@@ -1,0 +1,64 @@
+plugins {
+    id "java-library"
+    id "maven-publish"
+}
+
+group = "com.authcses"
+version = rootProject.findProperty("sdkVersion") ?: "1.0.0-SNAPSHOT"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // SpiceDB gRPC
+    implementation("com.authzed.api:authzed:1.5.4")
+    implementation("io.grpc:grpc-netty-shaded:1.72.0")
+    implementation("io.grpc:grpc-stub:1.72.0")
+    implementation("io.grpc:grpc-protobuf:1.72.0")
+
+    // JSON
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
+
+    // OpenTelemetry (no-op when no OTel SDK configured)
+    implementation("io.opentelemetry:opentelemetry-api:1.40.0")
+
+    // Optional
+    compileOnly("com.github.ben-manes.caffeine:caffeine:3.1.8")
+    compileOnly("io.micrometer:micrometer-core:1.13.0")
+
+    // Testing
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("org.assertj:assertj-core:3.25.3")
+    testImplementation("org.mockito:mockito-core:5.11.0")
+    testImplementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+}
+
+tasks.withType(Javadoc).configureEach {
+    failOnError = false
+    options.addStringOption("Xdoclint:none", "-quiet")
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            artifactId = "authcses-sdk"
+        }
+    }
+}
