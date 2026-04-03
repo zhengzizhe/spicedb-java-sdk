@@ -210,33 +210,34 @@ public class ResourceHandle {
             return from(Arrays.asList(userIds));
         }
 
+        /**
+         * Atomically delete all matching relationships using filter-based delete.
+         * No TOCTOU race — does NOT read-then-delete.
+         */
         public RevokeResult from(Collection<String> userIds) {
-            // Read all matching relationships with full consistency to ensure completeness
-            List<Tuple> existing;
-            if (relations == null || relations.length == 0) {
-                existing = handle.transport.readRelationships(
-                        handle.resourceType, handle.resourceId, null, Consistency.full());
-            } else {
-                existing = new ArrayList<>();
-                for (String rel : relations) {
-                    existing.addAll(handle.transport.readRelationships(
-                            handle.resourceType, handle.resourceId, rel, Consistency.full()));
+            int totalDeleted = 0;
+            String lastToken = null;
+
+            for (String uid : userIds) {
+                if (relations == null || relations.length == 0) {
+                    // Delete ALL relations for this subject on this resource
+                    var result = handle.transport.deleteByFilter(
+                            handle.resourceType, handle.resourceId,
+                            handle.defaultSubjectType, uid, null);
+                    totalDeleted += result.count();
+                    if (result.zedToken() != null) lastToken = result.zedToken();
+                } else {
+                    for (String rel : relations) {
+                        var result = handle.transport.deleteByFilter(
+                                handle.resourceType, handle.resourceId,
+                                handle.defaultSubjectType, uid, rel);
+                        totalDeleted += result.count();
+                        if (result.zedToken() != null) lastToken = result.zedToken();
+                    }
                 }
             }
 
-            Set<String> targetIds = new HashSet<>(userIds);
-            List<RelationshipUpdate> updates = existing.stream()
-                    .filter(t -> targetIds.contains(t.subjectId()))
-                    .map(t -> new RelationshipUpdate(
-                            Operation.DELETE,
-                            t.resourceType(), t.resourceId(), t.relation(),
-                            t.subjectType(), t.subjectId(), t.subjectRelation()))
-                    .toList();
-
-            if (updates.isEmpty()) {
-                return new RevokeResult(null, 0);
-            }
-            return handle.transport.deleteRelationships(updates);
+            return new RevokeResult(lastToken, totalDeleted);
         }
     }
 
@@ -307,14 +308,17 @@ public class ResourceHandle {
             return this;
         }
 
+        /**
+         * Check all permissions for one user in a single bulk RPC.
+         * N permissions → 1 gRPC call (not N sequential calls).
+         */
         public PermissionSet by(String userId) {
-            Map<String, CheckResult> results = new LinkedHashMap<>();
-            for (String perm : permissions) {
-                results.put(perm, handle.transport.check(
-                        handle.resourceType, handle.resourceId,
-                        perm, handle.defaultSubjectType, userId,
-                        consistency));
-            }
+            var items = Arrays.stream(permissions)
+                    .map(perm -> new SdkTransport.BulkCheckItem(
+                            handle.resourceType, handle.resourceId,
+                            perm, handle.defaultSubjectType, userId))
+                    .toList();
+            Map<String, CheckResult> results = handle.transport.checkBulkMulti(items, consistency);
             return new PermissionSet(results);
         }
 
@@ -352,6 +356,7 @@ public class ResourceHandle {
         private final String permissionOrRelation;
         private final boolean isPermission;
         private Consistency consistency = Consistency.minimizeLatency();
+        private int limit = 0;
 
         SubjectQuery(ResourceHandle handle, String permissionOrRelation, boolean isPermission) {
             this.handle = handle;
@@ -364,17 +369,24 @@ public class ResourceHandle {
             return this;
         }
 
+        /** Limit the number of results. 0 = unlimited (default). */
+        public SubjectQuery limit(int limit) {
+            this.limit = limit;
+            return this;
+        }
+
         public List<String> fetch() {
             if (isPermission) {
                 return handle.transport.lookupSubjects(
                         handle.resourceType, handle.resourceId,
-                        permissionOrRelation, handle.defaultSubjectType, consistency);
+                        permissionOrRelation, handle.defaultSubjectType, consistency, limit);
             } else {
-                return handle.transport.readRelationships(
+                var results = handle.transport.readRelationships(
                                 handle.resourceType, handle.resourceId,
                                 permissionOrRelation, consistency).stream()
                         .map(Tuple::subjectId)
                         .toList();
+                return limit > 0 && results.size() > limit ? results.subList(0, limit) : results;
             }
         }
 
@@ -453,11 +465,16 @@ public class ResourceHandle {
             return new HashSet<>(fetchSubjectIds());
         }
 
-        public Map<String, List<Tuple>> fetchGroupByRelation() {
+        /** Group by relation name, returning full Tuples per relation. */
+        public Map<String, List<Tuple>> groupByRelationTuples() {
             return fetch().stream().collect(Collectors.groupingBy(Tuple::relation));
         }
 
-        public Map<String, List<String>> fetchGroupByRelationSubjectIds() {
+        /**
+         * Group by relation name, returning subject IDs per relation.
+         * Example: {"editor": ["alice","bob"], "viewer": ["charlie"]}
+         */
+        public Map<String, List<String>> groupByRelation() {
             return fetch().stream().collect(Collectors.groupingBy(
                     Tuple::relation,
                     Collectors.mapping(Tuple::subjectId, Collectors.toList())));

@@ -57,7 +57,10 @@ public class RetryPolicy {
     }
 
     public static RetryPolicy defaults() {
-        return new Builder().build();
+        return new Builder()
+                .doNotRetryOn(com.authcses.sdk.exception.CircuitBreakerOpenException.class)
+                .doNotRetryOn(com.authcses.sdk.exception.AuthCsesAuthException.class)
+                .build();
     }
 
     public static Builder builder() { return new Builder(); }

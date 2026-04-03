@@ -9,6 +9,8 @@ import com.authcses.sdk.model.GrantResult;
 import com.authcses.sdk.model.RevokeResult;
 import com.authcses.sdk.model.Tuple;
 import com.authcses.sdk.model.enums.Permissionship;
+import com.authzed.api.v1.DeleteRelationshipsRequest;
+import com.authzed.api.v1.SubjectFilter;
 import com.authzed.api.v1.CheckBulkPermissionsRequest;
 import com.authzed.api.v1.CheckBulkPermissionsRequestItem;
 import com.authzed.api.v1.CheckPermissionRequest;
@@ -116,6 +118,42 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
+    public Map<String, CheckResult> checkBulkMulti(List<BulkCheckItem> items,
+                                                    Consistency consistency) {
+        var builder = CheckBulkPermissionsRequest.newBuilder()
+                .setConsistency(toGrpc(consistency));
+        for (var item : items) {
+            builder.addItems(CheckBulkPermissionsRequestItem.newBuilder()
+                    .setResource(objRef(item.resourceType(), item.resourceId()))
+                    .setPermission(item.permission())
+                    .setSubject(subRef(item.subjectType(), item.subjectId(), null)));
+        }
+
+        var response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
+        String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
+
+        Map<String, CheckResult> results = new LinkedHashMap<>();
+        for (int i = 0; i < items.size() && i < response.getPairsCount(); i++) {
+            var pair = response.getPairs(i);
+            CheckResult cr;
+            if (pair.hasError()) {
+                cr = new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
+            } else {
+                cr = switch (pair.getItem().getPermissionship()) {
+                    case PERMISSIONSHIP_HAS_PERMISSION ->
+                            new CheckResult(Permissionship.HAS_PERMISSION, bulkToken, Optional.empty());
+                    case PERMISSIONSHIP_CONDITIONAL_PERMISSION ->
+                            new CheckResult(Permissionship.CONDITIONAL_PERMISSION, bulkToken, Optional.empty());
+                    default ->
+                            new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
+                };
+            }
+            results.put(items.get(i).permission(), cr);
+        }
+        return results;
+    }
+
+    @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
         var builder = WriteRelationshipsRequest.newBuilder();
         for (var u : updates) {
@@ -174,15 +212,22 @@ public class GrpcTransport implements SdkTransport {
     public List<String> lookupSubjects(String resourceType, String resourceId,
                                         String permission, String subjectType,
                                         Consistency consistency) {
-        var request = LookupSubjectsRequest.newBuilder()
+        return lookupSubjects(resourceType, resourceId, permission, subjectType, consistency, 0);
+    }
+
+    @Override
+    public List<String> lookupSubjects(String resourceType, String resourceId,
+                                        String permission, String subjectType,
+                                        Consistency consistency, int limit) {
+        var builder = LookupSubjectsRequest.newBuilder()
                 .setResource(objRef(resourceType, resourceId))
                 .setPermission(permission)
                 .setSubjectObjectType(subjectType)
-                .setConsistency(toGrpc(consistency))
-                .build();
+                .setConsistency(toGrpc(consistency));
+        if (limit > 0) builder.setOptionalConcreteLimit(limit);
 
         List<String> subjects = new ArrayList<>();
-        var iterator = withErrorHandling(() -> stub().lookupSubjects(request));
+        var iterator = withErrorHandling(() -> stub().lookupSubjects(builder.build()));
         iterator.forEachRemaining(resp ->
                 subjects.add(resp.getSubject().getSubjectObjectId()));
         return subjects;
@@ -192,18 +237,50 @@ public class GrpcTransport implements SdkTransport {
     public List<String> lookupResources(String resourceType, String permission,
                                          String subjectType, String subjectId,
                                          Consistency consistency) {
-        var request = LookupResourcesRequest.newBuilder()
+        return lookupResources(resourceType, permission, subjectType, subjectId, consistency, 0);
+    }
+
+    @Override
+    public List<String> lookupResources(String resourceType, String permission,
+                                         String subjectType, String subjectId,
+                                         Consistency consistency, int limit) {
+        var builder = LookupResourcesRequest.newBuilder()
                 .setResourceObjectType(resourceType)
                 .setPermission(permission)
                 .setSubject(subRef(subjectType, subjectId, null))
-                .setConsistency(toGrpc(consistency))
-                .build();
+                .setConsistency(toGrpc(consistency));
+        if (limit > 0) builder.setOptionalLimit(limit);
 
         List<String> resources = new ArrayList<>();
-        var iterator = withErrorHandling(() -> stub().lookupResources(request));
+        var iterator = withErrorHandling(() -> stub().lookupResources(builder.build()));
         iterator.forEachRemaining(resp ->
                 resources.add(resp.getResourceObjectId()));
         return resources;
+    }
+
+    @Override
+    public RevokeResult deleteByFilter(String resourceType, String resourceId,
+                                        String subjectType, String subjectId,
+                                        String optionalRelation) {
+        var filterBuilder = RelationshipFilter.newBuilder()
+                .setResourceType(resourceType)
+                .setOptionalResourceId(resourceId);
+        if (optionalRelation != null) {
+            filterBuilder.setOptionalRelation(optionalRelation);
+        }
+
+        var subFilter = SubjectFilter.newBuilder()
+                .setSubjectType(subjectType)
+                .setOptionalSubjectId(subjectId);
+        filterBuilder.setOptionalSubjectFilter(subFilter);
+
+        var request = DeleteRelationshipsRequest.newBuilder()
+                .setRelationshipFilter(filterBuilder.build())
+                .build();
+
+        var response = withErrorHandling(() -> stub().deleteRelationships(request));
+        String token = response.hasDeletedAt() ? response.getDeletedAt().getToken() : null;
+        return new RevokeResult(token, 0);
     }
 
     @Override

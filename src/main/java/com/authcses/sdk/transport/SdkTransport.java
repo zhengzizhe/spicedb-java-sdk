@@ -29,6 +29,26 @@ public interface SdkTransport extends AutoCloseable {
                               String permission, List<String> subjectIds, String defaultSubjectType,
                               Consistency consistency);
 
+    /**
+     * Bulk check: multiple (resource, permission, subject) tuples in one RPC.
+     * Used by checkAll() to avoid N sequential calls.
+     */
+    record BulkCheckItem(String resourceType, String resourceId,
+                         String permission, String subjectType, String subjectId) {}
+
+    default Map<String, CheckResult> checkBulkMulti(List<BulkCheckItem> items,
+                                                     Consistency consistency) {
+        // Default: sequential fallback (InMemoryTransport, etc.)
+        Map<String, CheckResult> results = new java.util.LinkedHashMap<>();
+        for (var item : items) {
+            results.put(item.permission(),
+                    check(item.resourceType(), item.resourceId(),
+                            item.permission(), item.subjectType(), item.subjectId(),
+                            consistency));
+        }
+        return results;
+    }
+
     // ---- Relationship write/delete ----
     GrantResult writeRelationships(List<RelationshipUpdate> updates);
 
@@ -43,9 +63,54 @@ public interface SdkTransport extends AutoCloseable {
                                 String permission, String subjectType,
                                 Consistency consistency);
 
+    /** Lookup subjects with limit. 0 = unlimited. */
+    default List<String> lookupSubjects(String resourceType, String resourceId,
+                                        String permission, String subjectType,
+                                        Consistency consistency, int limit) {
+        var all = lookupSubjects(resourceType, resourceId, permission, subjectType, consistency);
+        return limit > 0 && all.size() > limit ? all.subList(0, limit) : all;
+    }
+
     List<String> lookupResources(String resourceType, String permission,
                                  String subjectType, String subjectId,
                                  Consistency consistency);
+
+    /** Lookup resources with limit. 0 = unlimited. */
+    default List<String> lookupResources(String resourceType, String permission,
+                                         String subjectType, String subjectId,
+                                         Consistency consistency, int limit) {
+        var all = lookupResources(resourceType, permission, subjectType, subjectId, consistency);
+        return limit > 0 && all.size() > limit ? all.subList(0, limit) : all;
+    }
+
+    // ---- Filter-based delete (atomic, no TOCTOU) ----
+
+    /**
+     * Delete all relationships matching the filter atomically.
+     * Used by revokeAll() to avoid read-then-delete race conditions.
+     *
+     * @param optionalRelation null to delete ALL relations for this subject on this resource
+     */
+    default RevokeResult deleteByFilter(String resourceType, String resourceId,
+                                        String subjectType, String subjectId,
+                                        String optionalRelation) {
+        // Default fallback: read-then-delete (InMemoryTransport, etc.)
+        List<Tuple> existing;
+        if (optionalRelation != null) {
+            existing = readRelationships(resourceType, resourceId, optionalRelation, Consistency.full());
+        } else {
+            existing = readRelationships(resourceType, resourceId, null, Consistency.full());
+        }
+        List<RelationshipUpdate> updates = existing.stream()
+                .filter(t -> t.subjectType().equals(subjectType) && t.subjectId().equals(subjectId))
+                .map(t -> new RelationshipUpdate(
+                        RelationshipUpdate.Operation.DELETE,
+                        t.resourceType(), t.resourceId(), t.relation(),
+                        t.subjectType(), t.subjectId(), t.subjectRelation()))
+                .toList();
+        if (updates.isEmpty()) return new RevokeResult(null, 0);
+        return deleteRelationships(updates);
+    }
 
     // ---- Expand ----
     default ExpandTree expand(String resourceType, String resourceId,

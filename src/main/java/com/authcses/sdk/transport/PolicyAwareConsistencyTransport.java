@@ -85,6 +85,15 @@ public class PolicyAwareConsistencyTransport implements SdkTransport {
     }
 
     @Override
+    public RevokeResult deleteByFilter(String resourceType, String resourceId,
+                                        String subjectType, String subjectId,
+                                        String optionalRelation) {
+        var result = delegate.deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation);
+        tokenTracker.recordWrite(result.zedToken());
+        return result;
+    }
+
+    @Override
     public void close() {
         delegate.close();
     }

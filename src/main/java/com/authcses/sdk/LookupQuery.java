@@ -18,6 +18,7 @@ public class LookupQuery {
     private String subjectId;
     private String subjectType;
     private Consistency consistency = Consistency.minimizeLatency();
+    private int limit = 0;
 
     LookupQuery(String resourceType, SdkTransport transport, String defaultSubjectType) {
         this.resourceType = resourceType;
@@ -41,10 +42,16 @@ public class LookupQuery {
         return this;
     }
 
+    /** Limit the number of results. 0 = unlimited (default). */
+    public LookupQuery limit(int limit) {
+        this.limit = limit;
+        return this;
+    }
+
     public List<String> fetch() {
         if (permission == null) throw new IllegalStateException("withPermission() must be called before fetch()");
         if (subjectId == null) throw new IllegalStateException("by() must be called before fetch()");
-        return transport.lookupResources(resourceType, permission, subjectType, subjectId, consistency);
+        return transport.lookupResources(resourceType, permission, subjectType, subjectId, consistency, limit);
     }
 
     public Set<String> fetchSet() {

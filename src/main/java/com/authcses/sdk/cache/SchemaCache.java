@@ -16,8 +16,19 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SchemaCache {
 
     private final AtomicReference<Map<String, DefinitionCache>> cache = new AtomicReference<>(Map.of());
+    private volatile Runnable refreshCallback;
+    private final java.util.concurrent.atomic.AtomicLong lastRefreshMs = new java.util.concurrent.atomic.AtomicLong(0);
+    private static final long REFRESH_COOLDOWN_MS = 30_000; // 30 seconds
 
     public record DefinitionCache(Set<String> relations, Set<String> permissions) {}
+
+    /**
+     * Set the callback used to refresh schema on validation miss.
+     * Called by AuthCsesClient.Builder during startup.
+     */
+    public void setRefreshCallback(Runnable callback) {
+        this.refreshCallback = callback;
+    }
 
     /**
      * Update from SpiceDB ReflectSchema response.
@@ -28,16 +39,40 @@ public class SchemaCache {
 
     /**
      * Validate a resource type exists in the schema.
+     * On miss, attempts one rate-limited refresh before throwing.
      */
     public void validateResourceType(String resourceType) {
         var c = cache.get();
         if (c.isEmpty()) return; // no schema loaded yet — skip validation
-        if (!c.containsKey(resourceType)) {
-            String suggestion = findClosest(resourceType, c.keySet());
-            String msg = "Resource type \"" + resourceType + "\" does not exist in schema.";
-            if (suggestion != null) msg += " Did you mean \"" + suggestion + "\"?";
-            msg += " Available: " + c.keySet();
-            throw new InvalidResourceException(msg);
+        if (c.containsKey(resourceType)) return;
+
+        // Unknown type — try refreshing schema once (rate-limited to 30s)
+        if (tryRefresh()) {
+            c = cache.get();
+            if (c.containsKey(resourceType)) return; // found after refresh
+        }
+
+        String suggestion = findClosest(resourceType, c.keySet());
+        String msg = "Resource type \"" + resourceType + "\" does not exist in schema.";
+        if (suggestion != null) msg += " Did you mean \"" + suggestion + "\"?";
+        msg += " Available: " + c.keySet();
+        throw new InvalidResourceException(msg);
+    }
+
+    /**
+     * Rate-limited schema refresh. Returns true if refresh was executed.
+     */
+    private boolean tryRefresh() {
+        if (refreshCallback == null) return false;
+        long now = System.currentTimeMillis();
+        long last = lastRefreshMs.get();
+        if (now - last < REFRESH_COOLDOWN_MS) return false;
+        if (!lastRefreshMs.compareAndSet(last, now)) return false;
+        try {
+            refreshCallback.run();
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 

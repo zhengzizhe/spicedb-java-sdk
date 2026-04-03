@@ -4,44 +4,50 @@
 
 ## Docs
 
-- [SDK Guide](src/main/resources/META-INF/authcses-sdk/GUIDE.md): Complete API reference, configuration, usage patterns
+- [AI Agent Guide](AGENTS.md): API cheat sheet, configuration, common mistakes
 - [SDK CLAUDE.md](CLAUDE.md): Coding standards, architecture, constraints
-- [Design Spec](docs/specs/2026-04-03-sdk-v2-architecture.md): V2 architecture design
 
 ## Instructions for AI Agents
 
 ### Do
 
-- Use `AuthCsesClient.builder().target("...").presharedKey("...").build()` to initialize
+- Use `AuthCsesClient.builder().connection(c -> c.target("...").presharedKey("...")).build()`
 - Use `AuthCsesClient.inMemory()` for unit tests
-- Use fluent API: `client.resource(type, id).check(permission).by(userId)`
-- Use `ConnectionConfig` for connection settings, separate from business logic
-- Register per-resource-type strategies via `ResourceStrategy` interface
-- Close the client with try-with-resources or `registerShutdownHook(true)`
+- Use simple API: `client.on("document").check("doc-1", "view", "alice")` → boolean
+- Use chain API for complex cases: `client.on("document").resource("doc-1").grant("editor").expiresIn(...).to("alice")`
+- Close the client with `@Bean(destroyMethod="close")` or `.features(f -> f.shutdownHook(true))`
+- Use codegen constants: `Document.VIEW`, `Document.EDITOR`
 
 ### Do Not
 
 - Do not pass platform URLs — SDK connects directly to SpiceDB
-- Do not use `apiKey` or `namespace` — these are V1 concepts, removed
-- Do not hardcode string literals for resource types/permissions — use codegen constants or `ResourceStrategy`
-- Do not call `check()` with a relation name — relations are for `grant/revoke`, permissions are for `check/who/lookup`
+- Do not use `check()` with a relation name — relations for `grant/revoke`, permissions for `check/subjects/resources`
 - Do not create multiple `AuthCsesClient` instances — one singleton per application
+- Do not inject separate permission beans — just inject `AuthCsesClient`, use `client.on(type)`
 
 ### API Pattern
 
 ```
-grant:    resource(type, id).grant(relation).to(userIds)
-revoke:   resource(type, id).revoke(relation).from(userIds)
-check:    resource(type, id).check(permission).by(userId) → CheckResult
-checkAll: resource(type, id).checkAll(perms...).by(userId) → PermissionSet
-who:      resource(type, id).who().withPermission(p).fetch() → List<String>
-lookup:   lookup(type).withPermission(p).by(userId).fetch() → List<String>
-batch:    resource(type, id).batch().grant(r).to(u).revoke(r).from(u).execute()
+Simple (ResourceFactory):
+  check:      doc.check("doc-1", "view", "alice") → boolean
+  grant:      doc.grant("doc-1", "editor", "alice", "bob")
+  revoke:     doc.revoke("doc-1", "editor", "alice")
+  revokeAll:  doc.revokeAll("doc-1", "alice")
+  checkAll:   doc.checkAll("doc-1", "alice", "view", "edit") → Map<String,Boolean>
+  subjects:   doc.subjectSet("doc-1", "view") → Set<String>
+  resources:  doc.resources("view", "alice") → List<String>
+  relations:  doc.allRelations("doc-1") → Map<String,List<String>>
+
+Subject refs (department/group/wildcard):
+  grantToSubjects:     doc.grantToSubjects("doc-1", "viewer", "department:eng#member")
+  revokeFromSubjects:  doc.revokeFromSubjects("doc-1", "link_viewer", "user:*")
+
+Chain (ResourceHandle — complex cases):
+  grant:    doc.resource("doc-1").grant("editor").expiresIn(7days).to("alice")
+  check:    doc.resource("doc-1").check("view").withConsistency(full).by("alice")
+  batch:    doc.resource("doc-1").batch().grant("owner").to("new").revoke("owner").from("old").execute()
+  who:      doc.resource("doc-1").who().withPermission("view").limit(100).fetch()
 ```
-
-### Consistency
-
-Default is SESSION (write-after-read safe). Override per-operation with `.withConsistency()` or per-type via `ResourceStrategy`.
 
 ### Error Handling
 
@@ -51,5 +57,5 @@ AuthCsesConnectionException → network issue (auto-retried)
 AuthCsesTimeoutException    → timeout (auto-retried)
 CircuitBreakerOpenException → SpiceDB down (fast-fail)
 InvalidResourceException    → typo in resource type (fix code)
-InvalidPermissionException  → typo or relation/permission confusion (fix code)
+InvalidPermissionException  → relation/permission confusion (fix code)
 ```

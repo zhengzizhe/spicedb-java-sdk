@@ -3,56 +3,39 @@ package com.authcses.sdk.policy;
 import java.time.Duration;
 
 /**
- * Read consistency level. Each level maps to a SpiceDB Consistency parameter + SDK token tracking.
+ * Read consistency level for per-resource-type policy.
  *
- * <p>Implemented:
  * <ul>
- *   <li>{@link #strong()} — fully consistent, highest latency</li>
- *   <li>{@link #session()} — read-after-write within this client instance (via ZedToken tracking)</li>
- *   <li>{@link #minimizeLatency()} — lowest latency, may read stale</li>
- * </ul>
- *
- * <p>Planned (requires TokenTracker):
- * <ul>
- *   <li>{@link #boundedStaleness(Duration)} — accept data up to N seconds old</li>
- *   <li>{@link #monotonicRead()} — never read older than last read</li>
- *   <li>{@link #snapshot()} — consistent snapshot for pagination</li>
+ *   <li>{@link #minimizeLatency()} — fastest, may read stale (SpiceDB 5s quantization window)</li>
+ *   <li>{@link #session()} — write-then-read safe within this SDK instance (default)</li>
+ *   <li>{@link #snapshot()} — frozen point-in-time for pagination/export</li>
+ *   <li>{@link #strong()} — absolute latest, bypasses all caches</li>
  * </ul>
  */
 public sealed interface ReadConsistency {
 
-    /** Always read the absolute latest state. SpiceDB: fully_consistent=true */
-    static ReadConsistency strong() { return Strong.INSTANCE; }
-
-    /** Read-after-write within same client. SpiceDB: at_least_as_fresh(lastWriteToken) */
-    static ReadConsistency session() { return Session.INSTANCE; }
-
-    /** Lowest latency, may read stale data. SpiceDB: minimize_latency=true */
+    /** Lowest latency, may read up to ~5s stale. SpiceDB: minimize_latency=true */
     static ReadConsistency minimizeLatency() { return MinimizeLatency.INSTANCE; }
 
-    /** Accept data up to maxAge old. Requires TokenTracker (planned). */
-    static ReadConsistency boundedStaleness(Duration maxAge) { return new BoundedStaleness(maxAge); }
+    /** Read-after-write within same SDK instance. SpiceDB: at_least_as_fresh(lastWriteToken) */
+    static ReadConsistency session() { return Session.INSTANCE; }
 
-    /** Never read data older than the last read. Requires TokenTracker (planned). */
-    static ReadConsistency monotonicRead() { return MonotonicRead.INSTANCE; }
-
-    /** Consistent snapshot for pagination. SpiceDB: at_exact_snapshot(token) */
+    /** Frozen snapshot for pagination/export. SpiceDB: at_exact_snapshot(token) */
     static ReadConsistency snapshot() { return Snapshot.INSTANCE; }
 
-    record Strong() implements ReadConsistency {
-        static final Strong INSTANCE = new Strong();
+    /** Absolute latest state, highest latency. SpiceDB: fully_consistent=true */
+    static ReadConsistency strong() { return Strong.INSTANCE; }
+
+    record MinimizeLatency() implements ReadConsistency {
+        static final MinimizeLatency INSTANCE = new MinimizeLatency();
     }
     record Session() implements ReadConsistency {
         static final Session INSTANCE = new Session();
     }
-    record MinimizeLatency() implements ReadConsistency {
-        static final MinimizeLatency INSTANCE = new MinimizeLatency();
-    }
-    record BoundedStaleness(Duration maxAge) implements ReadConsistency {}
-    record MonotonicRead() implements ReadConsistency {
-        static final MonotonicRead INSTANCE = new MonotonicRead();
-    }
     record Snapshot() implements ReadConsistency {
         static final Snapshot INSTANCE = new Snapshot();
+    }
+    record Strong() implements ReadConsistency {
+        static final Strong INSTANCE = new Strong();
     }
 }

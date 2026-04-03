@@ -99,6 +99,15 @@ public class CachedTransport implements SdkTransport {
     }
 
     @Override
+    public RevokeResult deleteByFilter(String resourceType, String resourceId,
+                                        String subjectType, String subjectId,
+                                        String optionalRelation) {
+        var result = delegate.deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation);
+        cache.invalidateResource(resourceType, resourceId);
+        return result;
+    }
+
+    @Override
     public void close() {
         cache.invalidateAll();
         delegate.close();

@@ -1,6 +1,7 @@
 package com.authcses.sdk.transport;
 
 import com.authcses.sdk.cache.CheckCache;
+import com.authcses.sdk.model.RelationshipChange;
 import com.authzed.api.v1.*;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -9,9 +10,11 @@ import io.grpc.stub.MetadataUtils;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /**
  * Subscribes to SpiceDB Watch stream and invalidates cache entries
@@ -31,11 +34,44 @@ public class WatchCacheInvalidator implements AutoCloseable {
 
     private final CheckCache cache;
     private final ManagedChannel channel;
+    private final boolean ownsChannel;
     private final Metadata authMetadata;
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final AtomicReference<String> lastToken = new AtomicReference<>(null);
     private final Thread watchThread;
+    private final List<Consumer<RelationshipChange>> listeners = new CopyOnWriteArrayList<>();
 
+    /** Register a listener for relationship changes. */
+    public void addListener(Consumer<RelationshipChange> listener) {
+        listeners.add(listener);
+    }
+
+    public void removeListener(Consumer<RelationshipChange> listener) {
+        listeners.remove(listener);
+    }
+
+    /**
+     * Create with a shared channel (preferred — reuses the main client's gRPC channel).
+     */
+    public WatchCacheInvalidator(ManagedChannel channel, String presharedKey, CheckCache cache) {
+        this.cache = cache;
+        this.channel = channel;
+        this.ownsChannel = false;
+
+        this.authMetadata = new Metadata();
+        authMetadata.put(
+                Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
+                "Bearer " + presharedKey);
+
+        this.watchThread = new Thread(this::watchLoop, "authcses-sdk-watch");
+        this.watchThread.setDaemon(true);
+        this.watchThread.start();
+    }
+
+    /**
+     * @deprecated Use {@link #WatchCacheInvalidator(ManagedChannel, String, CheckCache)} instead.
+     */
+    @Deprecated
     public WatchCacheInvalidator(List<String> endpoints, String presharedKey, boolean useTls,
                                   CheckCache cache) {
         this.cache = cache;
@@ -44,6 +80,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
         var builder = ManagedChannelBuilder.forTarget(target);
         if (!useTls) builder.usePlaintext();
         this.channel = builder.build();
+        this.ownsChannel = true;
 
         this.authMetadata = new Metadata();
         authMetadata.put(
@@ -82,12 +119,37 @@ public class WatchCacheInvalidator implements AutoCloseable {
                         lastToken.set(response.getChangesThrough().getToken());
                     }
 
-                    // Invalidate cache for changed resources
+                    String changeToken = response.hasChangesThrough()
+                            ? response.getChangesThrough().getToken() : null;
+
                     for (var update : response.getUpdatesList()) {
                         var rel = update.getRelationship();
                         String resourceType = rel.getResource().getObjectType();
                         String resourceId = rel.getResource().getObjectId();
+
+                        // 1. Invalidate cache
                         cache.invalidateResource(resourceType, resourceId);
+
+                        // 2. Notify user listeners
+                        if (!listeners.isEmpty()) {
+                            var op = update.getOperation() == RelationshipUpdate.Operation.OPERATION_DELETE
+                                    ? RelationshipChange.Operation.DELETE
+                                    : RelationshipChange.Operation.TOUCH;
+                            String subRel = rel.getSubject().getOptionalRelation();
+                            var change = new RelationshipChange(
+                                    op, resourceType, resourceId, rel.getRelation(),
+                                    rel.getSubject().getObject().getObjectType(),
+                                    rel.getSubject().getObject().getObjectId(),
+                                    subRel.isEmpty() ? null : subRel, changeToken);
+                            for (var listener : listeners) {
+                                try {
+                                    listener.accept(change);
+                                } catch (Exception e) {
+                                    LOG.log(System.Logger.Level.WARNING,
+                                            "Watch listener error: {0}", e.getMessage());
+                                }
+                            }
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -110,11 +172,13 @@ public class WatchCacheInvalidator implements AutoCloseable {
     public void close() {
         running.set(false);
         watchThread.interrupt();
-        try {
-            channel.shutdown().awaitTermination(3, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            channel.shutdownNow();
+        if (ownsChannel) {
+            try {
+                channel.shutdown().awaitTermination(3, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                channel.shutdownNow();
+            }
         }
     }
 
