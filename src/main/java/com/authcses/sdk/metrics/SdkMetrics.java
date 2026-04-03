@@ -1,10 +1,11 @@
 package com.authcses.sdk.metrics;
 
-import com.authcses.sdk.circuit.CircuitBreaker;
+import org.HdrHistogram.Histogram;
+import org.HdrHistogram.Recorder;
 
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Supplier;
 
 /**
  * SDK internal metrics. Thread-safe, lock-free.
@@ -30,13 +31,13 @@ public class SdkMetrics {
     private final LongAdder totalErrors = new LongAdder();
     private final LongAdder coalescedRequests = new LongAdder();
 
-    // ---- Latency (rolling window, microseconds) ----
-    private static final int LATENCY_WINDOW = 10_000;
-    private final long[] latencyBuffer = new long[LATENCY_WINDOW];
-    private final AtomicLong latencyIndex = new AtomicLong(0);
+    // ---- Latency (HdrHistogram dual-buffer, microseconds) ----
+    private static final long MAX_TRACKABLE_MICROS = 60_000_000L;
+    private final Recorder recorder = new Recorder(MAX_TRACKABLE_MICROS, 3);
+    private volatile Histogram intervalHistogram;
 
-    // ---- Circuit Breaker (injected) ----
-    private volatile CircuitBreaker circuitBreaker;
+    // ---- Circuit Breaker (injected via supplier) ----
+    private volatile Supplier<String> circuitBreakerStateSupplier = () -> "N/A";
 
     // ---- Record methods (called by transport layers) ----
 
@@ -48,14 +49,14 @@ public class SdkMetrics {
     public void recordRequest(long latencyMicros, boolean error) {
         totalRequests.increment();
         if (error) totalErrors.increment();
-
-        int idx = (int) (latencyIndex.getAndIncrement() % LATENCY_WINDOW);
-        latencyBuffer[idx] = latencyMicros;
+        recorder.recordValue(Math.min(latencyMicros, MAX_TRACKABLE_MICROS));
     }
 
     public void recordCoalesced() { coalescedRequests.increment(); }
 
-    public void setCircuitBreaker(CircuitBreaker cb) { this.circuitBreaker = cb; }
+    public void setCircuitBreakerStateSupplier(Supplier<String> supplier) {
+        this.circuitBreakerStateSupplier = supplier;
+    }
 
     // ---- Query methods (called by business code) ----
 
@@ -80,28 +81,29 @@ public class SdkMetrics {
         return total == 0 ? 0.0 : (double) totalErrors.sum() / total;
     }
 
-    /** Check latency p50 in milliseconds (from rolling window). */
-    public double checkLatencyP50() { return percentile(0.50); }
-    public double checkLatencyP95() { return percentile(0.95); }
-    public double checkLatencyP99() { return percentile(0.99); }
+    /** Check latency p50 in milliseconds. */
+    public double checkLatencyP50() { return percentile(50.0); }
+    public double checkLatencyP95() { return percentile(95.0); }
+    public double checkLatencyP99() { return percentile(99.0); }
     public double checkLatencyAvg() {
-        long count = Math.min(latencyIndex.get(), LATENCY_WINDOW);
-        if (count == 0) return 0;
-        long sum = 0;
-        for (int i = 0; i < count; i++) sum += latencyBuffer[i];
-        return (sum / (double) count) / 1000.0; // micros → ms
+        return getHistogram().getMean() / 1000.0; // micros → ms
     }
 
     public String circuitBreakerState() {
-        return circuitBreaker != null ? circuitBreaker.getState().name() : "N/A";
+        return circuitBreakerStateSupplier.get();
     }
 
     /** Full snapshot for logging or export. */
     public Snapshot snapshot() {
+        Histogram h = getHistogram();
+        double p50 = h.getValueAtPercentile(50.0) / 1000.0;
+        double p95 = h.getValueAtPercentile(95.0) / 1000.0;
+        double p99 = h.getValueAtPercentile(99.0) / 1000.0;
+        double avg = h.getMean() / 1000.0;
         return new Snapshot(
                 cacheHitRate(), cacheHits(), cacheMisses(), cacheEvictions(), cacheSize(),
                 totalRequests(), totalErrors(), errorRate(), coalescedRequests(),
-                checkLatencyP50(), checkLatencyP95(), checkLatencyP99(), checkLatencyAvg(),
+                p50, p95, p99, avg,
                 circuitBreakerState());
     }
 
@@ -124,12 +126,17 @@ public class SdkMetrics {
         }
     }
 
+    /**
+     * Retrieves the current interval histogram from the Recorder.
+     * Must be synchronized because Recorder.getIntervalHistogram is not safe
+     * for concurrent callers on the same intervalHistogram instance.
+     */
+    private synchronized Histogram getHistogram() {
+        intervalHistogram = recorder.getIntervalHistogram(intervalHistogram);
+        return intervalHistogram;
+    }
+
     private double percentile(double p) {
-        long count = Math.min(latencyIndex.get(), LATENCY_WINDOW);
-        if (count == 0) return 0;
-        long[] sorted = Arrays.copyOf(latencyBuffer, (int) count);
-        Arrays.sort(sorted);
-        int idx = (int) (count * p);
-        return sorted[Math.min(idx, sorted.length - 1)] / 1000.0; // micros → ms
+        return getHistogram().getValueAtPercentile(p) / 1000.0; // micros → ms
     }
 }

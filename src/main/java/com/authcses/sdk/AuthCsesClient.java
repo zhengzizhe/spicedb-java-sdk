@@ -488,7 +488,7 @@ public class AuthCsesClient implements AutoCloseable {
                                 (int) cbPolicy.getFailureRateThreshold(),
                                 cbPolicy.getWaitInOpenState(),
                                 cbPolicy.getPermittedCallsInHalfOpen());
-                        sdkMetrics.setCircuitBreaker(breaker);
+                        sdkMetrics.setCircuitBreakerStateSupplier(() -> breaker.getState().name());
                         t = new CircuitBreakerTransport(t, breaker, cbPolicy.getFailOpenPermissions());
                     }
 
