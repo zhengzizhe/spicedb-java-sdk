@@ -483,6 +483,14 @@ public class ResourceHandle {
                     Tuple::relation,
                     Collectors.mapping(Tuple::subjectId, Collectors.toList())));
         }
+
+        /**
+         * Fetch all relationships and group subject IDs by relation name.
+         * Example: {"editor": ["alice","bob"], "viewer": ["charlie"]}
+         */
+        public Map<String, List<String>> fetchGroupByRelationSubjectIds() {
+            return groupByRelation();
+        }
     }
 
     public static class BatchBuilder {
