@@ -4,6 +4,7 @@ import com.authcses.sdk.cache.*;
 import com.authcses.sdk.policy.PolicyRegistry;
 import com.authcses.sdk.telemetry.TelemetryReporter;
 import com.authcses.sdk.transport.*;
+import com.authcses.sdk.transport.ResilientTransport;
 
 import java.time.Duration;
 import java.util.List;
@@ -477,20 +478,14 @@ public class AuthCsesClient implements AutoCloseable {
                 // Phase: TRANSPORT
                 final CheckCache[] cacheHolder = {null};
                 final TelemetryReporter[] telemetryHolder = {null};
+                final ResilientTransport[] resilientHolder = {null};
                 SdkTransport transport = lm.phase(com.authcses.sdk.lifecycle.SdkPhase.TRANSPORT, () -> {
                     SdkTransport t = new GrpcTransport(grpcChannel, presharedKey, requestTimeout.toMillis());
-                    t = new PolicyAwareRetryTransport(t, policies);
 
-                    // Circuit breaker (between retry and telemetry)
-                    var cbPolicy = policies.getDefaultPolicy().getCircuitBreaker();
-                    if (cbPolicy != null && cbPolicy.isEnabled()) {
-                        var breaker = new com.authcses.sdk.circuit.CircuitBreaker(
-                                (int) cbPolicy.getFailureRateThreshold(),
-                                cbPolicy.getWaitInOpenState(),
-                                cbPolicy.getPermittedCallsInHalfOpen());
-                        sdkMetrics.setCircuitBreakerStateSupplier(() -> breaker.getState().name());
-                        t = new CircuitBreakerTransport(t, breaker, cbPolicy.getFailOpenPermissions());
-                    }
+                    // Resilience (circuit breaker + retry via Resilience4j)
+                    var resilientTransport = new ResilientTransport(t, policies, bus);
+                    resilientHolder[0] = resilientTransport;
+                    t = resilientTransport;
 
                     if (telemetryEnabled) {
                         telemetryHolder[0] = new TelemetryReporter(spi.telemetrySink(), useVirtualThreads);
@@ -514,6 +509,10 @@ public class AuthCsesClient implements AutoCloseable {
                     return t;
                 });
                 telemetryReporter = telemetryHolder[0];
+                if (resilientHolder[0] != null) {
+                    sdkMetrics.setCircuitBreakerStateSupplier(
+                            () -> resilientHolder[0].getCircuitBreakerState("_default").name());
+                }
 
                 // Phase: WATCH
                 final WatchCacheInvalidator[] watchHolder = {null};

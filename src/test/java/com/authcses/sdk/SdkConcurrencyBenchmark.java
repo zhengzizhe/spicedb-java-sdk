@@ -1,9 +1,10 @@
 package com.authcses.sdk;
 
 import com.authcses.sdk.cache.CaffeineCheckCache;
-import com.authcses.sdk.circuit.CircuitBreaker;
+import com.authcses.sdk.event.SdkEventBus;
 import com.authcses.sdk.model.CheckResult;
 import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.policy.PolicyRegistry;
 import com.authcses.sdk.transport.*;
 
 import java.time.Duration;
@@ -50,11 +51,11 @@ public class SdkConcurrencyBenchmark {
         runBenchmark("InMemory + Coalescing", coalescingTransport, docCount, userCount);
 
         // --- Benchmark 4: Full chain ---
-        System.out.println("\n--- 4. Full Chain (Coalescing → Cache → CircuitBreaker → InMemory) ---");
+        System.out.println("\n--- 4. Full Chain (Coalescing → Cache → Resilient → InMemory) ---");
         var inner4 = new InMemoryTransport();
         seedData(inner4, docCount, userCount);
         SdkTransport fullChain = inner4;
-        fullChain = new CircuitBreakerTransport(fullChain, new CircuitBreaker(), Set.of());
+        fullChain = new ResilientTransport(fullChain, PolicyRegistry.withDefaults(), new SdkEventBus());
         fullChain = new CachedTransport(fullChain, new CaffeineCheckCache(Duration.ofSeconds(10), 100_000));
         fullChain = new CoalescingTransport(fullChain);
         warmCache(fullChain, docCount, userCount);
@@ -65,7 +66,7 @@ public class SdkConcurrencyBenchmark {
         var inner5 = new InMemoryTransport();
         seedData(inner5, docCount, userCount);
         SdkTransport coldChain = inner5;
-        coldChain = new CircuitBreakerTransport(coldChain, new CircuitBreaker(), Set.of());
+        coldChain = new ResilientTransport(coldChain, PolicyRegistry.withDefaults(), new SdkEventBus());
         coldChain = new CachedTransport(coldChain, new CaffeineCheckCache(Duration.ofMillis(1), 100_000)); // 1ms TTL = always miss
         coldChain = new CoalescingTransport(coldChain);
         runBenchmark("Full chain cold", coldChain, docCount, userCount);
@@ -75,7 +76,7 @@ public class SdkConcurrencyBenchmark {
         var inner6 = new InMemoryTransport();
         seedData(inner6, 1, 1);
         SdkTransport contentionChain = inner6;
-        contentionChain = new CircuitBreakerTransport(contentionChain, new CircuitBreaker(), Set.of());
+        contentionChain = new ResilientTransport(contentionChain, PolicyRegistry.withDefaults(), new SdkEventBus());
         contentionChain = new CachedTransport(contentionChain, new CaffeineCheckCache(Duration.ofSeconds(10), 100_000));
         contentionChain = new CoalescingTransport(contentionChain);
         warmCache(contentionChain, 1, 1);
