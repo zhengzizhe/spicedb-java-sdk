@@ -318,8 +318,12 @@ public class ResourceHandle {
                             handle.resourceType, handle.resourceId,
                             perm, handle.defaultSubjectType, userId))
                     .toList();
-            Map<String, CheckResult> results = handle.transport.checkBulkMulti(items, consistency);
-            return new PermissionSet(results);
+            List<CheckResult> results = handle.transport.checkBulkMulti(items, consistency);
+            Map<String, CheckResult> map = new LinkedHashMap<>();
+            for (int i = 0; i < permissions.length; i++) {
+                map.put(permissions[i], results.get(i));
+            }
+            return new PermissionSet(map);
         }
 
         public PermissionMatrix byAll(String... userIds) {

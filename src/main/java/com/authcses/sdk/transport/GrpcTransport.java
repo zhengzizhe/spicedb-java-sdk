@@ -118,8 +118,8 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
-    public Map<String, CheckResult> checkBulkMulti(List<BulkCheckItem> items,
-                                                    Consistency consistency) {
+    public List<CheckResult> checkBulkMulti(List<BulkCheckItem> items,
+                                             Consistency consistency) {
         var builder = CheckBulkPermissionsRequest.newBuilder()
                 .setConsistency(toGrpc(consistency));
         for (var item : items) {
@@ -132,7 +132,7 @@ public class GrpcTransport implements SdkTransport {
         var response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
         String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
-        Map<String, CheckResult> results = new LinkedHashMap<>();
+        List<CheckResult> results = new java.util.ArrayList<>(items.size());
         for (int i = 0; i < items.size() && i < response.getPairsCount(); i++) {
             var pair = response.getPairs(i);
             CheckResult cr;
@@ -148,7 +148,7 @@ public class GrpcTransport implements SdkTransport {
                             new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
                 };
             }
-            results.put(items.get(i).permission(), cr);
+            results.add(cr);
         }
         return results;
     }
