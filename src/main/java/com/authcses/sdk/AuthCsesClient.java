@@ -107,7 +107,7 @@ public class AuthCsesClient implements AutoCloseable {
     public HealthResult health() {
         long start = System.nanoTime();
         try {
-            transport.readRelationships("__health__", "__probe__", null,
+            transport.readRelationships("healthprobe", "probe", null,
                     com.authcses.sdk.model.Consistency.minimizeLatency());
             long ms = (System.nanoTime() - start) / 1_000_000;
             return new HealthResult(true, ms, "SpiceDB reachable");

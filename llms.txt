@@ -1,0 +1,55 @@
+# AuthCSES SDK
+
+> Java SDK for SpiceDB permission management. Direct gRPC connection, no platform dependency.
+
+## Docs
+
+- [SDK Guide](src/main/resources/META-INF/authcses-sdk/GUIDE.md): Complete API reference, configuration, usage patterns
+- [SDK CLAUDE.md](CLAUDE.md): Coding standards, architecture, constraints
+- [Design Spec](docs/specs/2026-04-03-sdk-v2-architecture.md): V2 architecture design
+
+## Instructions for AI Agents
+
+### Do
+
+- Use `AuthCsesClient.builder().target("...").presharedKey("...").build()` to initialize
+- Use `AuthCsesClient.inMemory()` for unit tests
+- Use fluent API: `client.resource(type, id).check(permission).by(userId)`
+- Use `ConnectionConfig` for connection settings, separate from business logic
+- Register per-resource-type strategies via `ResourceStrategy` interface
+- Close the client with try-with-resources or `registerShutdownHook(true)`
+
+### Do Not
+
+- Do not pass platform URLs — SDK connects directly to SpiceDB
+- Do not use `apiKey` or `namespace` — these are V1 concepts, removed
+- Do not hardcode string literals for resource types/permissions — use codegen constants or `ResourceStrategy`
+- Do not call `check()` with a relation name — relations are for `grant/revoke`, permissions are for `check/who/lookup`
+- Do not create multiple `AuthCsesClient` instances — one singleton per application
+
+### API Pattern
+
+```
+grant:    resource(type, id).grant(relation).to(userIds)
+revoke:   resource(type, id).revoke(relation).from(userIds)
+check:    resource(type, id).check(permission).by(userId) → CheckResult
+checkAll: resource(type, id).checkAll(perms...).by(userId) → PermissionSet
+who:      resource(type, id).who().withPermission(p).fetch() → List<String>
+lookup:   lookup(type).withPermission(p).by(userId).fetch() → List<String>
+batch:    resource(type, id).batch().grant(r).to(u).revoke(r).from(u).execute()
+```
+
+### Consistency
+
+Default is SESSION (write-after-read safe). Override per-operation with `.withConsistency()` or per-type via `ResourceStrategy`.
+
+### Error Handling
+
+```
+AuthCsesAuthException       → invalid credentials (don't retry)
+AuthCsesConnectionException → network issue (auto-retried)
+AuthCsesTimeoutException    → timeout (auto-retried)
+CircuitBreakerOpenException → SpiceDB down (fast-fail)
+InvalidResourceException    → typo in resource type (fix code)
+InvalidPermissionException  → typo or relation/permission confusion (fix code)
+```
