@@ -1,5 +1,6 @@
 package com.authcses.sdk.spi;
 
+import com.authcses.sdk.model.enums.SdkAction;
 import java.util.Map;
 
 /**
@@ -39,7 +40,7 @@ public interface SdkInterceptor {
      * Context passed to interceptors. Mutable — interceptors can add attributes.
      */
     class OperationContext {
-        private final String action;       // CHECK, WRITE, DELETE, READ, LOOKUP_SUBJECTS, LOOKUP_RESOURCES
+        private final SdkAction action;
         private final String resourceType;
         private final String resourceId;
         private final String permission;
@@ -52,7 +53,7 @@ public interface SdkInterceptor {
         private String result;
         private Throwable error;
 
-        public OperationContext(String action, String resourceType, String resourceId,
+        public OperationContext(SdkAction action, String resourceType, String resourceId,
                                 String permission, String subjectType, String subjectId) {
             this.action = action;
             this.resourceType = resourceType;
@@ -62,7 +63,7 @@ public interface SdkInterceptor {
             this.subjectId = subjectId;
         }
 
-        public String action() { return action; }
+        public SdkAction action() { return action; }
         public String resourceType() { return resourceType; }
         public String resourceId() { return resourceId; }
         public String permission() { return permission; }

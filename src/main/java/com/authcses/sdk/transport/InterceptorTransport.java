@@ -1,6 +1,7 @@
 package com.authcses.sdk.transport;
 
 import com.authcses.sdk.model.*;
+import com.authcses.sdk.model.enums.SdkAction;
 import com.authcses.sdk.spi.SdkInterceptor;
 import com.authcses.sdk.spi.SdkInterceptor.OperationContext;
 
@@ -31,7 +32,7 @@ public class InterceptorTransport extends ForwardingTransport {
     public CheckResult check(String resourceType, String resourceId,
                              String permission, String subjectType, String subjectId,
                              Consistency consistency) {
-        return intercept("CHECK", resourceType, resourceId, permission, subjectType, subjectId,
+        return intercept(SdkAction.CHECK, resourceType, resourceId, permission, subjectType, subjectId,
                 () -> delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency));
     }
 
@@ -39,7 +40,7 @@ public class InterceptorTransport extends ForwardingTransport {
     public CheckResult check(String resourceType, String resourceId,
                              String permission, String subjectType, String subjectId,
                              Consistency consistency, java.util.Map<String, Object> context) {
-        return intercept("CHECK", resourceType, resourceId, permission, subjectType, subjectId,
+        return intercept(SdkAction.CHECK, resourceType, resourceId, permission, subjectType, subjectId,
                 () -> delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency, context));
     }
 
@@ -47,7 +48,7 @@ public class InterceptorTransport extends ForwardingTransport {
     public BulkCheckResult checkBulk(String resourceType, String resourceId,
                                      String permission, List<String> subjectIds, String defaultSubjectType,
                                      Consistency consistency) {
-        return intercept("CHECK_BULK", resourceType, resourceId, permission, defaultSubjectType, "",
+        return intercept(SdkAction.CHECK_BULK, resourceType, resourceId, permission, defaultSubjectType, "",
                 () -> delegate.checkBulk(resourceType, resourceId, permission, subjectIds, defaultSubjectType, consistency));
     }
 
@@ -55,7 +56,7 @@ public class InterceptorTransport extends ForwardingTransport {
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
         String resType = updates.isEmpty() ? "" : updates.getFirst().resourceType();
         String resId = updates.isEmpty() ? "" : updates.getFirst().resourceId();
-        return intercept("WRITE", resType, resId, "", "", "",
+        return intercept(SdkAction.WRITE, resType, resId, "", "", "",
                 () -> delegate.writeRelationships(updates));
     }
 
@@ -63,14 +64,14 @@ public class InterceptorTransport extends ForwardingTransport {
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
         String resType = updates.isEmpty() ? "" : updates.getFirst().resourceType();
         String resId = updates.isEmpty() ? "" : updates.getFirst().resourceId();
-        return intercept("DELETE", resType, resId, "", "", "",
+        return intercept(SdkAction.DELETE, resType, resId, "", "", "",
                 () -> delegate.deleteRelationships(updates));
     }
 
     @Override
     public List<Tuple> readRelationships(String resourceType, String resourceId,
                                           String relation, Consistency consistency) {
-        return intercept("READ", resourceType, resourceId, relation, "", "",
+        return intercept(SdkAction.READ, resourceType, resourceId, relation, "", "",
                 () -> delegate.readRelationships(resourceType, resourceId, relation, consistency));
     }
 
@@ -78,7 +79,7 @@ public class InterceptorTransport extends ForwardingTransport {
     public List<String> lookupSubjects(String resourceType, String resourceId,
                                         String permission, String subjectType,
                                         Consistency consistency) {
-        return intercept("LOOKUP_SUBJECTS", resourceType, resourceId, permission, subjectType, "",
+        return intercept(SdkAction.LOOKUP_SUBJECTS, resourceType, resourceId, permission, subjectType, "",
                 () -> delegate.lookupSubjects(resourceType, resourceId, permission, subjectType, consistency));
     }
 
@@ -86,14 +87,14 @@ public class InterceptorTransport extends ForwardingTransport {
     public List<String> lookupResources(String resourceType, String permission,
                                          String subjectType, String subjectId,
                                          Consistency consistency) {
-        return intercept("LOOKUP_RESOURCES", resourceType, "", permission, subjectType, subjectId,
+        return intercept(SdkAction.LOOKUP_RESOURCES, resourceType, "", permission, subjectType, subjectId,
                 () -> delegate.lookupResources(resourceType, permission, subjectType, subjectId, consistency));
     }
 
     @Override
     public ExpandTree expand(String resourceType, String resourceId,
                               String permission, Consistency consistency) {
-        return intercept("EXPAND", resourceType, resourceId, permission, "", "",
+        return intercept(SdkAction.EXPAND, resourceType, resourceId, permission, "", "",
                 () -> delegate.expand(resourceType, resourceId, permission, consistency));
     }
 
@@ -102,7 +103,7 @@ public class InterceptorTransport extends ForwardingTransport {
         delegate.close();
     }
 
-    private <T> T intercept(String action, String resType, String resId,
+    private <T> T intercept(SdkAction action, String resType, String resId,
                              String perm, String subType, String subId,
                              Supplier<T> call) {
         var ctx = new OperationContext(action, resType, resId, perm, subType, subId);

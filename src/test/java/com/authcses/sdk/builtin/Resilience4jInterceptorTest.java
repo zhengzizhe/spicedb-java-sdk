@@ -2,6 +2,7 @@ package com.authcses.sdk.builtin;
 
 import com.authcses.sdk.event.SdkEventBus;
 import com.authcses.sdk.exception.AuthCsesException;
+import com.authcses.sdk.model.enums.SdkAction;
 import com.authcses.sdk.spi.SdkInterceptor;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,7 @@ class Resilience4jInterceptorTest {
                 .eventBus(new SdkEventBus())
                 .build();
 
-        var ctx = new SdkInterceptor.OperationContext("CHECK", "doc", "1", "view", "user", "alice");
+        var ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
         interceptor.before(ctx);
 
         assertThatThrownBy(() -> interceptor.before(ctx))
@@ -32,10 +33,10 @@ class Resilience4jInterceptorTest {
                 .eventBus(new SdkEventBus())
                 .build();
 
-        var ctx1 = new SdkInterceptor.OperationContext("CHECK", "doc", "1", "view", "user", "alice");
+        var ctx1 = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
         interceptor.before(ctx1);
 
-        var ctx2 = new SdkInterceptor.OperationContext("CHECK", "doc", "2", "view", "user", "bob");
+        var ctx2 = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "2", "view", "user", "bob");
         assertThatThrownBy(() -> interceptor.before(ctx2))
                 .isInstanceOf(AuthCsesException.class)
                 .hasMessageContaining("Bulkhead rejected");
@@ -50,7 +51,7 @@ class Resilience4jInterceptorTest {
                 .eventBus(new SdkEventBus())
                 .build();
 
-        var ctx = new SdkInterceptor.OperationContext("CHECK", "doc", "1", "view", "user", "alice");
+        var ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
         for (int i = 0; i < 1000; i++) {
             interceptor.before(ctx);
             interceptor.after(ctx);

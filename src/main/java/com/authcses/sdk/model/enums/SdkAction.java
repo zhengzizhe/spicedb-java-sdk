@@ -10,5 +10,6 @@ public enum SdkAction {
     DELETE,
     READ,
     LOOKUP_SUBJECTS,
-    LOOKUP_RESOURCES;
+    LOOKUP_RESOURCES,
+    EXPAND;
 }
