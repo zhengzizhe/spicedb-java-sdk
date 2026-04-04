@@ -1,0 +1,27 @@
+/** Test schema for SDK integration testing. */
+
+definition user {}
+
+definition group {
+    relation member: user
+}
+
+definition document {
+    relation owner: user
+    relation editor: user | group#member
+    relation viewer: user | group#member | user:*
+
+    permission edit = owner + editor
+    permission view = edit + viewer
+    permission delete = owner
+}
+
+definition folder {
+    relation owner: user
+    relation editor: user
+    relation viewer: user | user:*
+    relation parent: folder
+
+    permission edit = owner + editor
+    permission view = edit + viewer
+}

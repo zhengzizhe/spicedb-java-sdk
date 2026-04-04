@@ -1,0 +1,12 @@
+server:
+  port: 8081
+
+spicedb:
+  # Two SpiceDB instances for multi-instance testing
+  target: "localhost:50051"
+  target-secondary: "localhost:50052"
+  preshared-key: "testkey"
+  cache-enabled: true
+  cache-max-size: 10000
+  watch-invalidation: true
+  virtual-threads: true

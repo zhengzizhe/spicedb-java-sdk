@@ -1,0 +1,131 @@
+# ============================================================
+#  Local test cluster:
+#    - 3 CockroachDB nodes (single cluster, consensus-ready)
+#    - 2 SpiceDB instances (both point to same CRDB)
+# ============================================================
+
+services:
+
+  # ---- CockroachDB cluster (3 nodes) ----
+
+  crdb-1:
+    image: cockroachdb/cockroach:v24.3.4
+    command: start --insecure --join=crdb-1,crdb-2,crdb-3 --advertise-addr=crdb-1
+    hostname: crdb-1
+    ports:
+      - "26257:26257"   # SQL
+      - "8080:8080"     # Admin UI
+    volumes:
+      - crdb-1-data:/cockroach/cockroach-data
+    healthcheck:
+      test: ["CMD-SHELL", "cockroach sql --insecure --host=crdb-1 -e 'SELECT 1' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  crdb-2:
+    image: cockroachdb/cockroach:v24.3.4
+    command: start --insecure --join=crdb-1,crdb-2,crdb-3 --advertise-addr=crdb-2
+    hostname: crdb-2
+    volumes:
+      - crdb-2-data:/cockroach/cockroach-data
+
+  crdb-3:
+    image: cockroachdb/cockroach:v24.3.4
+    command: start --insecure --join=crdb-1,crdb-2,crdb-3 --advertise-addr=crdb-3
+    hostname: crdb-3
+    volumes:
+      - crdb-3-data:/cockroach/cockroach-data
+
+  # Initialize the CRDB cluster (one-shot, retries until cluster is ready)
+  crdb-init:
+    image: cockroachdb/cockroach:v24.3.4
+    command: >
+      shell -c "
+        echo 'Waiting for CockroachDB to be ready...';
+        for i in $$(seq 1 30); do
+          cockroach init --insecure --host=crdb-1 2>/dev/null && break;
+          sleep 2;
+        done;
+        cockroach sql --insecure --host=crdb-1 -e '
+          CREATE DATABASE IF NOT EXISTS spicedb;
+        ';
+        echo 'CockroachDB cluster initialized.'
+      "
+    depends_on:
+      - crdb-1
+      - crdb-2
+      - crdb-3
+
+  # ---- SpiceDB instances (2 nodes, same CRDB backend) ----
+
+  spicedb-1:
+    image: authzed/spicedb:v1.41.0
+    command: serve
+    environment:
+      SPICEDB_GRPC_PRESHARED_KEY: "testkey"
+      SPICEDB_DATASTORE_ENGINE: cockroachdb
+      SPICEDB_DATASTORE_CONN_URI: "postgresql://root@crdb-1:26257/spicedb?sslmode=disable"
+    ports:
+      - "50051:50051"   # gRPC
+      - "8443:8443"     # HTTP gateway
+      - "9090:9090"     # metrics
+    depends_on:
+      crdb-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  spicedb-2:
+    image: authzed/spicedb:v1.41.0
+    command: serve
+    environment:
+      SPICEDB_GRPC_PRESHARED_KEY: "testkey"
+      SPICEDB_DATASTORE_ENGINE: cockroachdb
+      SPICEDB_DATASTORE_CONN_URI: "postgresql://root@crdb-2:26257/spicedb?sslmode=disable"
+    ports:
+      - "50052:50051"   # gRPC (different host port)
+      - "8444:8443"
+      - "9091:9090"
+    depends_on:
+      crdb-init:
+        condition: service_completed_successfully
+
+  # ---- Schema migration (one-shot, writes schema to SpiceDB) ----
+
+  spicedb-migrate:
+    image: authzed/spicedb:v1.41.0
+    command: >
+      migrate head
+    environment:
+      SPICEDB_DATASTORE_ENGINE: cockroachdb
+      SPICEDB_DATASTORE_CONN_URI: "postgresql://root@crdb-1:26257/spicedb?sslmode=disable"
+    depends_on:
+      crdb-init:
+        condition: service_completed_successfully
+
+  # ---- Schema writer (loads test schema into SpiceDB) ----
+
+  schema-writer:
+    image: authzed/zed:v0.24.0
+    entrypoint: >
+      sh -c "
+        sleep 5;
+        zed schema write --endpoint=spicedb-1:50051 --insecure --token=testkey /schema/schema.zed;
+        echo 'Schema written successfully.'
+      "
+    volumes:
+      - ./schema.zed:/schema/schema.zed:ro
+    depends_on:
+      - spicedb-1
+      - spicedb-migrate
+
+volumes:
+  crdb-1-data:
+  crdb-2-data:
+  crdb-3-data:
