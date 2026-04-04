@@ -1,6 +1,6 @@
 package com.authcses.sdk;
 
-import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.transport.SdkTransport;
 
 import java.util.*;
@@ -51,7 +51,9 @@ public class LookupQuery {
     public List<String> fetch() {
         if (permission == null) throw new IllegalStateException("withPermission() must be called before fetch()");
         if (subjectId == null) throw new IllegalStateException("by() must be called before fetch()");
-        return transport.lookupResources(resourceType, permission, subjectType, subjectId, consistency, limit);
+        var request = new LookupResourcesRequest(resourceType, Permission.of(permission),
+                SubjectRef.of(subjectType, subjectId, null), limit);
+        return transport.lookupResources(request, consistency);
     }
 
     public Set<String> fetchSet() {

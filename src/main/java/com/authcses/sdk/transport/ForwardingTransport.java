@@ -3,7 +3,6 @@ package com.authcses.sdk.transport;
 import com.authcses.sdk.model.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Abstract base for transport decorators. Delegates all methods to {@link #delegate()}.
@@ -16,24 +15,13 @@ public abstract class ForwardingTransport implements SdkTransport {
     protected abstract SdkTransport delegate();
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
-        return delegate().check(resourceType, resourceId, permission, subjectType, subjectId, consistency);
+    public CheckResult check(CheckRequest request) {
+        return delegate().check(request);
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency, Map<String, Object> context) {
-        return delegate().check(resourceType, resourceId, permission, subjectType, subjectId, consistency, context);
-    }
-
-    @Override
-    public BulkCheckResult checkBulk(String resourceType, String resourceId,
-                                     String permission, List<String> subjectIds, String defaultSubjectType,
-                                     Consistency consistency) {
-        return delegate().checkBulk(resourceType, resourceId, permission, subjectIds, defaultSubjectType, consistency);
+    public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
+        return delegate().checkBulk(request, subjects);
     }
 
     @Override
@@ -52,50 +40,29 @@ public abstract class ForwardingTransport implements SdkTransport {
     }
 
     @Override
-    public List<Tuple> readRelationships(String resourceType, String resourceId,
-                                         String relation, Consistency consistency) {
-        return delegate().readRelationships(resourceType, resourceId, relation, consistency);
+    public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
+        return delegate().readRelationships(resource, relation, consistency);
     }
 
     @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency) {
-        return delegate().lookupSubjects(resourceType, resourceId, permission, subjectType, consistency);
+    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
+        return delegate().lookupSubjects(request, consistency);
     }
 
     @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency, int limit) {
-        return delegate().lookupSubjects(resourceType, resourceId, permission, subjectType, consistency, limit);
+    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
+        return delegate().lookupResources(request, consistency);
     }
 
     @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency) {
-        return delegate().lookupResources(resourceType, permission, subjectType, subjectId, consistency);
+    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+                                        Relation optionalRelation) {
+        return delegate().deleteByFilter(resource, subject, optionalRelation);
     }
 
     @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency, int limit) {
-        return delegate().lookupResources(resourceType, permission, subjectType, subjectId, consistency, limit);
-    }
-
-    @Override
-    public RevokeResult deleteByFilter(String resourceType, String resourceId,
-                                        String subjectType, String subjectId,
-                                        String optionalRelation) {
-        return delegate().deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation);
-    }
-
-    @Override
-    public ExpandTree expand(String resourceType, String resourceId,
-                              String permission, Consistency consistency) {
-        return delegate().expand(resourceType, resourceId, permission, consistency);
+    public ExpandTree expand(ResourceRef resource, Permission permission, Consistency consistency) {
+        return delegate().expand(resource, permission, consistency);
     }
 
     @Override

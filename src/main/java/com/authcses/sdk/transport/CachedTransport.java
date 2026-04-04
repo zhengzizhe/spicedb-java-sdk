@@ -32,11 +32,13 @@ public class CachedTransport extends ForwardingTransport {
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
-        if (consistency instanceof Consistency.MinimizeLatency) {
-            var cached = cache.get(resourceType, resourceId, permission, subjectType, subjectId);
+    public CheckResult check(CheckRequest request) {
+        boolean hasCaveat = request.caveatContext() != null && !request.caveatContext().isEmpty();
+
+        if (!hasCaveat && request.consistency() instanceof Consistency.MinimizeLatency) {
+            var key = request.toKey();
+            var cached = cache.get(key.resource().type(), key.resource().id(),
+                    key.permission().name(), key.subject().type(), key.subject().id());
             if (cached.isPresent()) {
                 if (metrics != null) metrics.recordCacheHit();
                 return cached.get();
@@ -44,21 +46,15 @@ public class CachedTransport extends ForwardingTransport {
             if (metrics != null) metrics.recordCacheMiss();
         }
 
-        var result = delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency);
+        var result = delegate.check(request);
 
-        if (consistency instanceof Consistency.MinimizeLatency) {
-            cache.put(resourceType, resourceId, permission, subjectType, subjectId, result);
+        if (!hasCaveat && request.consistency() instanceof Consistency.MinimizeLatency) {
+            var key = request.toKey();
+            cache.put(key.resource().type(), key.resource().id(),
+                    key.permission().name(), key.subject().type(), key.subject().id(), result);
         }
         if (metrics != null) metrics.updateCacheSize(cache.size());
         return result;
-    }
-
-    @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency, java.util.Map<String, Object> context) {
-        // Context-aware checks bypass cache — different contexts produce different results
-        return delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency, context);
     }
 
     @Override
@@ -76,11 +72,10 @@ public class CachedTransport extends ForwardingTransport {
     }
 
     @Override
-    public RevokeResult deleteByFilter(String resourceType, String resourceId,
-                                        String subjectType, String subjectId,
-                                        String optionalRelation) {
-        var result = delegate.deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation);
-        cache.invalidateResource(resourceType, resourceId);
+    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+                                        Relation optionalRelation) {
+        var result = delegate.deleteByFilter(resource, subject, optionalRelation);
+        cache.invalidateResource(resource.type(), resource.id());
         return result;
     }
 
@@ -93,7 +88,7 @@ public class CachedTransport extends ForwardingTransport {
     private void invalidateAffectedResources(List<RelationshipUpdate> updates) {
         record ResourceKey(String type, String id) {}
         updates.stream()
-                .map(u -> new ResourceKey(u.resourceType(), u.resourceId()))
+                .map(u -> new ResourceKey(u.resource().type(), u.resource().id()))
                 .distinct()
                 .forEach(k -> cache.invalidateResource(k.type, k.id));
     }

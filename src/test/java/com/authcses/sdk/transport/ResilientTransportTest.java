@@ -3,8 +3,7 @@ package com.authcses.sdk.transport;
 import com.authcses.sdk.event.SdkEventBus;
 import com.authcses.sdk.exception.AuthCsesConnectionException;
 import com.authcses.sdk.exception.CircuitBreakerOpenException;
-import com.authcses.sdk.model.CheckResult;
-import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.model.enums.Permissionship;
 import com.authcses.sdk.policy.CircuitBreakerPolicy;
 import com.authcses.sdk.policy.PolicyRegistry;
@@ -30,10 +29,12 @@ class ResilientTransportTest {
         delegate.writeRelationships(java.util.List.of(
                 new SdkTransport.RelationshipUpdate(
                         SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                        "document", "doc-1", "viewer", "user", "alice", null)));
+                        ResourceRef.of("document", "doc-1"),
+                        Relation.of("viewer"),
+                        SubjectRef.of("user", "alice", null))));
         var transport = new ResilientTransport(delegate, PolicyRegistry.withDefaults(), new SdkEventBus());
 
-        var result = transport.check("document", "doc-1", "viewer", "user", "alice", Consistency.minimizeLatency());
+        var result = transport.check(CheckRequest.from("document", "doc-1", "viewer", "user", "alice", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
     }
 
@@ -51,7 +52,7 @@ class ResilientTransportTest {
         SdkTransport delegate = failingDelegate(callCount, 2, OK);
         var transport = new ResilientTransport(delegate, policy, new SdkEventBus());
 
-        var result = transport.check("document", "doc-1", "view", "user", "alice", Consistency.minimizeLatency());
+        var result = transport.check(CheckRequest.from("document", "doc-1", "view", "user", "alice", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
         assertThat(callCount.get()).isEqualTo(3); // 2 failures + 1 success
     }
@@ -76,13 +77,13 @@ class ResilientTransportTest {
 
         // Exhaust the sliding window
         for (int i = 0; i < 4; i++) {
-            try { transport.check("doc", "1", "view", "user", "a", Consistency.minimizeLatency()); }
+            try { transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
         // Next call should be rejected by circuit breaker
         assertThatThrownBy(() ->
-                transport.check("doc", "1", "view", "user", "a", Consistency.minimizeLatency()))
+                transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);
     }
 
@@ -107,17 +108,17 @@ class ResilientTransportTest {
 
         // Open the circuit
         for (int i = 0; i < 4; i++) {
-            try { transport.check("doc", "1", "view", "user", "a", Consistency.minimizeLatency()); }
+            try { transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
         // fail-open for "view"
-        var result = transport.check("doc", "1", "view", "user", "a", Consistency.minimizeLatency());
+        var result = transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
 
         // "edit" is NOT in fail-open set
         assertThatThrownBy(() ->
-                transport.check("doc", "1", "edit", "user", "a", Consistency.minimizeLatency()))
+                transport.check(CheckRequest.from("doc", "1", "edit", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);
     }
 
@@ -141,18 +142,18 @@ class ResilientTransportTest {
 
         // Fail "document" breaker
         for (int i = 0; i < 4; i++) {
-            try { transport.check("document", "1", "view", "user", "a", Consistency.minimizeLatency()); }
+            try { transport.check(CheckRequest.from("document", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
         // "document" circuit is open
         assertThatThrownBy(() ->
-                transport.check("document", "1", "view", "user", "a", Consistency.minimizeLatency()))
+                transport.check(CheckRequest.from("document", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);
 
         // "folder" circuit is still closed — should call delegate (and fail, but not with CircuitBreakerOpenException)
         assertThatThrownBy(() ->
-                transport.check("folder", "1", "view", "user", "a", Consistency.minimizeLatency()))
+                transport.check(CheckRequest.from("folder", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(AuthCsesConnectionException.class);
     }
 
@@ -172,7 +173,7 @@ class ResilientTransportTest {
         // Even after many failures, no CircuitBreakerOpenException
         for (int i = 0; i < 100; i++) {
             assertThatThrownBy(() ->
-                    transport.check("doc", "1", "view", "user", "a", Consistency.minimizeLatency()))
+                    transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
                     .isInstanceOf(AuthCsesConnectionException.class);
         }
         assertThat(callCount.get()).isEqualTo(100);
@@ -202,20 +203,20 @@ class ResilientTransportTest {
 
         // 2 logical calls, each generating 3 retry attempts = 6 CB failure recordings
         for (int i = 0; i < 2; i++) {
-            try { transport.check("doc", "1", "view", "user", "a", Consistency.minimizeLatency()); }
+            try { transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
         // Circuit should now be open
         assertThatThrownBy(() ->
-                transport.check("doc", "1", "view", "user", "a", Consistency.minimizeLatency()))
+                transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);
     }
 
     @Test
     void close_cleansUpInstances() {
         var transport = new ResilientTransport(new InMemoryTransport(), PolicyRegistry.withDefaults(), new SdkEventBus());
-        transport.check("document", "1", "viewer", "user", "a", Consistency.minimizeLatency());
+        transport.check(CheckRequest.from("document", "1", "viewer", "user", "a", Consistency.minimizeLatency()));
         transport.close(); // should not throw
     }
 
@@ -224,7 +225,7 @@ class ResilientTransportTest {
     private SdkTransport failingDelegate(AtomicInteger callCount, int failCount, CheckResult successResult) {
         return new InMemoryTransport() {
             @Override
-            public CheckResult check(String rt, String ri, String p, String st, String si, Consistency c) {
+            public CheckResult check(CheckRequest request) {
                 if (callCount.getAndIncrement() < failCount) {
                     throw new AuthCsesConnectionException("transient failure");
                 }
@@ -236,7 +237,7 @@ class ResilientTransportTest {
     private SdkTransport alwaysFailingDelegate(AtomicInteger callCount) {
         return new InMemoryTransport() {
             @Override
-            public CheckResult check(String rt, String ri, String p, String st, String si, Consistency c) {
+            public CheckResult check(CheckRequest request) {
                 callCount.incrementAndGet();
                 throw new AuthCsesConnectionException("always fails");
             }

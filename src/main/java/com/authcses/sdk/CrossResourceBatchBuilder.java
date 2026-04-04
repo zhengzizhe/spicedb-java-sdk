@@ -1,7 +1,6 @@
 package com.authcses.sdk;
 
-import com.authcses.sdk.model.BatchResult;
-import com.authcses.sdk.model.Ref;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.transport.SdkTransport;
 import com.authcses.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authcses.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
@@ -95,25 +94,29 @@ public class CrossResourceBatchBuilder {
         }
 
         public ResourceScope to(Collection<String> userIds) {
+            ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
             for (String rel : relations) {
                 for (String uid : userIds) {
                     scope.batch.addUpdate(new RelationshipUpdate(
                             Operation.TOUCH,
-                            scope.resourceType, scope.resourceId, rel,
-                            scope.batch.defaultSubjectType, uid, null));
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(scope.batch.defaultSubjectType, uid, null)));
                 }
             }
             return scope;
         }
 
         public ResourceScope toSubjects(String... subjectRefs) {
+            ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
             for (String rel : relations) {
                 for (String ref : subjectRefs) {
                     Ref parsed = Ref.parse(ref);
                     scope.batch.addUpdate(new RelationshipUpdate(
                             Operation.TOUCH,
-                            scope.resourceType, scope.resourceId, rel,
-                            parsed.type(), parsed.id(), parsed.relation()));
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(parsed.type(), parsed.id(), parsed.relation())));
                 }
             }
             return scope;
@@ -134,12 +137,14 @@ public class CrossResourceBatchBuilder {
         }
 
         public ResourceScope from(Collection<String> userIds) {
+            ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
             for (String rel : relations) {
                 for (String uid : userIds) {
                     scope.batch.addUpdate(new RelationshipUpdate(
                             Operation.DELETE,
-                            scope.resourceType, scope.resourceId, rel,
-                            scope.batch.defaultSubjectType, uid, null));
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(scope.batch.defaultSubjectType, uid, null)));
                 }
             }
             return scope;

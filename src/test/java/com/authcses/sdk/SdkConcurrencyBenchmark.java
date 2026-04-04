@@ -2,8 +2,7 @@ package com.authcses.sdk;
 
 import com.authcses.sdk.cache.CaffeineCheckCache;
 import com.authcses.sdk.event.SdkEventBus;
-import com.authcses.sdk.model.CheckResult;
-import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.policy.PolicyRegistry;
 import com.authcses.sdk.transport.*;
 
@@ -114,7 +113,7 @@ public class SdkConcurrencyBenchmark {
                     String userId = "user-" + rng.nextInt(userCount);
 
                     long opStart = System.nanoTime();
-                    transport.check("document", docId, "editor", "user", userId, Consistency.minimizeLatency());
+                    transport.check(CheckRequest.from("document", docId, "editor", "user", userId, Consistency.minimizeLatency()));
                     long opNanos = System.nanoTime() - opStart;
 
                     totalNanos.addAndGet(opNanos);
@@ -171,7 +170,7 @@ public class SdkConcurrencyBenchmark {
                 }
                 for (int i = 0; i < opsPerThread; i++) {
                     long opStart = System.nanoTime();
-                    transport.check("document", "doc-0", "editor", "user", "user-0", Consistency.minimizeLatency());
+                    transport.check(CheckRequest.from("document", "doc-0", "editor", "user", "user-0", Consistency.minimizeLatency()));
                     long opNanos = System.nanoTime() - opStart;
 
                     totalNanos.addAndGet(opNanos);
@@ -210,8 +209,9 @@ public class SdkConcurrencyBenchmark {
                 if ((d + u) % 5 == 0) { // ~20% hit rate
                     updates.add(new SdkTransport.RelationshipUpdate(
                             SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                            "document", "doc-" + d, "editor",
-                            "user", "user-" + u, null));
+                            ResourceRef.of("document", "doc-" + d),
+                            Relation.of("editor"),
+                            SubjectRef.of("user", "user-" + u, null)));
                 }
             }
         }
@@ -221,7 +221,7 @@ public class SdkConcurrencyBenchmark {
     static void warmCache(SdkTransport transport, int docCount, int userCount) {
         for (int d = 0; d < docCount; d++) {
             for (int u = 0; u < userCount; u++) {
-                transport.check("document", "doc-" + d, "editor", "user", "user-" + u, Consistency.minimizeLatency());
+                transport.check(CheckRequest.from("document", "doc-" + d, "editor", "user", "user-" + u, Consistency.minimizeLatency()));
             }
         }
     }

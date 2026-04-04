@@ -35,21 +35,23 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
-        var result = delegate.check(resourceType, resourceId, permission, subjectType, subjectId,
-                resolveConsistency(resourceType, consistency));
+    public CheckResult check(CheckRequest request) {
+        var resolved = resolveConsistency(request.resource().type(), request.consistency());
+        CheckRequest adjusted = resolved == request.consistency()
+                ? request
+                : new CheckRequest(request.resource(), request.permission(), request.subject(), resolved, request.caveatContext());
+        var result = delegate.check(adjusted);
         tokenTracker.recordRead(result.zedToken());
         return result;
     }
 
     @Override
-    public BulkCheckResult checkBulk(String resourceType, String resourceId,
-                                     String permission, List<String> subjectIds, String defaultSubjectType,
-                                     Consistency consistency) {
-        return delegate.checkBulk(resourceType, resourceId, permission, subjectIds, defaultSubjectType,
-                resolveConsistency(resourceType, consistency));
+    public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
+        var resolved = resolveConsistency(request.resource().type(), request.consistency());
+        CheckRequest adjusted = resolved == request.consistency()
+                ? request
+                : new CheckRequest(request.resource(), request.permission(), request.subject(), resolved, request.caveatContext());
+        return delegate.checkBulk(adjusted, subjects);
     }
 
     @Override
@@ -67,33 +69,27 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     }
 
     @Override
-    public List<Tuple> readRelationships(String resourceType, String resourceId,
-                                          String relation, Consistency consistency) {
-        return delegate.readRelationships(resourceType, resourceId, relation,
-                resolveConsistency(resourceType, consistency));
+    public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
+        return delegate.readRelationships(resource, relation,
+                resolveConsistency(resource.type(), consistency));
     }
 
     @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency) {
-        return delegate.lookupSubjects(resourceType, resourceId, permission, subjectType,
-                resolveConsistency(resourceType, consistency));
+    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
+        return delegate.lookupSubjects(request,
+                resolveConsistency(request.resource().type(), consistency));
     }
 
     @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency) {
-        return delegate.lookupResources(resourceType, permission, subjectType, subjectId,
-                resolveConsistency(resourceType, consistency));
+    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
+        return delegate.lookupResources(request,
+                resolveConsistency(request.resourceType(), consistency));
     }
 
     @Override
-    public RevokeResult deleteByFilter(String resourceType, String resourceId,
-                                        String subjectType, String subjectId,
-                                        String optionalRelation) {
-        var result = delegate.deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation);
+    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+                                        Relation optionalRelation) {
+        var result = delegate.deleteByFilter(resource, subject, optionalRelation);
         tokenTracker.recordWrite(result.zedToken());
         return result;
     }

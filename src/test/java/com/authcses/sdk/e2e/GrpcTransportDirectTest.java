@@ -1,8 +1,6 @@
 package com.authcses.sdk.e2e;
 
-import com.authcses.sdk.model.CheckResult;
-import com.authcses.sdk.model.Consistency;
-import com.authcses.sdk.model.GrantResult;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.transport.GrpcTransport;
 import com.authcses.sdk.transport.SdkTransport;
 import org.junit.jupiter.api.*;
@@ -27,7 +25,7 @@ class GrpcTransportDirectTest {
                     .usePlaintext().build();
             transport = new GrpcTransport(channel, "dev-token", 5000);
             // Quick smoke test — if SpiceDB is down, this will throw
-            transport.readRelationships("document", "__probe__", null, Consistency.full());
+            transport.readRelationships(ResourceRef.of("document", "__probe__"), null, Consistency.full());
         } catch (Exception e) {
             transport = null;
             assumeTrue(false, "SpiceDB not reachable: " + e.getMessage());
@@ -46,21 +44,23 @@ class GrpcTransportDirectTest {
         GrantResult wr = transport.writeRelationships(List.of(
                 new SdkTransport.RelationshipUpdate(
                         SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                        "document", "grpc-test-1", "editor",
-                        "user", "grpc-alice", null)));
+                        ResourceRef.of("document", "grpc-test-1"),
+                        Relation.of("editor"),
+                        SubjectRef.of("user", "grpc-alice", null))));
         assertNotNull(wr.zedToken());
 
         // Check
         CheckResult cr = transport.check(
-                "document", "grpc-test-1", "editor",
-                "user", "grpc-alice", Consistency.full());
+                CheckRequest.from("document", "grpc-test-1", "editor",
+                        "user", "grpc-alice", Consistency.full()));
         assertTrue(cr.hasPermission(), "grpc-alice should have editor after write");
     }
 
     @Test
     @Order(2)
     void readRelationships() {
-        var tuples = transport.readRelationships("document", "grpc-test-1", "editor", Consistency.full());
+        var tuples = transport.readRelationships(
+                ResourceRef.of("document", "grpc-test-1"), Relation.of("editor"), Consistency.full());
         assertFalse(tuples.isEmpty());
         assertEquals("grpc-alice", tuples.getFirst().subjectId());
     }
@@ -68,8 +68,10 @@ class GrpcTransportDirectTest {
     @Test
     @Order(3)
     void lookupSubjects() {
-        var subjects = transport.lookupSubjects(
-                "document", "grpc-test-1", "editor", "user", Consistency.full());
+        var request = new LookupSubjectsRequest(
+                ResourceRef.of("document", "grpc-test-1"),
+                Permission.of("editor"), "user");
+        var subjects = transport.lookupSubjects(request, Consistency.full());
         assertTrue(subjects.contains("grpc-alice"));
     }
 
@@ -79,12 +81,13 @@ class GrpcTransportDirectTest {
         transport.deleteRelationships(List.of(
                 new SdkTransport.RelationshipUpdate(
                         SdkTransport.RelationshipUpdate.Operation.DELETE,
-                        "document", "grpc-test-1", "editor",
-                        "user", "grpc-alice", null)));
+                        ResourceRef.of("document", "grpc-test-1"),
+                        Relation.of("editor"),
+                        SubjectRef.of("user", "grpc-alice", null))));
 
         CheckResult cr = transport.check(
-                "document", "grpc-test-1", "editor",
-                "user", "grpc-alice", Consistency.full());
+                CheckRequest.from("document", "grpc-test-1", "editor",
+                        "user", "grpc-alice", Consistency.full()));
         assertFalse(cr.hasPermission(), "grpc-alice should no longer have editor");
     }
 }

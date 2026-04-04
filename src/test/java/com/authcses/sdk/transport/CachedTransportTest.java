@@ -1,8 +1,7 @@
 package com.authcses.sdk.transport;
 
 import com.authcses.sdk.cache.CaffeineCheckCache;
-import com.authcses.sdk.model.CheckResult;
-import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,15 +31,17 @@ class CachedTransportTest {
         // Write a relationship
         cached.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                "document", "d1", "editor", "user", "alice", null)));
+                ResourceRef.of("document", "d1"),
+                Relation.of("editor"),
+                SubjectRef.of("user", "alice", null))));
 
         // First check — miss, goes to delegate
-        var r1 = cached.check("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
+        var r1 = cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         assertTrue(r1.hasPermission());
         assertEquals(1, cache.size());
 
         // Second check — cache hit
-        var r2 = cached.check("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
+        var r2 = cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         assertTrue(r2.hasPermission());
     }
 
@@ -48,10 +49,12 @@ class CachedTransportTest {
     void check_fullConsistency_bypassesCache() {
         cached.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                "document", "d1", "editor", "user", "alice", null)));
+                ResourceRef.of("document", "d1"),
+                Relation.of("editor"),
+                SubjectRef.of("user", "alice", null))));
 
         // Full consistency — should NOT cache
-        cached.check("document", "d1", "editor", "user", "alice", Consistency.full());
+        cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.full()));
         assertEquals(0, cache.size());
     }
 
@@ -60,14 +63,18 @@ class CachedTransportTest {
         // Populate cache
         cached.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                "document", "d1", "editor", "user", "alice", null)));
-        cached.check("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
+                ResourceRef.of("document", "d1"),
+                Relation.of("editor"),
+                SubjectRef.of("user", "alice", null))));
+        cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         assertEquals(1, cache.size());
 
         // Write (grant another user) → should invalidate d1's cache
         cached.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                "document", "d1", "viewer", "user", "bob", null)));
+                ResourceRef.of("document", "d1"),
+                Relation.of("viewer"),
+                SubjectRef.of("user", "bob", null))));
         assertEquals(0, cache.size());
     }
 
@@ -75,12 +82,16 @@ class CachedTransportTest {
     void delete_invalidatesCache() {
         cached.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                "document", "d1", "editor", "user", "alice", null)));
-        cached.check("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
+                ResourceRef.of("document", "d1"),
+                Relation.of("editor"),
+                SubjectRef.of("user", "alice", null))));
+        cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         cached.deleteRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.DELETE,
-                "document", "d1", "editor", "user", "alice", null)));
+                ResourceRef.of("document", "d1"),
+                Relation.of("editor"),
+                SubjectRef.of("user", "alice", null))));
         assertEquals(0, cache.size());
     }
 }

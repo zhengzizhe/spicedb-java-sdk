@@ -74,7 +74,10 @@ public class ResourceHandle {
      * Useful for debugging why a user does/doesn't have a permission.
      */
     public ExpandTree expand(String permission) {
-        return transport.expand(resourceType, resourceId, permission, Consistency.full());
+        return transport.expand(
+                ResourceRef.of(resourceType, resourceId),
+                Permission.of(permission),
+                Consistency.full());
     }
 
     // ---- Who ----
@@ -149,13 +152,15 @@ public class ResourceHandle {
         }
 
         private GrantResult writeRelationships(List<Ref> subjects) {
+            ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
             List<RelationshipUpdate> updates = new ArrayList<>();
             for (String rel : relations) {
                 for (Ref sub : subjects) {
                     updates.add(new RelationshipUpdate(
                             Operation.TOUCH,
-                            handle.resourceType, handle.resourceId, rel,
-                            sub.type(), sub.id(), sub.relation(),
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(sub.type(), sub.id(), sub.relation()),
                             caveatName, caveatContext, expiresAt));
                 }
             }
@@ -191,13 +196,15 @@ public class ResourceHandle {
         }
 
         private RevokeResult deleteRelationships(List<Ref> subjects) {
+            ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
             List<RelationshipUpdate> updates = new ArrayList<>();
             for (String rel : relations) {
                 for (Ref sub : subjects) {
                     updates.add(new RelationshipUpdate(
                             Operation.DELETE,
-                            handle.resourceType, handle.resourceId, rel,
-                            sub.type(), sub.id(), sub.relation()));
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(sub.type(), sub.id(), sub.relation())));
                 }
             }
             return handle.transport.deleteRelationships(updates);
@@ -222,22 +229,20 @@ public class ResourceHandle {
          * No TOCTOU race — does NOT read-then-delete.
          */
         public RevokeResult from(Collection<String> userIds) {
+            ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
             int totalDeleted = 0;
             String lastToken = null;
 
             for (String uid : userIds) {
+                SubjectRef subject = SubjectRef.of(handle.defaultSubjectType, uid, null);
                 if (relations == null || relations.length == 0) {
                     // Delete ALL relations for this subject on this resource
-                    var result = handle.transport.deleteByFilter(
-                            handle.resourceType, handle.resourceId,
-                            handle.defaultSubjectType, uid, null);
+                    var result = handle.transport.deleteByFilter(resource, subject, null);
                     totalDeleted += result.count();
                     if (result.zedToken() != null) lastToken = result.zedToken();
                 } else {
                     for (String rel : relations) {
-                        var result = handle.transport.deleteByFilter(
-                                handle.resourceType, handle.resourceId,
-                                handle.defaultSubjectType, uid, rel);
+                        var result = handle.transport.deleteByFilter(resource, subject, Relation.of(rel));
                         totalDeleted += result.count();
                         if (result.zedToken() != null) lastToken = result.zedToken();
                     }
@@ -271,16 +276,13 @@ public class ResourceHandle {
         }
 
         public CheckResult by(String userId) {
-            if (context != null) {
-                return handle.transport.check(
-                        handle.resourceType, handle.resourceId,
-                        permissions[0], handle.defaultSubjectType, userId,
-                        consistency, context);
-            }
-            return handle.transport.check(
-                    handle.resourceType, handle.resourceId,
-                    permissions[0], handle.defaultSubjectType, userId,
-                    consistency);
+            var request = new CheckRequest(
+                    ResourceRef.of(handle.resourceType, handle.resourceId),
+                    Permission.of(permissions[0]),
+                    SubjectRef.of(handle.defaultSubjectType, userId, null),
+                    consistency,
+                    context);
+            return handle.transport.check(request);
         }
 
         /** Async version. Uses the SDK's configured executor instead of ForkJoinPool.commonPool. */
@@ -293,10 +295,15 @@ public class ResourceHandle {
         }
 
         public BulkCheckResult byAll(Collection<String> userIds) {
-            return handle.transport.checkBulk(
-                    handle.resourceType, handle.resourceId,
-                    permissions[0], List.copyOf(userIds), handle.defaultSubjectType,
+            var request = CheckRequest.of(
+                    ResourceRef.of(handle.resourceType, handle.resourceId),
+                    Permission.of(permissions[0]),
+                    SubjectRef.of(handle.defaultSubjectType, "", null),
                     consistency);
+            List<SubjectRef> subjects = userIds.stream()
+                    .map(uid -> SubjectRef.of(handle.defaultSubjectType, uid, null))
+                    .toList();
+            return handle.transport.checkBulk(request, subjects);
         }
     }
 
@@ -322,8 +329,9 @@ public class ResourceHandle {
         public PermissionSet by(String userId) {
             var items = Arrays.stream(permissions)
                     .map(perm -> new SdkTransport.BulkCheckItem(
-                            handle.resourceType, handle.resourceId,
-                            perm, handle.defaultSubjectType, userId))
+                            ResourceRef.of(handle.resourceType, handle.resourceId),
+                            Permission.of(perm),
+                            SubjectRef.of(handle.defaultSubjectType, userId, null)))
                     .toList();
             List<CheckResult> results = handle.transport.checkBulkMulti(items, consistency);
             Map<String, CheckResult> map = new LinkedHashMap<>();
@@ -387,14 +395,14 @@ public class ResourceHandle {
         }
 
         public List<String> fetch() {
+            ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
             if (isPermission) {
-                return handle.transport.lookupSubjects(
-                        handle.resourceType, handle.resourceId,
-                        permissionOrRelation, handle.defaultSubjectType, consistency, limit);
+                var request = new LookupSubjectsRequest(resource,
+                        Permission.of(permissionOrRelation), handle.defaultSubjectType, limit);
+                return handle.transport.lookupSubjects(request, consistency);
             } else {
                 var results = handle.transport.readRelationships(
-                                handle.resourceType, handle.resourceId,
-                                permissionOrRelation, consistency).stream()
+                                resource, Relation.of(permissionOrRelation), consistency).stream()
                         .map(Tuple::subjectId)
                         .toList();
                 return limit > 0 && results.size() > limit ? results.subList(0, limit) : results;
@@ -439,14 +447,13 @@ public class ResourceHandle {
         }
 
         public List<Tuple> fetch() {
+            ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
             if (relations == null || relations.length == 0) {
-                return handle.transport.readRelationships(
-                        handle.resourceType, handle.resourceId, null, consistency);
+                return handle.transport.readRelationships(resource, null, consistency);
             }
             List<Tuple> result = new ArrayList<>();
             for (String rel : relations) {
-                result.addAll(handle.transport.readRelationships(
-                        handle.resourceType, handle.resourceId, rel, consistency));
+                result.addAll(handle.transport.readRelationships(resource, Relation.of(rel), consistency));
             }
             return result;
         }
@@ -542,25 +549,29 @@ public class ResourceHandle {
         }
 
         public BatchBuilder to(Collection<String> userIds) {
+            ResourceRef resource = ResourceRef.of(batch.handle.resourceType, batch.handle.resourceId);
             for (String rel : relations) {
                 for (String uid : userIds) {
                     batch.addUpdate(new RelationshipUpdate(
                             Operation.TOUCH,
-                            batch.handle.resourceType, batch.handle.resourceId, rel,
-                            batch.handle.defaultSubjectType, uid, null));
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(batch.handle.defaultSubjectType, uid, null)));
                 }
             }
             return batch;
         }
 
         public BatchBuilder toSubjects(String... subjectRefs) {
+            ResourceRef resource = ResourceRef.of(batch.handle.resourceType, batch.handle.resourceId);
             for (String rel : relations) {
                 for (String ref : subjectRefs) {
                     Ref parsed = Ref.parse(ref);
                     batch.addUpdate(new RelationshipUpdate(
                             Operation.TOUCH,
-                            batch.handle.resourceType, batch.handle.resourceId, rel,
-                            parsed.type(), parsed.id(), parsed.relation()));
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(parsed.type(), parsed.id(), parsed.relation())));
                 }
             }
             return batch;
@@ -581,25 +592,29 @@ public class ResourceHandle {
         }
 
         public BatchBuilder from(Collection<String> userIds) {
+            ResourceRef resource = ResourceRef.of(batch.handle.resourceType, batch.handle.resourceId);
             for (String rel : relations) {
                 for (String uid : userIds) {
                     batch.addUpdate(new RelationshipUpdate(
                             Operation.DELETE,
-                            batch.handle.resourceType, batch.handle.resourceId, rel,
-                            batch.handle.defaultSubjectType, uid, null));
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(batch.handle.defaultSubjectType, uid, null)));
                 }
             }
             return batch;
         }
 
         public BatchBuilder fromSubjects(String... subjectRefs) {
+            ResourceRef resource = ResourceRef.of(batch.handle.resourceType, batch.handle.resourceId);
             for (String rel : relations) {
                 for (String ref : subjectRefs) {
                     Ref parsed = Ref.parse(ref);
                     batch.addUpdate(new RelationshipUpdate(
                             Operation.DELETE,
-                            batch.handle.resourceType, batch.handle.resourceId, rel,
-                            parsed.type(), parsed.id(), parsed.relation()));
+                            resource,
+                            Relation.of(rel),
+                            SubjectRef.of(parsed.type(), parsed.id(), parsed.relation())));
                 }
             }
             return batch;

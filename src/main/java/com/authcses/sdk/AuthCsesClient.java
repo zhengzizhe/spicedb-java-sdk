@@ -174,14 +174,24 @@ public class AuthCsesClient implements AutoCloseable {
 
     // -- Check --
 
-    /** Check a single permission. Returns true if allowed. */
+    /** Check a single permission. Returns true if allowed. Default: minimize_latency. */
     public boolean check(String type, String id, String permission, String userId) {
+        // L0 fast path: direct cache lookup, skip entire transport chain
+        if (checkCache != null) {
+            var cached = checkCache.getIfPresent(type, id, permission, defaultSubjectType, userId);
+            if (cached != null) return cached.hasPermission();
+        }
         return on(type).check(id, permission, userId);
     }
 
     /** Check with explicit consistency. */
     public boolean check(String type, String id, String permission, String userId,
                          com.authcses.sdk.model.Consistency consistency) {
+        // L0 fast path: only for MinimizeLatency (cacheable)
+        if (consistency instanceof com.authcses.sdk.model.Consistency.MinimizeLatency && checkCache != null) {
+            var cached = checkCache.getIfPresent(type, id, permission, defaultSubjectType, userId);
+            if (cached != null) return cached.hasPermission();
+        }
         return on(type).check(id, permission, userId, consistency);
     }
 
@@ -257,7 +267,9 @@ public class AuthCsesClient implements AutoCloseable {
     public HealthResult health() {
         long start = System.nanoTime();
         try {
-            transport.readRelationships("healthprobe", "probe", null,
+            transport.readRelationships(
+                    com.authcses.sdk.model.ResourceRef.of("healthprobe", "probe"),
+                    null,
                     com.authcses.sdk.model.Consistency.minimizeLatency());
             long ms = (System.nanoTime() - start) / 1_000_000;
             return new HealthResult(true, ms, "SpiceDB reachable");

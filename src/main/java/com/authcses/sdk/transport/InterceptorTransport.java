@@ -29,73 +29,68 @@ public class InterceptorTransport extends ForwardingTransport {
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
-        return intercept(SdkAction.CHECK, resourceType, resourceId, permission, subjectType, subjectId,
-                () -> delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency));
+    public CheckResult check(CheckRequest request) {
+        return intercept(SdkAction.CHECK,
+                request.resource().type(), request.resource().id(),
+                request.permission().name(),
+                request.subject().type(), request.subject().id(),
+                () -> delegate.check(request));
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency, java.util.Map<String, Object> context) {
-        return intercept(SdkAction.CHECK, resourceType, resourceId, permission, subjectType, subjectId,
-                () -> delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency, context));
-    }
-
-    @Override
-    public BulkCheckResult checkBulk(String resourceType, String resourceId,
-                                     String permission, List<String> subjectIds, String defaultSubjectType,
-                                     Consistency consistency) {
-        return intercept(SdkAction.CHECK_BULK, resourceType, resourceId, permission, defaultSubjectType, "",
-                () -> delegate.checkBulk(resourceType, resourceId, permission, subjectIds, defaultSubjectType, consistency));
+    public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
+        return intercept(SdkAction.CHECK_BULK,
+                request.resource().type(), request.resource().id(),
+                request.permission().name(),
+                request.subject().type(), "",
+                () -> delegate.checkBulk(request, subjects));
     }
 
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        String resType = updates.isEmpty() ? "" : updates.getFirst().resourceType();
-        String resId = updates.isEmpty() ? "" : updates.getFirst().resourceId();
+        String resType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
+        String resId = updates.isEmpty() ? "" : updates.getFirst().resource().id();
         return intercept(SdkAction.WRITE, resType, resId, "", "", "",
                 () -> delegate.writeRelationships(updates));
     }
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        String resType = updates.isEmpty() ? "" : updates.getFirst().resourceType();
-        String resId = updates.isEmpty() ? "" : updates.getFirst().resourceId();
+        String resType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
+        String resId = updates.isEmpty() ? "" : updates.getFirst().resource().id();
         return intercept(SdkAction.DELETE, resType, resId, "", "", "",
                 () -> delegate.deleteRelationships(updates));
     }
 
     @Override
-    public List<Tuple> readRelationships(String resourceType, String resourceId,
-                                          String relation, Consistency consistency) {
-        return intercept(SdkAction.READ, resourceType, resourceId, relation, "", "",
-                () -> delegate.readRelationships(resourceType, resourceId, relation, consistency));
+    public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
+        return intercept(SdkAction.READ, resource.type(), resource.id(),
+                relation != null ? relation.name() : "", "", "",
+                () -> delegate.readRelationships(resource, relation, consistency));
     }
 
     @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency) {
-        return intercept(SdkAction.LOOKUP_SUBJECTS, resourceType, resourceId, permission, subjectType, "",
-                () -> delegate.lookupSubjects(resourceType, resourceId, permission, subjectType, consistency));
+    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
+        return intercept(SdkAction.LOOKUP_SUBJECTS,
+                request.resource().type(), request.resource().id(),
+                request.permission().name(), request.subjectType(), "",
+                () -> delegate.lookupSubjects(request, consistency));
     }
 
     @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency) {
-        return intercept(SdkAction.LOOKUP_RESOURCES, resourceType, "", permission, subjectType, subjectId,
-                () -> delegate.lookupResources(resourceType, permission, subjectType, subjectId, consistency));
+    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
+        return intercept(SdkAction.LOOKUP_RESOURCES,
+                request.resourceType(), "",
+                request.permission().name(),
+                request.subject().type(), request.subject().id(),
+                () -> delegate.lookupResources(request, consistency));
     }
 
     @Override
-    public ExpandTree expand(String resourceType, String resourceId,
-                              String permission, Consistency consistency) {
-        return intercept(SdkAction.EXPAND, resourceType, resourceId, permission, "", "",
-                () -> delegate.expand(resourceType, resourceId, permission, consistency));
+    public ExpandTree expand(ResourceRef resource, Permission permission, Consistency consistency) {
+        return intercept(SdkAction.EXPAND, resource.type(), resource.id(),
+                permission.name(), "", "",
+                () -> delegate.expand(resource, permission, consistency));
     }
 
     @Override

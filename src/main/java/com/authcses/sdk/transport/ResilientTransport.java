@@ -46,18 +46,17 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
+    public CheckResult check(CheckRequest request) {
+        String resourceType = request.resource().type();
         var policy = policyRegistry.resolve(resourceType);
         Set<String> failOpenPerms = policy.getCircuitBreaker() != null
                 ? policy.getCircuitBreaker().getFailOpenPermissions() : Set.of();
 
         try {
             return executeWithResilience(resourceType,
-                    () -> delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency));
+                    () -> delegate.check(request));
         } catch (CircuitBreakerOpenException e) {
-            if (failOpenPerms.contains(permission)) {
+            if (failOpenPerms.contains(request.permission().name())) {
                 return new CheckResult(Permissionship.HAS_PERMISSION, null, Optional.empty());
             }
             throw e;
@@ -65,68 +64,59 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     @Override
-    public BulkCheckResult checkBulk(String resourceType, String resourceId,
-                                     String permission, List<String> subjectIds, String defaultSubjectType,
-                                     Consistency consistency) {
-        return executeWithResilience(resourceType,
-                () -> delegate.checkBulk(resourceType, resourceId, permission, subjectIds, defaultSubjectType, consistency));
+    public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
+        return executeWithResilience(request.resource().type(),
+                () -> delegate.checkBulk(request, subjects));
     }
 
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        String resourceType = updates.isEmpty() ? "" : updates.getFirst().resourceType();
+        String resourceType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
         return executeWithResilience(resourceType, () -> delegate.writeRelationships(updates));
     }
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        String resourceType = updates.isEmpty() ? "" : updates.getFirst().resourceType();
+        String resourceType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
         return executeWithResilience(resourceType, () -> delegate.deleteRelationships(updates));
     }
 
     @Override
-    public List<Tuple> readRelationships(String resourceType, String resourceId,
-                                          String relation, Consistency consistency) {
-        return executeWithResilience(resourceType,
-                () -> delegate.readRelationships(resourceType, resourceId, relation, consistency));
+    public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
+        return executeWithResilience(resource.type(),
+                () -> delegate.readRelationships(resource, relation, consistency));
     }
 
     @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency) {
-        return executeWithResilience(resourceType,
-                () -> delegate.lookupSubjects(resourceType, resourceId, permission, subjectType, consistency));
+    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
+        return executeWithResilience(request.resource().type(),
+                () -> delegate.lookupSubjects(request, consistency));
     }
 
     @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency) {
-        return executeWithResilience(resourceType,
-                () -> delegate.lookupResources(resourceType, permission, subjectType, subjectId, consistency));
+    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
+        return executeWithResilience(request.resourceType(),
+                () -> delegate.lookupResources(request, consistency));
     }
 
     @Override
     public List<CheckResult> checkBulkMulti(List<BulkCheckItem> items, Consistency consistency) {
         if (items.isEmpty()) return List.of();
-        String resourceType = items.getFirst().resourceType();
+        String resourceType = items.getFirst().resource().type();
         return executeWithResilience(resourceType, () -> delegate.checkBulkMulti(items, consistency));
     }
 
     @Override
-    public RevokeResult deleteByFilter(String resourceType, String resourceId,
-                                        String subjectType, String subjectId,
-                                        String optionalRelation) {
-        return executeWithResilience(resourceType,
-                () -> delegate.deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation));
+    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+                                        Relation optionalRelation) {
+        return executeWithResilience(resource.type(),
+                () -> delegate.deleteByFilter(resource, subject, optionalRelation));
     }
 
     @Override
-    public ExpandTree expand(String resourceType, String resourceId,
-                              String permission, Consistency consistency) {
-        return executeWithResilience(resourceType,
-                () -> delegate.expand(resourceType, resourceId, permission, consistency));
+    public ExpandTree expand(ResourceRef resource, Permission permission, Consistency consistency) {
+        return executeWithResilience(resource.type(),
+                () -> delegate.expand(resource, permission, consistency));
     }
 
     public io.github.resilience4j.circuitbreaker.CircuitBreaker.State getCircuitBreakerState(String resourceType) {

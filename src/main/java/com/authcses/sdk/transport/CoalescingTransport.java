@@ -33,10 +33,8 @@ public class CoalescingTransport extends ForwardingTransport {
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
-        String key = coalescingKey(resourceType, resourceId, permission, subjectType, subjectId, consistency);
+    public CheckResult check(CheckRequest request) {
+        String key = coalescingKey(request);
 
         // Try to be the "owner" of this request
         CompletableFuture<CheckResult> myFuture = new CompletableFuture<>();
@@ -55,7 +53,7 @@ public class CoalescingTransport extends ForwardingTransport {
 
         // We are the owner — execute the call, share result with all waiters
         try {
-            var result = delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency);
+            var result = delegate.check(request);
             myFuture.complete(result);
             return result;
         } catch (Exception e) {
@@ -72,16 +70,15 @@ public class CoalescingTransport extends ForwardingTransport {
         delegate.close();
     }
 
-    private static String coalescingKey(String resourceType, String resourceId,
-                                        String permission, String subjectType, String subjectId,
-                                        Consistency consistency) {
-        String consistencyKey = switch (consistency) {
+    private static String coalescingKey(CheckRequest request) {
+        String consistencyKey = switch (request.consistency()) {
             case Consistency.MinimizeLatency ignored -> "min";
             case Consistency.Full ignored -> "full";
             case Consistency.AtLeast al -> "al:" + al.zedToken();
             case Consistency.AtExactSnapshot aes -> "aes:" + aes.zedToken();
         };
-        return resourceType + ":" + resourceId + "#" + permission + "@" +
-                subjectType + ":" + subjectId + "!" + consistencyKey;
+        return request.resource().type() + ":" + request.resource().id() + "#" +
+                request.permission().name() + "@" +
+                request.subject().type() + ":" + request.subject().id() + "!" + consistencyKey;
     }
 }
