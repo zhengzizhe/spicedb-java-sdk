@@ -109,6 +109,21 @@ public class ResilientTransport implements SdkTransport {
         return executeWithResilience(resourceType, () -> delegate.checkBulkMulti(items, consistency));
     }
 
+    @Override
+    public RevokeResult deleteByFilter(String resourceType, String resourceId,
+                                        String subjectType, String subjectId,
+                                        String optionalRelation) {
+        return executeWithResilience(resourceType,
+                () -> delegate.deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation));
+    }
+
+    @Override
+    public ExpandTree expand(String resourceType, String resourceId,
+                              String permission, Consistency consistency) {
+        return executeWithResilience(resourceType,
+                () -> delegate.expand(resourceType, resourceId, permission, consistency));
+    }
+
     public io.github.resilience4j.circuitbreaker.CircuitBreaker.State getCircuitBreakerState(String resourceType) {
         var breaker = breakers.get(resourceType);
         return breaker != null ? breaker.getState() : io.github.resilience4j.circuitbreaker.CircuitBreaker.State.DISABLED;

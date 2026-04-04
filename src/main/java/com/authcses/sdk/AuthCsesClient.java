@@ -274,16 +274,16 @@ public class AuthCsesClient implements AutoCloseable {
 
         if (scheduler != null) {
             scheduler.shutdown();
-            try { if (!scheduler.awaitTermination(3, TimeUnit.SECONDS)) scheduler.shutdownNow(); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); scheduler.shutdownNow(); }
+            try { scheduler.awaitTermination(5, TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
         if (watchInvalidator != null) watchInvalidator.close();
         if (telemetryReporter != null) telemetryReporter.close();
         transport.close();
         if (grpcChannel != null) {
             grpcChannel.shutdown();
-            try { if (!grpcChannel.awaitTermination(3, TimeUnit.SECONDS)) grpcChannel.shutdownNow(); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); grpcChannel.shutdownNow(); }
+            try { grpcChannel.awaitTermination(5, TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
 
         if (shutdownHookRef != null && Thread.currentThread() != shutdownHookRef) {
@@ -566,10 +566,18 @@ public class AuthCsesClient implements AutoCloseable {
 
                 return client;
             } catch (Exception e) {
-                if (scheduler != null) scheduler.shutdownNow();
+                if (scheduler != null) {
+                    scheduler.shutdown();
+                    try { scheduler.awaitTermination(1, TimeUnit.SECONDS); }
+                    catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                }
                 if (watchInvalidator != null) watchInvalidator.close();
                 if (telemetryReporter != null) telemetryReporter.close();
-                if (channel != null) channel.shutdownNow();
+                if (channel != null) {
+                    channel.shutdown();
+                    try { channel.awaitTermination(1, TimeUnit.SECONDS); }
+                    catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                }
                 throw e;
             }
         }
