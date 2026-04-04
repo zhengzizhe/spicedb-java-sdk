@@ -5,11 +5,15 @@ import com.authcses.sdk.exception.AuthCsesTimeoutException;
 import com.authcses.sdk.model.BulkCheckResult;
 import com.authcses.sdk.model.CheckResult;
 import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.ExpandTree;
 import com.authcses.sdk.model.GrantResult;
 import com.authcses.sdk.model.RevokeResult;
 import com.authcses.sdk.model.Tuple;
 import com.authcses.sdk.model.enums.Permissionship;
+import com.authzed.api.v1.AlgebraicSubjectSet;
 import com.authzed.api.v1.DeleteRelationshipsRequest;
+import com.authzed.api.v1.ExpandPermissionTreeRequest;
+import com.authzed.api.v1.PermissionRelationshipTree;
 import com.authzed.api.v1.SubjectFilter;
 import com.authzed.api.v1.CheckBulkPermissionsRequest;
 import com.authzed.api.v1.CheckBulkPermissionsRequestItem;
@@ -281,6 +285,52 @@ public class GrpcTransport implements SdkTransport {
         var response = withErrorHandling(() -> stub().deleteRelationships(request));
         String token = response.hasDeletedAt() ? response.getDeletedAt().getToken() : null;
         return new RevokeResult(token, 0);
+    }
+
+    @Override
+    public ExpandTree expand(String resourceType, String resourceId,
+                             String permission, Consistency consistency) {
+        var request = ExpandPermissionTreeRequest.newBuilder()
+                .setResource(objRef(resourceType, resourceId))
+                .setPermission(permission)
+                .setConsistency(toGrpc(consistency))
+                .build();
+
+        var response = withErrorHandling(() -> stub().expandPermissionTree(request));
+        return mapTree(response.getTreeRoot());
+    }
+
+    private static ExpandTree mapTree(PermissionRelationshipTree node) {
+        String resType = node.hasExpandedObject() ? node.getExpandedObject().getObjectType() : null;
+        String resId   = node.hasExpandedObject() ? node.getExpandedObject().getObjectId()   : null;
+        String rel     = node.getExpandedRelation().isEmpty() ? null : node.getExpandedRelation();
+
+        return switch (node.getTreeTypeCase()) {
+            case INTERMEDIATE -> {
+                AlgebraicSubjectSet intermediate = node.getIntermediate();
+                String operation = switch (intermediate.getOperation()) {
+                    case OPERATION_UNION        -> "union";
+                    case OPERATION_INTERSECTION -> "intersection";
+                    case OPERATION_EXCLUSION    -> "exclusion";
+                    default                     -> "union";
+                };
+                List<ExpandTree> children = intermediate.getChildrenList().stream()
+                        .map(GrpcTransport::mapTree)
+                        .toList();
+                yield new ExpandTree(operation, resType, resId, rel, children, List.of());
+            }
+            case LEAF -> {
+                List<String> subjects = node.getLeaf().getSubjectsList().stream()
+                        .map(s -> {
+                            String ref = s.getObject().getObjectType() + ":" + s.getObject().getObjectId();
+                            String optRel = s.getOptionalRelation();
+                            return optRel.isEmpty() ? ref : ref + "#" + optRel;
+                        })
+                        .toList();
+                yield new ExpandTree("leaf", resType, resId, rel, List.of(), subjects);
+            }
+            default -> new ExpandTree("leaf", resType, resId, rel, List.of(), List.of());
+        };
     }
 
     @Override

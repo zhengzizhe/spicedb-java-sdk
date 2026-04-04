@@ -109,6 +109,23 @@ public class InMemoryTransport implements SdkTransport {
     }
 
     @Override
+    public ExpandTree expand(String resourceType, String resourceId,
+                             String permission, Consistency consistency) {
+        // In-memory: collect all direct subjects with the given relation (= permission),
+        // return as a single leaf node. No recursive permission computation.
+        List<String> subjects = store.values().stream()
+                .filter(t -> t.resourceType().equals(resourceType))
+                .filter(t -> t.resourceId().equals(resourceId))
+                .filter(t -> t.relation().equals(permission))
+                .map(t -> {
+                    String ref = t.subjectType() + ":" + t.subjectId();
+                    return t.subjectRelation() != null ? ref + "#" + t.subjectRelation() : ref;
+                })
+                .toList();
+        return new ExpandTree("leaf", resourceType, resourceId, permission, List.of(), subjects);
+    }
+
+    @Override
     public void close() {
         store.clear();
     }
