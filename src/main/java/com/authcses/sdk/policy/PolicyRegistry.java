@@ -43,22 +43,29 @@ public class PolicyRegistry {
 
     private final ResourcePolicy defaultPolicy;
     private final Map<String, ResourcePolicy> resourceTypePolicies;
+    /** Pre-computed merged policies — avoids per-call allocation on hot path. */
+    private final Map<String, ResourcePolicy> resolvedPolicies;
 
     private PolicyRegistry(Builder builder) {
         this.defaultPolicy = builder.defaultPolicy != null
                 ? builder.defaultPolicy.mergeWith(ResourcePolicy.defaults())
                 : ResourcePolicy.defaults();
         this.resourceTypePolicies = Map.copyOf(builder.resourceTypePolicies);
+        // Pre-compute merged policies at construction time
+        var resolved = new HashMap<String, ResourcePolicy>();
+        for (var entry : this.resourceTypePolicies.entrySet()) {
+            resolved.put(entry.getKey(), entry.getValue().mergeWith(this.defaultPolicy));
+        }
+        this.resolvedPolicies = Map.copyOf(resolved);
     }
 
     /**
      * Resolve the effective policy for a resource type.
-     * Per-type policy merged with global defaults (per-type fields override global).
+     * Returns pre-computed merged result — no allocation on hot path.
      */
     public ResourcePolicy resolve(String resourceType) {
-        ResourcePolicy perType = resourceTypePolicies.get(resourceType);
-        if (perType == null) return defaultPolicy;
-        return perType.mergeWith(defaultPolicy);
+        ResourcePolicy resolved = resolvedPolicies.get(resourceType);
+        return resolved != null ? resolved : defaultPolicy;
     }
 
     /**
