@@ -78,6 +78,17 @@ public interface SdkInterceptor {
         @SuppressWarnings("unchecked")
         public <T> T getAttribute(String key) { return (T) attributes.get(key); }
 
+        @SuppressWarnings("unchecked")
+        public <T> T attr(AttributeKey<T> key) {
+            Object value = attributes.get(key.name());
+            if (value == null) return key.defaultValue();
+            return key.type().cast(value);
+        }
+
+        public <T> void attr(AttributeKey<T> key, T value) {
+            attributes.put(key.name(), value);
+        }
+
         public void setDurationMs(long ms) { this.durationMs = ms; }
         public void setResult(String result) { this.result = result; }
         public void setError(Throwable error) { this.error = error; }
