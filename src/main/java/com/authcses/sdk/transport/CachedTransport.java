@@ -10,7 +10,7 @@ import java.util.List;
  * Wraps a SdkTransport with L1 check cache.
  * Only caches check() results. Write operations invalidate the cache for the affected resource.
  */
-public class CachedTransport implements SdkTransport {
+public class CachedTransport extends ForwardingTransport {
 
     private final SdkTransport delegate;
     private final CheckCache cache;
@@ -24,6 +24,11 @@ public class CachedTransport implements SdkTransport {
 
     public CachedTransport(SdkTransport delegate, CheckCache cache) {
         this(delegate, cache, null);
+    }
+
+    @Override
+    protected SdkTransport delegate() {
+        return delegate;
     }
 
     @Override
@@ -57,14 +62,6 @@ public class CachedTransport implements SdkTransport {
     }
 
     @Override
-    public BulkCheckResult checkBulk(String resourceType, String resourceId,
-                                     String permission, List<String> subjectIds, String defaultSubjectType,
-                                     Consistency consistency) {
-        // No caching for bulk — pass through (could be optimized later)
-        return delegate.checkBulk(resourceType, resourceId, permission, subjectIds, defaultSubjectType, consistency);
-    }
-
-    @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
         var result = delegate.writeRelationships(updates);
         invalidateAffectedResources(updates);
@@ -76,26 +73,6 @@ public class CachedTransport implements SdkTransport {
         var result = delegate.deleteRelationships(updates);
         invalidateAffectedResources(updates);
         return result;
-    }
-
-    @Override
-    public List<Tuple> readRelationships(String resourceType, String resourceId,
-                                          String relation, Consistency consistency) {
-        return delegate.readRelationships(resourceType, resourceId, relation, consistency);
-    }
-
-    @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency) {
-        return delegate.lookupSubjects(resourceType, resourceId, permission, subjectType, consistency);
-    }
-
-    @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency) {
-        return delegate.lookupResources(resourceType, permission, subjectType, subjectId, consistency);
     }
 
     @Override

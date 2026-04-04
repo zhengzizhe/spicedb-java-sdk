@@ -17,7 +17,7 @@ import java.util.List;
  * <p>When the user explicitly passes a non-default consistency (full(), atLeast(), atExactSnapshot()),
  * we respect it — explicit always wins over policy.
  */
-public class PolicyAwareConsistencyTransport implements SdkTransport {
+public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     private final SdkTransport delegate;
     private final PolicyRegistry policyRegistry;
@@ -27,6 +27,11 @@ public class PolicyAwareConsistencyTransport implements SdkTransport {
         this.delegate = delegate;
         this.policyRegistry = policyRegistry;
         this.tokenTracker = tokenTracker;
+    }
+
+    @Override
+    protected SdkTransport delegate() {
+        return delegate;
     }
 
     @Override
@@ -91,11 +96,6 @@ public class PolicyAwareConsistencyTransport implements SdkTransport {
         var result = delegate.deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation);
         tokenTracker.recordWrite(result.zedToken());
         return result;
-    }
-
-    @Override
-    public void close() {
-        delegate.close();
     }
 
     /**

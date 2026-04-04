@@ -10,7 +10,7 @@ import java.util.function.Supplier;
 /**
  * Runs registered interceptors before/after each operation on the delegate transport.
  */
-public class InterceptorTransport implements SdkTransport {
+public class InterceptorTransport extends ForwardingTransport {
 
     private static final System.Logger LOG = System.getLogger(InterceptorTransport.class.getName());
 
@@ -20,6 +20,11 @@ public class InterceptorTransport implements SdkTransport {
     public InterceptorTransport(SdkTransport delegate, List<SdkInterceptor> interceptors) {
         this.delegate = delegate;
         this.interceptors = List.copyOf(interceptors);
+    }
+
+    @Override
+    protected SdkTransport delegate() {
+        return delegate;
     }
 
     @Override

@@ -24,7 +24,7 @@ import java.util.function.Supplier;
  * Resilience transport: per-resource-type circuit breaker + retry via Resilience4j.
  * Replaces CircuitBreakerTransport + PolicyAwareRetryTransport.
  */
-public class ResilientTransport implements SdkTransport {
+public class ResilientTransport extends ForwardingTransport {
 
     private static final System.Logger LOG = System.getLogger(ResilientTransport.class.getName());
 
@@ -38,6 +38,11 @@ public class ResilientTransport implements SdkTransport {
         this.delegate = delegate;
         this.policyRegistry = policyRegistry;
         this.eventBus = eventBus != null ? eventBus : new SdkEventBus();
+    }
+
+    @Override
+    protected SdkTransport delegate() {
+        return delegate;
     }
 
     @Override

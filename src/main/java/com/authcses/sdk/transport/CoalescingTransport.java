@@ -3,7 +3,6 @@ package com.authcses.sdk.transport;
 import com.authcses.sdk.metrics.SdkMetrics;
 import com.authcses.sdk.model.*;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -13,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Only coalesces check() (most common hot-path). Other operations pass through.
  */
-public class CoalescingTransport implements SdkTransport {
+public class CoalescingTransport extends ForwardingTransport {
 
     private final SdkTransport delegate;
     private final SdkMetrics metrics;
@@ -26,6 +25,11 @@ public class CoalescingTransport implements SdkTransport {
 
     public CoalescingTransport(SdkTransport delegate) {
         this(delegate, null);
+    }
+
+    @Override
+    protected SdkTransport delegate() {
+        return delegate;
     }
 
     @Override
@@ -60,43 +64,6 @@ public class CoalescingTransport implements SdkTransport {
         } finally {
             inflight.remove(key, myFuture); // only remove if still ours
         }
-    }
-
-    @Override
-    public BulkCheckResult checkBulk(String resourceType, String resourceId,
-                                     String permission, List<String> subjectIds, String defaultSubjectType,
-                                     Consistency consistency) {
-        return delegate.checkBulk(resourceType, resourceId, permission, subjectIds, defaultSubjectType, consistency);
-    }
-
-    @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        return delegate.writeRelationships(updates);
-    }
-
-    @Override
-    public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        return delegate.deleteRelationships(updates);
-    }
-
-    @Override
-    public List<Tuple> readRelationships(String resourceType, String resourceId,
-                                          String relation, Consistency consistency) {
-        return delegate.readRelationships(resourceType, resourceId, relation, consistency);
-    }
-
-    @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency) {
-        return delegate.lookupSubjects(resourceType, resourceId, permission, subjectType, consistency);
-    }
-
-    @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency) {
-        return delegate.lookupResources(resourceType, permission, subjectType, subjectId, consistency);
     }
 
     @Override

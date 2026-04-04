@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 /**
  * Wraps a SdkTransport and records telemetry + metrics + trace for each operation.
  */
-public class InstrumentedTransport implements SdkTransport {
+public class InstrumentedTransport extends ForwardingTransport {
 
     private final SdkTransport delegate;
     private final TelemetryReporter reporter;
@@ -23,6 +23,11 @@ public class InstrumentedTransport implements SdkTransport {
         this.delegate = delegate;
         this.reporter = reporter;
         this.metrics = metrics;
+    }
+
+    @Override
+    protected SdkTransport delegate() {
+        return delegate;
     }
 
     @Override
