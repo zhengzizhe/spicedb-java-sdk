@@ -1,27 +1,115 @@
-/** Test schema for SDK integration testing. */
+/**
+ * 类飞书文档库权限模型
+ *
+ * 层级：organization → space → folder (可嵌套) → document
+ * 主体：user, department (层级), group
+ * 权限：owner > manager > editor > commenter > viewer
+ * 特性：层级继承、部门权限、链接分享、公开文档
+ */
+
+// ============================================================
+//  主体定义
+// ============================================================
 
 definition user {}
 
-definition group {
+/** 部门（支持层级：子部门的 member 自动是父部门的 member） */
+definition department {
     relation member: user
+    relation parent: department
+
+    /** 递归：本部门成员 + 所有子部门成员 */
+    permission all_members = member + parent->all_members
 }
 
-definition document {
+/** 用户组（扁平，不继承） */
+definition group {
+    relation member: user | department#all_members
+}
+
+// ============================================================
+//  组织
+// ============================================================
+
+definition organization {
+    relation admin: user
+    relation member: user | department#all_members
+
+    permission manage = admin
+    permission access = admin + member
+}
+
+// ============================================================
+//  空间（Space）— 类似飞书的「知识空间」
+// ============================================================
+
+definition space {
+    relation org: organization
     relation owner: user
-    relation editor: user | group#member
-    relation viewer: user | group#member | user:*
+    relation admin: user | group#member
+    relation member: user | group#member | department#all_members
+    relation viewer: user | group#member | department#all_members | user:*
 
-    permission edit = owner + editor
+    /** 空间管理 = 空间 owner + 空间 admin + 组织 admin */
+    permission manage = owner + admin + org->manage
+    /** 空间编辑 = 管理者 + 成员 */
+    permission edit = manage + member
+    /** 空间查看 = 编辑者 + viewer */
     permission view = edit + viewer
-    permission delete = owner
 }
+
+// ============================================================
+//  文件夹（支持嵌套，权限从父文件夹继承）
+// ============================================================
 
 definition folder {
-    relation owner: user
-    relation editor: user
-    relation viewer: user | user:*
+    relation space: space
     relation parent: folder
 
-    permission edit = owner + editor
-    permission view = edit + viewer
+    relation owner: user
+    relation editor: user | group#member | department#all_members
+    relation commenter: user | group#member | department#all_members
+    relation viewer: user | group#member | department#all_members | user:*
+
+    /** 管理 = owner + 父文件夹管理 + 空间管理 */
+    permission manage = owner + parent->manage + space->manage
+    /** 编辑 = 管理 + editor + 父文件夹编辑 + 空间编辑 */
+    permission edit = manage + editor + parent->edit + space->edit
+    /** 评论 = 编辑 + commenter + 父文件夹评论 */
+    permission comment = edit + commenter + parent->comment
+    /** 查看 = 评论 + viewer + 父文件夹查看 + 空间查看 */
+    permission view = comment + viewer + parent->view + space->view
+    /** 创建子文件夹/文档 = 编辑权限 */
+    permission create_child = edit
+}
+
+// ============================================================
+//  文档（最细粒度，权限从文件夹 + 空间继承）
+// ============================================================
+
+definition document {
+    relation folder: folder
+    relation space: space
+
+    relation owner: user
+    relation editor: user | group#member | department#all_members
+    relation commenter: user | group#member | department#all_members
+    relation viewer: user | group#member | department#all_members | user:*
+
+    /** 链接分享：任何人可查看/编辑 */
+    relation link_viewer: user:*
+    relation link_editor: user:*
+
+    /** 管理 = owner + 文件夹管理 + 空间管理 */
+    permission manage = owner + folder->manage + space->manage
+    /** 编辑 = 管理 + editor + link_editor + 文件夹编辑 */
+    permission edit = manage + editor + link_editor + folder->edit
+    /** 评论 = 编辑 + commenter + 文件夹评论 */
+    permission comment = edit + commenter + folder->comment
+    /** 查看 = 评论 + viewer + link_viewer + 文件夹查看 */
+    permission view = comment + viewer + link_viewer + folder->view
+    /** 删除 = 管理者 */
+    permission delete = manage
+    /** 分享 = 编辑者可分享 */
+    permission share = edit
 }
