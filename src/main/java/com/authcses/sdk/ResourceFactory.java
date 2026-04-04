@@ -23,9 +23,9 @@ import com.authcses.sdk.transport.SdkTransport;
  */
 public class ResourceFactory {
 
-    private String resourceType;
-    private SdkTransport transport;
-    private String defaultSubjectType;
+    private volatile String resourceType;
+    private volatile SdkTransport transport;
+    private volatile String defaultSubjectType;
 
     /** For reflective instantiation by {@link AuthCsesClient#create(Class)}. */
     protected ResourceFactory() {}
