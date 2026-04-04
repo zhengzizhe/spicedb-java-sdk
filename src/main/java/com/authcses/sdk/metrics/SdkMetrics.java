@@ -81,13 +81,11 @@ public class SdkMetrics {
         return total == 0 ? 0.0 : (double) totalErrors.sum() / total;
     }
 
-    /** Check latency p50 in milliseconds. */
-    public double checkLatencyP50() { return percentile(50.0); }
-    public double checkLatencyP95() { return percentile(95.0); }
-    public double checkLatencyP99() { return percentile(99.0); }
-    public double checkLatencyAvg() {
-        return getHistogram().getMean() / 1000.0; // micros → ms
-    }
+    /** Check latency p50 in milliseconds. Uses snapshot() for consistent multi-percentile reads. */
+    public double checkLatencyP50() { return snapshot().latencyP50Ms(); }
+    public double checkLatencyP95() { return snapshot().latencyP95Ms(); }
+    public double checkLatencyP99() { return snapshot().latencyP99Ms(); }
+    public double checkLatencyAvg() { return snapshot().latencyAvgMs(); }
 
     public String circuitBreakerState() {
         return circuitBreakerStateSupplier.get();
@@ -136,7 +134,4 @@ public class SdkMetrics {
         return intervalHistogram;
     }
 
-    private double percentile(double p) {
-        return getHistogram().getValueAtPercentile(p) / 1000.0; // micros → ms
-    }
 }
