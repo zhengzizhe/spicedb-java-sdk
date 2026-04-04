@@ -10,6 +10,14 @@ import java.util.function.Supplier;
 
 /**
  * Runs registered interceptors before/after each operation on the delegate transport.
+ *
+ * <p>For {@code check()} and {@code writeRelationships()}, uses OkHttp-style chains
+ * ({@link RealCheckChain} / {@link RealWriteChain}) so interceptors can modify requests,
+ * short-circuit, or wrap errors. For other operations, uses the legacy before/after pattern.
+ *
+ * <p>Backward compatibility: interceptors using only {@code before()/after()} work
+ * unchanged — the default {@code interceptCheck()/interceptWrite()} bridge methods
+ * on {@link SdkInterceptor} call {@code before()/after()} automatically.
  */
 public class InterceptorTransport extends ForwardingTransport {
 
@@ -28,14 +36,30 @@ public class InterceptorTransport extends ForwardingTransport {
         return delegate;
     }
 
+    // ---- Chain-based operations ----
+
     @Override
     public CheckResult check(CheckRequest request) {
-        return intercept(SdkAction.CHECK,
-                request.resource().type(), request.resource().id(),
-                request.permission().name(),
-                request.subject().type(), request.subject().id(),
-                () -> delegate.check(request));
+        if (interceptors.isEmpty()) return delegate.check(request);
+
+        var ctx = buildCheckContext(request);
+        var chain = new RealCheckChain(interceptors, 0, request, delegate, ctx);
+        return chain.proceed(request);
     }
+
+    @Override
+    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
+        if (interceptors.isEmpty()) return delegate.writeRelationships(updates);
+
+        String resType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
+        String resId = updates.isEmpty() ? "" : updates.getFirst().resource().id();
+        var ctx = new OperationContext(SdkAction.WRITE, resType, resId, "", "", "");
+        var writeRequest = new WriteRequest(updates);
+        var chain = new RealWriteChain(interceptors, 0, writeRequest, delegate, ctx);
+        return chain.proceed(writeRequest);
+    }
+
+    // ---- Legacy before/after operations (no chain interface yet) ----
 
     @Override
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
@@ -44,14 +68,6 @@ public class InterceptorTransport extends ForwardingTransport {
                 request.permission().name(),
                 request.subject().type(), "",
                 () -> delegate.checkBulk(request, subjects));
-    }
-
-    @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        String resType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
-        String resId = updates.isEmpty() ? "" : updates.getFirst().resource().id();
-        return intercept(SdkAction.WRITE, resType, resId, "", "", "",
-                () -> delegate.writeRelationships(updates));
     }
 
     @Override
@@ -98,6 +114,19 @@ public class InterceptorTransport extends ForwardingTransport {
         delegate.close();
     }
 
+    // ---- Internal helpers ----
+
+    private OperationContext buildCheckContext(CheckRequest request) {
+        return new OperationContext(SdkAction.CHECK,
+                request.resource().type(), request.resource().id(),
+                request.permission().name(),
+                request.subject().type(), request.subject().id());
+    }
+
+    /**
+     * Legacy intercept pattern for operations that don't have a chain interface yet.
+     * Runs before() in order, executes the call, then after() in reverse order.
+     */
     private <T> T intercept(SdkAction action, String resType, String resId,
                              String perm, String subType, String subId,
                              Supplier<T> call) {

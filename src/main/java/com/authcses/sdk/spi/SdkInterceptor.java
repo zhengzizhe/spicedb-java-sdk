@@ -1,5 +1,9 @@
 package com.authcses.sdk.spi;
 
+import com.authcses.sdk.model.CheckRequest;
+import com.authcses.sdk.model.CheckResult;
+import com.authcses.sdk.model.GrantResult;
+import com.authcses.sdk.model.WriteRequest;
 import com.authcses.sdk.model.enums.SdkAction;
 import java.util.Map;
 
@@ -35,6 +39,90 @@ public interface SdkInterceptor {
      * Context includes duration and result/error.
      */
     default void after(OperationContext ctx) {}
+
+    // ---- OkHttp-style chain methods ----
+
+    /**
+     * OkHttp-style chain for check operations. Override for full control:
+     * modify request, short-circuit, wrap errors, measure timing.
+     *
+     * <p>Default implementation bridges to the legacy {@link #before}/{@link #after} pattern
+     * so existing interceptors work without changes.
+     */
+    default CheckResult interceptCheck(CheckChain chain) {
+        var ctx = chain.operationContext();
+        before(ctx);
+        try {
+            CheckResult result = chain.proceed(chain.request());
+            ctx.setResult(result.permissionship().name());
+            after(ctx);
+            return result;
+        } catch (Exception e) {
+            ctx.setError(e);
+            after(ctx);
+            throw e;
+        }
+    }
+
+    /**
+     * OkHttp-style chain for write operations. Override for full control:
+     * modify request, short-circuit, wrap errors, measure timing.
+     *
+     * <p>Default implementation bridges to the legacy {@link #before}/{@link #after} pattern.
+     */
+    default GrantResult interceptWrite(WriteChain chain) {
+        var ctx = chain.operationContext();
+        before(ctx);
+        try {
+            GrantResult result = chain.proceed(chain.request());
+            after(ctx);
+            return result;
+        } catch (Exception e) {
+            ctx.setError(e);
+            after(ctx);
+            throw e;
+        }
+    }
+
+    // ---- Chain interfaces ----
+
+    /**
+     * Check chain — allows interceptors to modify the request, short-circuit with a result,
+     * or handle errors. Modeled after OkHttp's {@code Interceptor.Chain}.
+     */
+    interface CheckChain {
+        /** The current request (may have been modified by a previous interceptor). */
+        CheckRequest request();
+
+        /** Advance to the next interceptor, or execute the transport if at the end. */
+        CheckResult proceed(CheckRequest request);
+
+        /** Shared context for the operation. */
+        OperationContext operationContext();
+
+        /** Read a typed attribute from the context. */
+        <T> T attr(AttributeKey<T> key);
+
+        /** Set a typed attribute on the context. */
+        <T> void attr(AttributeKey<T> key, T value);
+    }
+
+    /**
+     * Write chain — same pattern for write operations.
+     */
+    interface WriteChain {
+        /** The current request (may have been modified by a previous interceptor). */
+        WriteRequest request();
+
+        /** Advance to the next interceptor, or execute the transport if at the end. */
+        GrantResult proceed(WriteRequest request);
+
+        /** Shared context for the operation. */
+        OperationContext operationContext();
+
+        /** Read a typed attribute from the context. */
+        <T> T attr(AttributeKey<T> key);
+    }
 
     /**
      * Context passed to interceptors. Mutable — interceptors can add attributes.
