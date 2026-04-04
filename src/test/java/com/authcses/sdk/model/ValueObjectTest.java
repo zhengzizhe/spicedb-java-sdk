@@ -101,4 +101,10 @@ class ValueObjectTest {
         assertThat(c.name()).isEqualTo("simple_caveat");
         assertThat(c.context()).isNull();
     }
+
+    @Test void caveatRef_rejectsNullName() {
+        assertThatThrownBy(() -> new CaveatRef(null, null))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessageContaining("name");
+    }
 }

@@ -351,11 +351,19 @@ public class GrpcTransport implements SdkTransport {
     }
 
     private static Relationship toGrpcRel(RelationshipUpdate u) {
-        return Relationship.newBuilder()
+        var builder = Relationship.newBuilder()
                 .setResource(objRef(u.resource()))
                 .setRelation(u.relation().name())
-                .setSubject(subRef(u.subject()))
-                .build();
+                .setSubject(subRef(u.subject()));
+        if (u.caveat() != null) {
+            var caveatBuilder = com.authzed.api.v1.ContextualizedCaveat.newBuilder()
+                    .setCaveatName(u.caveat().name());
+            if (u.caveat().context() != null && !u.caveat().context().isEmpty()) {
+                caveatBuilder.setContext(toStruct(u.caveat().context()));
+            }
+            builder.setOptionalCaveat(caveatBuilder.build());
+        }
+        return builder.build();
     }
 
     private static com.authzed.api.v1.Consistency toGrpc(Consistency c) {

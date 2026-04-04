@@ -134,7 +134,10 @@ public interface SdkInterceptor {
         private final String permission;
         private final String subjectType;
         private final String subjectId;
+        /** Legacy string-keyed attributes for backward compatibility. */
         private final Map<String, Object> attributes = new java.util.concurrent.ConcurrentHashMap<>();
+        /** Typed attribute map keyed by {@link AttributeKey} identity — no collision risk. */
+        private final Map<AttributeKey<?>, Object> typedAttributes = new java.util.HashMap<>();
 
         // Set after execution
         private long durationMs;
@@ -162,19 +165,23 @@ public interface SdkInterceptor {
         public Throwable error() { return error; }
         public boolean hasError() { return error != null; }
 
+        /** Legacy string-keyed setter — kept for backward compatibility. */
         public void setAttribute(String key, Object value) { attributes.put(key, value); }
+        /** Legacy string-keyed getter — kept for backward compatibility. */
         @SuppressWarnings("unchecked")
         public <T> T getAttribute(String key) { return (T) attributes.get(key); }
 
+        /** Type-safe getter using {@link AttributeKey} identity. */
         @SuppressWarnings("unchecked")
         public <T> T attr(AttributeKey<T> key) {
-            Object value = attributes.get(key.name());
+            Object value = typedAttributes.get(key);
             if (value == null) return key.defaultValue();
             return key.type().cast(value);
         }
 
+        /** Type-safe setter using {@link AttributeKey} identity. */
         public <T> void attr(AttributeKey<T> key, T value) {
-            attributes.put(key.name(), value);
+            typedAttributes.put(key, value);
         }
 
         public void setDurationMs(long ms) { this.durationMs = ms; }

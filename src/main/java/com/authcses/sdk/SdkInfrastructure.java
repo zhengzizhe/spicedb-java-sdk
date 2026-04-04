@@ -4,6 +4,7 @@ import com.authcses.sdk.lifecycle.LifecycleManager;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -36,8 +37,25 @@ public final class SdkInfrastructure implements AutoCloseable {
     public void setShutdownHook(Thread hook) { this.shutdownHookRef = hook; }
     public Thread shutdownHook() { return shutdownHookRef; }
 
+    /**
+     * Shuts down scheduler, channel, and removes the shutdown hook.
+     * Must be called at most once (guarded by {@link #markClosed()}).
+     */
     @Override
     public void close() {
-        // Actual close logic delegated to AuthCsesClient.close() which orchestrates shutdown order
+        if (scheduler != null) {
+            scheduler.shutdown();
+            try { scheduler.awaitTermination(5, TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+        if (channel != null) {
+            channel.shutdown();
+            try { channel.awaitTermination(5, TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+        if (shutdownHookRef != null && Thread.currentThread() != shutdownHookRef) {
+            try { Runtime.getRuntime().removeShutdownHook(shutdownHookRef); }
+            catch (IllegalStateException ignored) {}
+        }
     }
 }

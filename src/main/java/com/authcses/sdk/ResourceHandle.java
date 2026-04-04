@@ -106,8 +106,7 @@ public class ResourceHandle {
         private final ResourceHandle handle;
         private final String[] relations;
         private java.time.Instant expiresAt;
-        private String caveatName;
-        private Map<String, Object> caveatContext;
+        private CaveatRef caveat;
 
         GrantAction(ResourceHandle handle, String[] relations) {
             this.handle = handle;
@@ -128,8 +127,7 @@ public class ResourceHandle {
 
         /** Attach a caveat (conditional permission). */
         public GrantAction withCaveat(String caveatName, Map<String, Object> context) {
-            this.caveatName = caveatName;
-            this.caveatContext = context;
+            this.caveat = new CaveatRef(caveatName, context);
             return this;
         }
 
@@ -161,7 +159,7 @@ public class ResourceHandle {
                             resource,
                             Relation.of(rel),
                             sub,
-                            caveatName, caveatContext, expiresAt));
+                            caveat, expiresAt));
                 }
             }
             return handle.transport.writeRelationships(updates);

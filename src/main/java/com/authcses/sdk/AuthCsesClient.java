@@ -273,24 +273,11 @@ public class AuthCsesClient implements AutoCloseable {
         observability.eventBus().fire(com.authcses.sdk.event.SdkEvent.CLIENT_STOPPING, "SDK shutting down");
         infra.lifecycle().stopping();
 
-        if (infra.scheduler() != null) {
-            infra.scheduler().shutdown();
-            try { infra.scheduler().awaitTermination(5, TimeUnit.SECONDS); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
+        // Shutdown order: scheduler → watch → telemetry flush → transport → channel → hook
+        infra.close(); // scheduler + channel + shutdownHook removal
         if (caching.watchInvalidator() != null) caching.watchInvalidator().close();
         if (observability.telemetry() != null) observability.telemetry().close();
         transport.close();
-        if (infra.channel() != null) {
-            infra.channel().shutdown();
-            try { infra.channel().awaitTermination(5, TimeUnit.SECONDS); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-
-        if (infra.shutdownHook() != null && Thread.currentThread() != infra.shutdownHook()) {
-            try { Runtime.getRuntime().removeShutdownHook(infra.shutdownHook()); }
-            catch (IllegalStateException ignored) {}
-        }
 
         infra.lifecycle().stopped();
         observability.eventBus().fire(com.authcses.sdk.event.SdkEvent.CLIENT_STOPPED, "SDK stopped");

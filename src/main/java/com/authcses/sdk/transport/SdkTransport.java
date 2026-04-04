@@ -94,19 +94,19 @@ public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkL
             ResourceRef resource,
             Relation relation,
             SubjectRef subject,
-            String caveatName, Map<String, Object> caveatContext,
+            CaveatRef caveat,
             java.time.Instant expiresAt
     ) {
         public enum Operation { TOUCH, DELETE }
 
         /**
-         * Simple constructor without caveat/expiry.
+         * Convenience constructor without caveat/expiry.
          */
         public RelationshipUpdate(Operation operation,
                                   ResourceRef resource,
                                   Relation relation,
                                   SubjectRef subject) {
-            this(operation, resource, relation, subject, null, null, null);
+            this(operation, resource, relation, subject, null, null);
         }
     }
 }
