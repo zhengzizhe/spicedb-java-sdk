@@ -139,7 +139,7 @@ public class ResourceHandle {
 
         public GrantResult to(Collection<String> userIds) {
             return writeRelationships(userIds.stream()
-                    .map(id -> new Ref(handle.defaultSubjectType, id, null))
+                    .map(id -> SubjectRef.of(handle.defaultSubjectType, id, null))
                     .toList());
         }
 
@@ -148,19 +148,19 @@ public class ResourceHandle {
         }
 
         public GrantResult toSubjects(Collection<String> subjectRefs) {
-            return writeRelationships(subjectRefs.stream().map(Ref::parse).toList());
+            return writeRelationships(subjectRefs.stream().map(SubjectRef::parse).toList());
         }
 
-        private GrantResult writeRelationships(List<Ref> subjects) {
+        private GrantResult writeRelationships(List<SubjectRef> subjects) {
             ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
             List<RelationshipUpdate> updates = new ArrayList<>();
             for (String rel : relations) {
-                for (Ref sub : subjects) {
+                for (SubjectRef sub : subjects) {
                     updates.add(new RelationshipUpdate(
                             Operation.TOUCH,
                             resource,
                             Relation.of(rel),
-                            SubjectRef.of(sub.type(), sub.id(), sub.relation()),
+                            sub,
                             caveatName, caveatContext, expiresAt));
                 }
             }
@@ -183,7 +183,7 @@ public class ResourceHandle {
 
         public RevokeResult from(Collection<String> userIds) {
             return deleteRelationships(userIds.stream()
-                    .map(id -> new Ref(handle.defaultSubjectType, id, null))
+                    .map(id -> SubjectRef.of(handle.defaultSubjectType, id, null))
                     .toList());
         }
 
@@ -192,19 +192,19 @@ public class ResourceHandle {
         }
 
         public RevokeResult fromSubjects(Collection<String> subjectRefs) {
-            return deleteRelationships(subjectRefs.stream().map(Ref::parse).toList());
+            return deleteRelationships(subjectRefs.stream().map(SubjectRef::parse).toList());
         }
 
-        private RevokeResult deleteRelationships(List<Ref> subjects) {
+        private RevokeResult deleteRelationships(List<SubjectRef> subjects) {
             ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
             List<RelationshipUpdate> updates = new ArrayList<>();
             for (String rel : relations) {
-                for (Ref sub : subjects) {
+                for (SubjectRef sub : subjects) {
                     updates.add(new RelationshipUpdate(
                             Operation.DELETE,
                             resource,
                             Relation.of(rel),
-                            SubjectRef.of(sub.type(), sub.id(), sub.relation())));
+                            sub));
                 }
             }
             return handle.transport.deleteRelationships(updates);
@@ -566,12 +566,12 @@ public class ResourceHandle {
             ResourceRef resource = ResourceRef.of(batch.handle.resourceType, batch.handle.resourceId);
             for (String rel : relations) {
                 for (String ref : subjectRefs) {
-                    Ref parsed = Ref.parse(ref);
+                    SubjectRef parsed = SubjectRef.parse(ref);
                     batch.addUpdate(new RelationshipUpdate(
                             Operation.TOUCH,
                             resource,
                             Relation.of(rel),
-                            SubjectRef.of(parsed.type(), parsed.id(), parsed.relation())));
+                            parsed));
                 }
             }
             return batch;
@@ -609,12 +609,12 @@ public class ResourceHandle {
             ResourceRef resource = ResourceRef.of(batch.handle.resourceType, batch.handle.resourceId);
             for (String rel : relations) {
                 for (String ref : subjectRefs) {
-                    Ref parsed = Ref.parse(ref);
+                    SubjectRef parsed = SubjectRef.parse(ref);
                     batch.addUpdate(new RelationshipUpdate(
                             Operation.DELETE,
                             resource,
                             Relation.of(rel),
-                            SubjectRef.of(parsed.type(), parsed.id(), parsed.relation())));
+                            parsed));
                 }
             }
             return batch;

@@ -9,6 +9,7 @@ import com.authcses.sdk.transport.ResilientTransport;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -28,55 +29,28 @@ import java.util.concurrent.TimeUnit;
 public class AuthCsesClient implements AutoCloseable {
 
     private final SdkTransport transport;
-    private final io.grpc.ManagedChannel grpcChannel;
-    private final com.authcses.sdk.cache.SchemaCache schemaCache;
-    private final CheckCache checkCache;
-    private final com.authcses.sdk.metrics.SdkMetrics sdkMetrics;
-    private final com.authcses.sdk.event.SdkEventBus eventBus;
-    private final com.authcses.sdk.lifecycle.LifecycleManager lifecycle;
-    private final WatchCacheInvalidator watchInvalidator;
-    private final TelemetryReporter telemetryReporter;
-    private final ScheduledExecutorService scheduler;
-    private volatile Thread shutdownHookRef;
-    private final String defaultSubjectType;
-    private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final SdkInfrastructure infra;
+    private final SdkObservability observability;
+    private final SdkCaching caching;
+    private final SdkConfig config;
     private final SchemaClient schemaClient;
-    private final CacheHandle cacheHandle;
-    private final com.authcses.sdk.watch.WatchDispatcher watchDispatcher;
-    private final java.util.concurrent.Executor asyncExecutor;
+    private final ConcurrentHashMap<String, ResourceFactory> factories = new ConcurrentHashMap<>();
 
     AuthCsesClient(SdkTransport transport,
-                   io.grpc.ManagedChannel grpcChannel,
-                   SchemaCache schemaCache,
-                   CheckCache checkCache,
-                   com.authcses.sdk.metrics.SdkMetrics sdkMetrics,
-                   com.authcses.sdk.event.SdkEventBus eventBus,
-                   com.authcses.sdk.lifecycle.LifecycleManager lifecycle,
-                   WatchCacheInvalidator watchInvalidator,
-                   TelemetryReporter telemetryReporter,
-                   ScheduledExecutorService scheduler,
-                   String defaultSubjectType,
-                   com.authcses.sdk.watch.WatchDispatcher watchDispatcher,
-                   java.util.concurrent.Executor asyncExecutor) {
+                   SdkInfrastructure infra,
+                   SdkObservability observability,
+                   SdkCaching caching,
+                   SdkConfig config) {
         this.transport = Objects.requireNonNull(transport);
-        this.grpcChannel = grpcChannel;
-        this.schemaCache = schemaCache;
-        this.checkCache = checkCache;
-        this.sdkMetrics = sdkMetrics;
-        this.eventBus = eventBus != null ? eventBus : new com.authcses.sdk.event.SdkEventBus();
-        this.lifecycle = lifecycle != null ? lifecycle : new com.authcses.sdk.lifecycle.LifecycleManager(this.eventBus);
-        this.watchInvalidator = watchInvalidator;
-        this.telemetryReporter = telemetryReporter;
-        this.scheduler = scheduler;
-        this.defaultSubjectType = defaultSubjectType != null ? defaultSubjectType : "user";
-        this.schemaClient = new SchemaClient(schemaCache);
-        this.cacheHandle = new CacheHandle(checkCache);
-        this.watchDispatcher = watchDispatcher;
-        this.asyncExecutor = asyncExecutor != null ? asyncExecutor : Runnable::run;
+        this.infra = Objects.requireNonNull(infra);
+        this.observability = Objects.requireNonNull(observability);
+        this.caching = Objects.requireNonNull(caching);
+        this.config = Objects.requireNonNull(config);
+        this.schemaClient = new SchemaClient(caching.schemaCache());
 
         // Wire dispatcher into Watch stream
-        if (watchInvalidator != null && watchDispatcher != null) {
-            watchInvalidator.addListener(watchDispatcher);
+        if (caching.watchInvalidator() != null && caching.watchDispatcher() != null) {
+            caching.watchInvalidator().addListener(caching.watchDispatcher());
         }
     }
 
@@ -88,14 +62,14 @@ public class AuthCsesClient implements AutoCloseable {
         var bus = new com.authcses.sdk.event.SdkEventBus();
         var lm = new com.authcses.sdk.lifecycle.LifecycleManager(bus);
         lm.begin(); lm.complete();
-        return new AuthCsesClient(new InMemoryTransport(), null, null, null,
-                new com.authcses.sdk.metrics.SdkMetrics(), bus, lm,
-                null, null, null, "user", null, null);
+        var infra = new SdkInfrastructure(null, null, Runnable::run, lm);
+        var observability = new SdkObservability(new com.authcses.sdk.metrics.SdkMetrics(), bus, null);
+        var caching = new SdkCaching(null, null, null, null);
+        var config = new SdkConfig("user", PolicyRegistry.withDefaults(), false, false);
+        return new AuthCsesClient(new InMemoryTransport(), infra, observability, caching, config);
     }
 
     // ---- Business API ----
-
-    private final java.util.concurrent.ConcurrentHashMap<String, ResourceFactory> factories = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Get a cached factory for a resource type. Auto-created on first call.
@@ -116,8 +90,8 @@ public class AuthCsesClient implements AutoCloseable {
      */
     public ResourceFactory on(String resourceType) {
         return factories.computeIfAbsent(resourceType, type -> {
-            if (schemaCache != null) schemaCache.validateResourceType(type);
-            return new ResourceFactory(type, transport, defaultSubjectType, asyncExecutor);
+            if (caching.schemaCache() != null) caching.schemaCache().validateResourceType(type);
+            return new ResourceFactory(type, transport, config.defaultSubjectType(), infra.asyncExecutor());
         });
     }
 
@@ -141,12 +115,12 @@ public class AuthCsesClient implements AutoCloseable {
             throw new IllegalArgumentException(clazz.getSimpleName() + " must be annotated with @PermissionResource");
         }
         String resourceType = annotation.value();
-        if (schemaCache != null) schemaCache.validateResourceType(resourceType);
+        if (caching.schemaCache() != null) caching.schemaCache().validateResourceType(resourceType);
         try {
             var constructor = clazz.getDeclaredConstructor();
             constructor.setAccessible(true);
             T instance = constructor.newInstance();
-            instance.init(resourceType, transport, defaultSubjectType, asyncExecutor);
+            instance.init(resourceType, transport, config.defaultSubjectType(), infra.asyncExecutor());
             return instance;
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to create " + clazz.getSimpleName() + ": " + e.getMessage(), e);
@@ -157,16 +131,16 @@ public class AuthCsesClient implements AutoCloseable {
      * One-off resource handle.
      */
     public ResourceHandle resource(String type, String id) {
-        if (schemaCache != null) schemaCache.validateResourceType(type);
-        return new ResourceHandle(type, id, transport, defaultSubjectType, asyncExecutor);
+        if (caching.schemaCache() != null) caching.schemaCache().validateResourceType(type);
+        return new ResourceHandle(type, id, transport, config.defaultSubjectType(), infra.asyncExecutor());
     }
 
     public LookupQuery lookup(String resourceType) {
-        return new LookupQuery(resourceType, transport, defaultSubjectType);
+        return new LookupQuery(resourceType, transport, config.defaultSubjectType());
     }
 
     public CrossResourceBatchBuilder batch() {
-        return new CrossResourceBatchBuilder(transport, defaultSubjectType);
+        return new CrossResourceBatchBuilder(transport, config.defaultSubjectType());
     }
 
     // ---- Convenience methods (type as first param) ----
@@ -177,8 +151,8 @@ public class AuthCsesClient implements AutoCloseable {
     /** Check a single permission. Returns true if allowed. Default: minimize_latency. */
     public boolean check(String type, String id, String permission, String userId) {
         // L0 fast path: direct cache lookup, skip entire transport chain
-        if (checkCache != null) {
-            var cached = checkCache.getIfPresent(type, id, permission, defaultSubjectType, userId);
+        if (caching.checkCache() != null) {
+            var cached = caching.checkCache().getIfPresent(type, id, permission, config.defaultSubjectType(), userId);
             if (cached != null) return cached.hasPermission();
         }
         return on(type).check(id, permission, userId);
@@ -188,8 +162,8 @@ public class AuthCsesClient implements AutoCloseable {
     public boolean check(String type, String id, String permission, String userId,
                          com.authcses.sdk.model.Consistency consistency) {
         // L0 fast path: only for MinimizeLatency (cacheable)
-        if (consistency instanceof com.authcses.sdk.model.Consistency.MinimizeLatency && checkCache != null) {
-            var cached = checkCache.getIfPresent(type, id, permission, defaultSubjectType, userId);
+        if (consistency instanceof com.authcses.sdk.model.Consistency.MinimizeLatency && caching.checkCache() != null) {
+            var cached = caching.checkCache().getIfPresent(type, id, permission, config.defaultSubjectType(), userId);
             if (cached != null) return cached.hasPermission();
         }
         return on(type).check(id, permission, userId, consistency);
@@ -243,26 +217,26 @@ public class AuthCsesClient implements AutoCloseable {
      * @throws IllegalStateException if Watch is not enabled
      */
     public void onRelationshipChange(java.util.function.Consumer<com.authcses.sdk.model.RelationshipChange> listener) {
-        if (watchDispatcher == null) {
+        if (caching.watchDispatcher() == null) {
             throw new IllegalStateException(
                     "Watch not enabled. Use .cache(c -> c.enabled(true).watchInvalidation(true)) in Builder.");
         }
-        watchDispatcher.addGlobalListener(listener);
+        caching.watchDispatcher().addGlobalListener(listener);
     }
 
     public void offRelationshipChange(java.util.function.Consumer<com.authcses.sdk.model.RelationshipChange> listener) {
-        if (watchDispatcher != null) {
-            watchDispatcher.removeGlobalListener(listener);
+        if (caching.watchDispatcher() != null) {
+            caching.watchDispatcher().removeGlobalListener(listener);
         }
     }
 
     // ---- Observability ----
 
-    public com.authcses.sdk.metrics.SdkMetrics metrics() { return sdkMetrics; }
-    public com.authcses.sdk.event.SdkEventBus eventBus() { return eventBus; }
-    public com.authcses.sdk.lifecycle.LifecycleManager lifecycle() { return lifecycle; }
+    public com.authcses.sdk.metrics.SdkMetrics metrics() { return observability.metrics(); }
+    public com.authcses.sdk.event.SdkEventBus eventBus() { return observability.eventBus(); }
+    public com.authcses.sdk.lifecycle.LifecycleManager lifecycle() { return infra.lifecycle(); }
     public SchemaClient schema() { return schemaClient; }
-    public CacheHandle cache() { return cacheHandle; }
+    public CacheHandle cache() { return caching.handle(); }
 
     public HealthResult health() {
         long start = System.nanoTime();
@@ -283,31 +257,31 @@ public class AuthCsesClient implements AutoCloseable {
 
     @Override
     public void close() {
-        if (!closed.compareAndSet(false, true)) return; // prevent double-close
-        eventBus.fire(com.authcses.sdk.event.SdkEvent.CLIENT_STOPPING, "SDK shutting down");
-        lifecycle.stopping();
+        if (!infra.markClosed()) return; // prevent double-close
+        observability.eventBus().fire(com.authcses.sdk.event.SdkEvent.CLIENT_STOPPING, "SDK shutting down");
+        infra.lifecycle().stopping();
 
-        if (scheduler != null) {
-            scheduler.shutdown();
-            try { scheduler.awaitTermination(5, TimeUnit.SECONDS); }
+        if (infra.scheduler() != null) {
+            infra.scheduler().shutdown();
+            try { infra.scheduler().awaitTermination(5, TimeUnit.SECONDS); }
             catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
-        if (watchInvalidator != null) watchInvalidator.close();
-        if (telemetryReporter != null) telemetryReporter.close();
+        if (caching.watchInvalidator() != null) caching.watchInvalidator().close();
+        if (observability.telemetry() != null) observability.telemetry().close();
         transport.close();
-        if (grpcChannel != null) {
-            grpcChannel.shutdown();
-            try { grpcChannel.awaitTermination(5, TimeUnit.SECONDS); }
+        if (infra.channel() != null) {
+            infra.channel().shutdown();
+            try { infra.channel().awaitTermination(5, TimeUnit.SECONDS); }
             catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
 
-        if (shutdownHookRef != null && Thread.currentThread() != shutdownHookRef) {
-            try { Runtime.getRuntime().removeShutdownHook(shutdownHookRef); }
+        if (infra.shutdownHook() != null && Thread.currentThread() != infra.shutdownHook()) {
+            try { Runtime.getRuntime().removeShutdownHook(infra.shutdownHook()); }
             catch (IllegalStateException ignored) {}
         }
 
-        lifecycle.stopped();
-        eventBus.fire(com.authcses.sdk.event.SdkEvent.CLIENT_STOPPED, "SDK stopped");
+        infra.lifecycle().stopped();
+        observability.eventBus().fire(com.authcses.sdk.event.SdkEvent.CLIENT_STOPPED, "SDK stopped");
     }
 
     // ============================================================
@@ -575,14 +549,18 @@ public class AuthCsesClient implements AutoCloseable {
                         ? java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()
                         : Runnable::run;
 
-                var client = new AuthCsesClient(transport, grpcChannel, schemaCache, cacheHolder[0], sdkMetrics,
-                        bus, lm, watchInvalidator, telemetryReporter, scheduler, defaultSubjectType, dispatcher,
-                        asyncExec);
+                // Build aggregation objects
+                var infraObj = new SdkInfrastructure(grpcChannel, scheduler, asyncExec, lm);
+                var observabilityObj = new SdkObservability(sdkMetrics, bus, telemetryReporter);
+                var cachingObj = new SdkCaching(cacheHolder[0], schemaCache, watchInvalidator, dispatcher);
+                var configObj = new SdkConfig(defaultSubjectType, policies, coalescingEnabled, useVirtualThreads);
+
+                var client = new AuthCsesClient(transport, infraObj, observabilityObj, cachingObj, configObj);
 
                 if (registerShutdownHook) {
                     var hook = new Thread(client::close, "authcses-sdk-shutdown");
                     Runtime.getRuntime().addShutdownHook(hook);
-                    client.shutdownHookRef = hook;
+                    infraObj.setShutdownHook(hook);
                 }
 
                 return client;

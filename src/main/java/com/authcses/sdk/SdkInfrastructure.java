@@ -21,7 +21,7 @@ public final class SdkInfrastructure implements AutoCloseable {
 
     public SdkInfrastructure(io.grpc.ManagedChannel channel, ScheduledExecutorService scheduler,
                               Executor asyncExecutor, LifecycleManager lifecycle) {
-        this.channel = Objects.requireNonNull(channel, "channel");
+        this.channel = channel; // nullable for InMemory usage
         this.scheduler = scheduler;
         this.asyncExecutor = asyncExecutor != null ? asyncExecutor : Runnable::run;
         this.lifecycle = lifecycle;
