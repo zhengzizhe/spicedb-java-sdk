@@ -33,8 +33,7 @@ class SdkEndToEndTest {
         // Skip if SpiceDB is not reachable
         try {
             client = AuthCsesClient.builder()
-                    .target("localhost:50051")
-                    .presharedKey("dev-token")
+                    .connection(c -> c.target("localhost:50051").presharedKey("dev-token"))
                     .build();
         } catch (Exception e) {
             assumeTrue(false, "SpiceDB not reachable: " + e.getMessage());

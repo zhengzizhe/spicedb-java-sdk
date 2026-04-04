@@ -21,10 +21,8 @@ class SchemaCacheE2ETest {
     static void setup() {
         try {
             client = AuthCsesClient.builder()
-                    .target("localhost:50051")
-                    
-                    .presharedKey("dev-token")
-                    .telemetryEnabled(false)
+                    .connection(c -> c.target("localhost:50051").presharedKey("dev-token"))
+                    .features(f -> f.telemetry(false))
                     .build();
         } catch (Exception e) {
             assumeTrue(false, "Platform not reachable: " + e.getMessage());

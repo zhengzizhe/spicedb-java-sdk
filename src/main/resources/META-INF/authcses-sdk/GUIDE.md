@@ -65,39 +65,30 @@ import com.authcses.sdk.policy.*;
 import java.time.Duration;
 
 AuthCsesClient client = AuthCsesClient.builder()
-    // Required
-    .target("dns:///spicedb.prod:50051")   // SpiceDB URL
-    .presharedKey("my-key")                         // SpiceDB preshared key
-                              // Namespace (space) name
-
-    // Connection
-    .requestTimeout(Duration.ofSeconds(5))         // Per-request timeout (default: 5s)
-    .useTls(false)                                 // TLS for SpiceDB gRPC (default: false)
-    .useVirtualThreads(true)                       // Java 21 virtual threads for internal threads
-
-    // Cache
-    .cacheEnabled(true)                            // Enable L1 Caffeine cache (default: false)
-    .cacheMaxSize(100_000)                         // Max cached entries (default: 100,000)
-
-    // Features
-    .coalescingEnabled(true)                       // Deduplicate concurrent identical checks (default: true)
-    .watchInvalidation(true)                       // Watch SpiceDB for real-time cache invalidation
-    .telemetryEnabled(true)                        // Async operation logging via TelemetrySink SPI (default: true)
-
-    // Default subject type for bare user IDs (default: "user")
-    .defaultSubjectType("user")
-
-    // Per-resource-type policies (optional, see section 8)
-    .policies(PolicyRegistry.builder()
-        .defaultPolicy(ResourcePolicy.builder()
-            .cache(CachePolicy.builder().ttl(Duration.ofSeconds(5)).build())
-            .readConsistency(ReadConsistency.session())
-            .retry(RetryPolicy.defaults())
-            .circuitBreaker(CircuitBreakerPolicy.defaults())
-            .timeout(Duration.ofSeconds(5))
-            .build())
-        .build())
-
+    .connection(c -> c
+        .target("dns:///spicedb.prod:50051")       // SpiceDB URL
+        .presharedKey("my-key")                    // SpiceDB preshared key
+        .requestTimeout(Duration.ofSeconds(5))     // Per-request timeout (default: 5s)
+        .tls(false))                               // TLS for SpiceDB gRPC (default: false)
+    .cache(c -> c
+        .enabled(true)                             // Enable L1 Caffeine cache (default: false)
+        .maxSize(100_000)                          // Max cached entries (default: 100,000)
+        .watchInvalidation(true))                  // Watch SpiceDB for real-time cache invalidation
+    .features(f -> f
+        .virtualThreads(true)                      // Java 21 virtual threads for internal threads
+        .coalescing(true)                          // Deduplicate concurrent identical checks (default: true)
+        .telemetry(true)                           // Async operation logging via TelemetrySink SPI
+        .defaultSubjectType("user"))               // Default subject type for bare user IDs
+    .extend(e -> e
+        .policies(PolicyRegistry.builder()         // Per-resource-type policies (optional, see section 8)
+            .defaultPolicy(ResourcePolicy.builder()
+                .cache(CachePolicy.builder().ttl(Duration.ofSeconds(5)).build())
+                .readConsistency(ReadConsistency.session())
+                .retry(RetryPolicy.defaults())
+                .circuitBreaker(CircuitBreakerPolicy.defaults())
+                .timeout(Duration.ofSeconds(5))
+                .build())
+            .build()))
     .build();
 ```
 
@@ -431,7 +422,7 @@ Schema is auto-refreshed on each credential refresh cycle.
 Different resource types often need different strategies:
 
 ```java
-.policies(PolicyRegistry.builder()
+.extend(e -> e.policies(PolicyRegistry.builder()
     // Global defaults (applied to any type without specific config)
     .defaultPolicy(ResourcePolicy.builder()
         .cache(CachePolicy.builder()
@@ -476,7 +467,7 @@ Different resource types often need different strategies:
         .retry(RetryPolicy.disabled())
         .build())
 
-    .build())
+    .build()))
 ```
 
 **Resolution order:** per-permission TTL → per-type policy → global default.

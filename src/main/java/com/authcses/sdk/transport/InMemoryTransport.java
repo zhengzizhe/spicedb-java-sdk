@@ -79,27 +79,27 @@ public class InMemoryTransport implements SdkTransport {
     }
 
     @Override
-    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
+    public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
         // In-memory: match on relation == permission (no recursive permission computation)
         var all = store.values().stream()
                 .filter(t -> t.resourceType().equals(request.resource().type()))
                 .filter(t -> t.resourceId().equals(request.resource().id()))
                 .filter(t -> t.relation().equals(request.permission().name()))
                 .filter(t -> t.subjectType().equals(request.subjectType()))
-                .map(Tuple::subjectId)
+                .map(t -> SubjectRef.of(t.subjectType(), t.subjectId(), t.subjectRelation()))
                 .toList();
         return request.limit() > 0 && all.size() > request.limit() ? all.subList(0, request.limit()) : all;
     }
 
     @Override
-    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
+    public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
         // In-memory: match on relation == permission (no recursive permission computation)
         var all = store.values().stream()
                 .filter(t -> t.resourceType().equals(request.resourceType()))
                 .filter(t -> t.relation().equals(request.permission().name()))
                 .filter(t -> t.subjectType().equals(request.subject().type()))
                 .filter(t -> t.subjectId().equals(request.subject().id()))
-                .map(Tuple::resourceId)
+                .map(t -> ResourceRef.of(t.resourceType(), t.resourceId()))
                 .toList();
         return request.limit() > 0 && all.size() > request.limit() ? all.subList(0, request.limit()) : all;
     }

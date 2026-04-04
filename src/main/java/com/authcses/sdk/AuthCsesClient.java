@@ -28,9 +28,8 @@ import java.util.concurrent.TimeUnit;
  *
  * <pre>
  * var client = AuthCsesClient.builder()
- *     .target("dns:///spicedb.prod:50051")
- *     .presharedKey("my-key")
- *     .cacheEnabled(true)
+ *     .connection(c -> c.target("dns:///spicedb.prod:50051").presharedKey("my-key"))
+ *     .cache(c -> c.enabled(true))
  *     .build();
  * </pre>
  */
@@ -289,7 +288,6 @@ public class AuthCsesClient implements AutoCloseable {
 
     /**
      * <pre>
-     * // Grouped style (recommended)
      * AuthCsesClient.builder()
      *     .connection(c -> c
      *         .target("dns:///spicedb.prod:50051")
@@ -299,13 +297,6 @@ public class AuthCsesClient implements AutoCloseable {
      *         .enabled(true)
      *         .maxSize(100_000)
      *         .watchInvalidation(true))
-     *     .build();
-     *
-     * // Flat style (also works)
-     * AuthCsesClient.builder()
-     *     .target("localhost:50051")
-     *     .presharedKey("my-key")
-     *     .cacheEnabled(true)
      *     .build();
      * </pre>
      */
@@ -398,31 +389,6 @@ public class AuthCsesClient implements AutoCloseable {
             /** Register a Watch strategy for a resource type. Requires watchInvalidation(true). */
             public ExtendConfig addWatchStrategy(com.authcses.sdk.watch.WatchStrategy s) { Builder.this.watchStrategies.add(s); return this; }
         }
-
-        // ============================================================
-        //  Flat setters (backward compatible)
-        // ============================================================
-
-        public Builder target(String target) { this.target = target; return this; }
-        public Builder targets(String... targets) { this.targets = List.of(targets); return this; }
-        public Builder presharedKey(String key) { this.presharedKey = key; return this; }
-        public Builder useTls(boolean tls) { this.useTls = tls; return this; }
-        public Builder loadBalancing(String policy) { this.loadBalancing = policy; return this; }
-        public Builder keepAliveTime(Duration d) { this.keepAliveTime = d; return this; }
-        public Builder requestTimeout(Duration d) { this.requestTimeout = d; return this; }
-        public Builder cacheEnabled(boolean e) { this.cacheEnabled = e; return this; }
-        public Builder cacheMaxSize(long s) { this.cacheMaxSize = s; return this; }
-        public Builder watchInvalidation(boolean e) { this.watchInvalidation = e; return this; }
-        public Builder coalescingEnabled(boolean e) { this.coalescingEnabled = e; return this; }
-        public Builder useVirtualThreads(boolean e) { this.useVirtualThreads = e; return this; }
-        public Builder registerShutdownHook(boolean e) { this.registerShutdownHook = e; return this; }
-        public Builder telemetryEnabled(boolean e) { this.telemetryEnabled = e; return this; }
-        public Builder defaultSubjectType(String t) { this.defaultSubjectType = t; return this; }
-        public Builder policies(PolicyRegistry p) { this.policyRegistry = p; return this; }
-        public Builder eventBus(com.authcses.sdk.event.TypedEventBus b) { this.eventBus = b; return this; }
-        public Builder components(com.authcses.sdk.spi.SdkComponents c) { this.components = c; return this; }
-        public Builder addInterceptor(com.authcses.sdk.spi.SdkInterceptor i) { this.interceptors.add(i); return this; }
-        public Builder addWatchStrategy(com.authcses.sdk.watch.WatchStrategy s) { this.watchStrategies.add(s); return this; }
 
         public AuthCsesClient build() {
             Objects.requireNonNull(presharedKey, "presharedKey is required");

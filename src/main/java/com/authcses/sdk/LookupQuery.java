@@ -52,8 +52,9 @@ public class LookupQuery {
         if (permission == null) throw new IllegalStateException("withPermission() must be called before fetch()");
         if (subjectId == null) throw new IllegalStateException("by() must be called before fetch()");
         var request = new LookupResourcesRequest(resourceType, Permission.of(permission),
-                SubjectRef.of(subjectType, subjectId, null), limit);
-        return transport.lookupResources(request, consistency);
+                SubjectRef.of(subjectType, subjectId, null), limit, consistency);
+        return transport.lookupResources(request).stream()
+                .map(ResourceRef::id).toList();
     }
 
     public Set<String> fetchSet() {

@@ -76,24 +76,24 @@ public class InstrumentedTransport extends ForwardingTransport {
     }
 
     @Override
-    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
+    public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
         return instrument(SdkAction.LOOKUP_SUBJECTS,
                 request.resource().type(), request.resource().id(),
                 request.subjectType(), "",
                 request.permission().name(),
                 () -> new InstrumentedResult<>(
-                        delegate.lookupSubjects(request, consistency),
+                        delegate.lookupSubjects(request),
                         "SUCCESS"));
     }
 
     @Override
-    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
+    public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
         return instrument(SdkAction.LOOKUP_RESOURCES,
                 request.resourceType(), "",
                 request.subject().type(), request.subject().id(),
                 request.permission().name(),
                 () -> new InstrumentedResult<>(
-                        delegate.lookupResources(request, consistency),
+                        delegate.lookupResources(request),
                         "SUCCESS"));
     }
 

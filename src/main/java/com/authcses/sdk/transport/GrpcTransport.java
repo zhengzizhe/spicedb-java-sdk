@@ -207,34 +207,34 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
-    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
+    public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
         var builder = com.authzed.api.v1.LookupSubjectsRequest.newBuilder()
                 .setResource(objRef(request.resource()))
                 .setPermission(request.permission().name())
                 .setSubjectObjectType(request.subjectType())
-                .setConsistency(toGrpc(consistency));
+                .setConsistency(toGrpc(request.consistency()));
         if (request.limit() > 0) builder.setOptionalConcreteLimit(request.limit());
 
-        List<String> subjects = new ArrayList<>();
+        List<SubjectRef> subjects = new ArrayList<>();
         var iterator = withErrorHandling(() -> stub().lookupSubjects(builder.build()));
         iterator.forEachRemaining(resp ->
-                subjects.add(resp.getSubject().getSubjectObjectId()));
+                subjects.add(SubjectRef.of(request.subjectType(), resp.getSubject().getSubjectObjectId(), null)));
         return subjects;
     }
 
     @Override
-    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
+    public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
         var builder = com.authzed.api.v1.LookupResourcesRequest.newBuilder()
                 .setResourceObjectType(request.resourceType())
                 .setPermission(request.permission().name())
                 .setSubject(subRef(request.subject()))
-                .setConsistency(toGrpc(consistency));
+                .setConsistency(toGrpc(request.consistency()));
         if (request.limit() > 0) builder.setOptionalLimit(request.limit());
 
-        List<String> resources = new ArrayList<>();
+        List<ResourceRef> resources = new ArrayList<>();
         var iterator = withErrorHandling(() -> stub().lookupResources(builder.build()));
         iterator.forEachRemaining(resp ->
-                resources.add(resp.getResourceObjectId()));
+                resources.add(ResourceRef.of(request.resourceType(), resp.getResourceObjectId())));
         return resources;
     }
 

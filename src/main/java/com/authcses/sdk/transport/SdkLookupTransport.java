@@ -9,7 +9,7 @@ import java.util.List;
  */
 public interface SdkLookupTransport {
 
-    List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency);
+    List<SubjectRef> lookupSubjects(LookupSubjectsRequest request);
 
-    List<String> lookupResources(LookupResourcesRequest request, Consistency consistency);
+    List<ResourceRef> lookupResources(LookupResourcesRequest request);
 }

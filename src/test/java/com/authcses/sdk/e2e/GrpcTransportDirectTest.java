@@ -70,9 +70,9 @@ class GrpcTransportDirectTest {
     void lookupSubjects() {
         var request = new LookupSubjectsRequest(
                 ResourceRef.of("document", "grpc-test-1"),
-                Permission.of("editor"), "user");
-        var subjects = transport.lookupSubjects(request, Consistency.full());
-        assertTrue(subjects.contains("grpc-alice"));
+                Permission.of("editor"), "user", 0, Consistency.full());
+        var subjects = transport.lookupSubjects(request);
+        assertTrue(subjects.stream().anyMatch(s -> s.id().equals("grpc-alice")));
     }
 
     @Test

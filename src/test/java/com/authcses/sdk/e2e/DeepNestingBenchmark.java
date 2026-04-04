@@ -29,10 +29,10 @@ public class DeepNestingBenchmark {
         System.out.println("=== 10-Level Nested Folder Benchmark ===\n");
 
         try (var client = AuthCsesClient.builder()
-                .target("localhost:50051").presharedKey("dev-token")
-                .requestTimeout(Duration.ofSeconds(15))
-                .cacheEnabled(false).telemetryEnabled(false)
-                .coalescingEnabled(false)
+                .connection(c -> c.target("localhost:50051").presharedKey("dev-token")
+                        .requestTimeout(Duration.ofSeconds(15)))
+                .cache(c -> c.enabled(false))
+                .features(f -> f.telemetry(false).coalescing(false))
                 .build()) {
 
             // --- Step 1: Build the nesting chain ---
@@ -66,9 +66,9 @@ public class DeepNestingBenchmark {
             // --- Step 7: With cache ---
             System.out.println("\n--- Same test WITH L1 cache ---");
             try (var cachedClient = AuthCsesClient.builder()
-                    .target("localhost:50051").presharedKey("dev-token")
-                    .cacheEnabled(true)
-                    .telemetryEnabled(false)
+                    .connection(c -> c.target("localhost:50051").presharedKey("dev-token"))
+                    .cache(c -> c.enabled(true))
+                    .features(f -> f.telemetry(false))
                     .build()) {
                 // Warm cache
                 for (int c = 0; c < 50; c++) {

@@ -396,8 +396,9 @@ public class ResourceHandle {
             ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
             if (isPermission) {
                 var request = new LookupSubjectsRequest(resource,
-                        Permission.of(permissionOrRelation), handle.defaultSubjectType, limit);
-                return handle.transport.lookupSubjects(request, consistency);
+                        Permission.of(permissionOrRelation), handle.defaultSubjectType, limit, consistency);
+                return handle.transport.lookupSubjects(request).stream()
+                        .map(SubjectRef::id).toList();
             } else {
                 var results = handle.transport.readRelationships(
                                 resource, Relation.of(permissionOrRelation), consistency).stream()

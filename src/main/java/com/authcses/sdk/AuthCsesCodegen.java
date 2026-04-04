@@ -14,8 +14,7 @@ import java.util.stream.Collectors;
  *
  * <pre>
  * var client = AuthCsesClient.builder()
- *     .target("localhost:50051")
- *     .presharedKey("dev-token")
+ *     .connection(c -> c.target("localhost:50051").presharedKey("dev-token"))
  *     .build();
  *
  * AuthCsesCodegen.generate(client, "src/main/java", "com.mycompany.permissions");

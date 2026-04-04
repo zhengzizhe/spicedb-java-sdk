@@ -45,13 +45,13 @@ public abstract class ForwardingTransport implements SdkTransport {
     }
 
     @Override
-    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
-        return delegate().lookupSubjects(request, consistency);
+    public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
+        return delegate().lookupSubjects(request);
     }
 
     @Override
-    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
-        return delegate().lookupResources(request, consistency);
+    public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
+        return delegate().lookupResources(request);
     }
 
     @Override

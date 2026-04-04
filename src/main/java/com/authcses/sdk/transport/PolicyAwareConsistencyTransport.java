@@ -75,15 +75,23 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     }
 
     @Override
-    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
-        return delegate.lookupSubjects(request,
-                resolveConsistency(request.resource().type(), consistency));
+    public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
+        var resolved = resolveConsistency(request.resource().type(), request.consistency());
+        LookupSubjectsRequest adjusted = resolved == request.consistency()
+                ? request
+                : new LookupSubjectsRequest(request.resource(), request.permission(),
+                        request.subjectType(), request.limit(), resolved);
+        return delegate.lookupSubjects(adjusted);
     }
 
     @Override
-    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
-        return delegate.lookupResources(request,
-                resolveConsistency(request.resourceType(), consistency));
+    public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
+        var resolved = resolveConsistency(request.resourceType(), request.consistency());
+        LookupResourcesRequest adjusted = resolved == request.consistency()
+                ? request
+                : new LookupResourcesRequest(request.resourceType(), request.permission(),
+                        request.subject(), request.limit(), resolved);
+        return delegate.lookupResources(adjusted);
     }
 
     @Override

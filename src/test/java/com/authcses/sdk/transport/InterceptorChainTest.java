@@ -172,33 +172,7 @@ class InterceptorChainTest {
         assertTrue(result.hasPermission());
     }
 
-    // ---- 6. Legacy before/after interceptors still work through the default bridge ----
-
-    @Test
-    void legacyBeforeAfterStillWorkViaDefaultBridge() {
-        var events = new ArrayList<String>();
-
-        SdkInterceptor legacyInterceptor = new SdkInterceptor() {
-            @Override
-            public void before(SdkInterceptor.OperationContext ctx) {
-                events.add("before:" + ctx.action());
-            }
-
-            @Override
-            public void after(SdkInterceptor.OperationContext ctx) {
-                events.add("after:" + ctx.result());
-            }
-        };
-
-        var transport = new InterceptorTransport(inner, List.of(legacyInterceptor));
-        var result = transport.check(CheckRequest.from(
-                "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
-
-        assertTrue(result.hasPermission());
-        assertEquals(List.of("before:" + SdkAction.CHECK, "after:" + Permissionship.HAS_PERMISSION.name()), events);
-    }
-
-    // ---- 7. Write chain proceeds through interceptors ----
+    // ---- 6. Write chain proceeds through interceptors ----
 
     @Test
     void writeChainProceedsThroughInterceptors() {
@@ -225,35 +199,7 @@ class InterceptorChainTest {
         assertEquals(List.of("write-before", "write-after:1"), events);
     }
 
-    // ---- 8. Write chain with legacy interceptor ----
-
-    @Test
-    void writeChainWithLegacyBeforeAfter() {
-        var events = new ArrayList<String>();
-
-        SdkInterceptor legacyInterceptor = new SdkInterceptor() {
-            @Override
-            public void before(SdkInterceptor.OperationContext ctx) {
-                events.add("before:" + ctx.action());
-            }
-
-            @Override
-            public void after(SdkInterceptor.OperationContext ctx) {
-                events.add("after");
-            }
-        };
-
-        var transport = new InterceptorTransport(inner, List.of(legacyInterceptor));
-        transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
-                SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                ResourceRef.of("document", "d3"),
-                Relation.of("viewer"),
-                SubjectRef.of("user", "carol", null))));
-
-        assertEquals(List.of("before:" + SdkAction.WRITE, "after"), events);
-    }
-
-    // ---- 9. Chain attributes are shared between interceptors ----
+    // ---- 7. Chain attributes are shared between interceptors ----
 
     @Test
     void chainAttributesSharedBetweenInterceptors() {
@@ -283,7 +229,7 @@ class InterceptorChainTest {
         assertEquals("trace-abc-123", capturedTraceId[0]);
     }
 
-    // ---- 10. Interceptor can time the call ----
+    // ---- 8. Interceptor can time the call ----
 
     @Test
     void interceptorCanTimeProceedCall() {
@@ -306,7 +252,7 @@ class InterceptorChainTest {
         assertTrue(capturedDuration[0] > 0, "Duration should be positive");
     }
 
-    // ---- 11. Exception propagation without error handler ----
+    // ---- 9. Exception propagation without error handler ----
 
     @Test
     void exceptionPropagatesWhenNotCaught() {
@@ -333,40 +279,22 @@ class InterceptorChainTest {
         assertEquals("connection refused", ex.getMessage());
     }
 
-    // ---- 12. Mixed old-style and new-style interceptors ----
+    // ---- 10. Default interceptCheck pass-through works ----
 
     @Test
-    void mixedOldAndNewStyleInterceptors() {
-        var events = new ArrayList<String>();
-
-        // Old-style interceptor using before/after
-        SdkInterceptor legacy = new SdkInterceptor() {
+    void defaultInterceptCheckPassesThrough() {
+        // An interceptor that only overrides interceptWrite, leaving interceptCheck default
+        SdkInterceptor writeOnly = new SdkInterceptor() {
             @Override
-            public void before(SdkInterceptor.OperationContext ctx) {
-                events.add("legacy-before");
-            }
-            @Override
-            public void after(SdkInterceptor.OperationContext ctx) {
-                events.add("legacy-after");
+            public GrantResult interceptWrite(SdkInterceptor.WriteChain chain) {
+                return chain.proceed(chain.request());
             }
         };
 
-        // New-style interceptor using interceptCheck
-        SdkInterceptor modern = new SdkInterceptor() {
-            @Override
-            public CheckResult interceptCheck(SdkInterceptor.CheckChain chain) {
-                events.add("modern-before");
-                CheckResult result = chain.proceed(chain.request());
-                events.add("modern-after");
-                return result;
-            }
-        };
-
-        var transport = new InterceptorTransport(inner, List.of(legacy, modern));
-        transport.check(CheckRequest.from(
+        var transport = new InterceptorTransport(inner, List.of(writeOnly));
+        var result = transport.check(CheckRequest.from(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
-        // legacy wraps around modern due to chain ordering
-        assertEquals(List.of("legacy-before", "modern-before", "modern-after", "legacy-after"), events);
+        assertTrue(result.hasPermission());
     }
 }

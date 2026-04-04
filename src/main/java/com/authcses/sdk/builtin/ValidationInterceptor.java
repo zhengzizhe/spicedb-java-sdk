@@ -1,5 +1,7 @@
 package com.authcses.sdk.builtin;
 
+import com.authcses.sdk.model.CheckResult;
+import com.authcses.sdk.model.GrantResult;
 import com.authcses.sdk.spi.SdkInterceptor;
 
 import java.util.regex.Pattern;
@@ -15,11 +17,20 @@ public class ValidationInterceptor implements SdkInterceptor {
     private static final Pattern PERMISSION_PATTERN = Pattern.compile("[a-z][a-z0-9_]{0,127}");
 
     @Override
-    public void before(OperationContext ctx) {
-        String resType = ctx.resourceType();
-        String resId = ctx.resourceId();
-        String perm = ctx.permission();
+    public CheckResult interceptCheck(CheckChain chain) {
+        var ctx = chain.operationContext();
+        validate(ctx.resourceType(), ctx.resourceId(), ctx.permission());
+        return chain.proceed(chain.request());
+    }
 
+    @Override
+    public GrantResult interceptWrite(WriteChain chain) {
+        var ctx = chain.operationContext();
+        validate(ctx.resourceType(), ctx.resourceId(), ctx.permission());
+        return chain.proceed(chain.request());
+    }
+
+    private void validate(String resType, String resId, String perm) {
         if (resType != null && !resType.isEmpty()) {
             if (!RESOURCE_TYPE_PATTERN.matcher(resType).matches()) {
                 throw new IllegalArgumentException(

@@ -90,15 +90,15 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     @Override
-    public List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency) {
+    public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
         return executeWithResilience(request.resource().type(),
-                () -> delegate.lookupSubjects(request, consistency));
+                () -> delegate.lookupSubjects(request));
     }
 
     @Override
-    public List<String> lookupResources(LookupResourcesRequest request, Consistency consistency) {
+    public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
         return executeWithResilience(request.resourceType(),
-                () -> delegate.lookupResources(request, consistency));
+                () -> delegate.lookupResources(request));
     }
 
     @Override

@@ -4,6 +4,9 @@ import com.authcses.sdk.event.DefaultTypedEventBus;
 import com.authcses.sdk.event.SdkTypedEvent;
 import com.authcses.sdk.event.TypedEventBus;
 import com.authcses.sdk.exception.AuthCsesException;
+import com.authcses.sdk.model.CheckResult;
+import com.authcses.sdk.model.GrantResult;
+import com.authcses.sdk.spi.AttributeKey;
 import com.authcses.sdk.spi.SdkInterceptor;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
@@ -14,6 +17,9 @@ import java.time.Duration;
 import java.time.Instant;
 
 public class Resilience4jInterceptor implements SdkInterceptor {
+
+    private static final AttributeKey<Boolean> BULKHEAD_ACQUIRED =
+            AttributeKey.of("bulkhead_acquired", Boolean.class);
 
     private final RateLimiter rateLimiter;
     private final Bulkhead bulkhead;
@@ -26,7 +32,28 @@ public class Resilience4jInterceptor implements SdkInterceptor {
     }
 
     @Override
-    public void before(OperationContext ctx) {
+    public CheckResult interceptCheck(CheckChain chain) {
+        var ctx = chain.operationContext();
+        acquirePermissions(ctx);
+        try {
+            return chain.proceed(chain.request());
+        } finally {
+            releasePermissions(ctx);
+        }
+    }
+
+    @Override
+    public GrantResult interceptWrite(WriteChain chain) {
+        var ctx = chain.operationContext();
+        acquirePermissions(ctx);
+        try {
+            return chain.proceed(chain.request());
+        } finally {
+            releasePermissions(ctx);
+        }
+    }
+
+    private void acquirePermissions(OperationContext ctx) {
         // Rate limiter first — waitForPermission() throws RequestNotPermitted on rejection
         if (rateLimiter != null) {
             try {
@@ -41,14 +68,13 @@ public class Resilience4jInterceptor implements SdkInterceptor {
                 eventBus.publish(new SdkTypedEvent.BulkheadRejected(Instant.now(), ctx.action().name()));
                 throw new AuthCsesException("Bulkhead rejected: max concurrent requests exceeded");
             }
-            ctx.setAttribute("_bulkhead_acquired", true);
+            ctx.attr(BULKHEAD_ACQUIRED, true);
         }
     }
 
-    @Override
-    public void after(OperationContext ctx) {
+    private void releasePermissions(OperationContext ctx) {
         if (bulkhead != null) {
-            Boolean acquired = ctx.getAttribute("_bulkhead_acquired");
+            Boolean acquired = ctx.attr(BULKHEAD_ACQUIRED);
             if (acquired != null && acquired) {
                 bulkhead.releasePermission();
             }

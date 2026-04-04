@@ -5,83 +5,46 @@ import com.authcses.sdk.model.CheckResult;
 import com.authcses.sdk.model.GrantResult;
 import com.authcses.sdk.model.WriteRequest;
 import com.authcses.sdk.model.enums.SdkAction;
-import java.util.Map;
 
 /**
- * Interceptor for SDK operations. Runs before/after each check, grant, revoke, lookup, etc.
+ * Interceptor for SDK operations using OkHttp-style chain pattern.
  *
  * <pre>
  * client = AuthCsesClient.builder()
- *     .addInterceptor(new SdkInterceptor() {
- *         @Override public void before(OperationContext ctx) {
- *             log.debug("→ {} {}:{} by {}", ctx.action(), ctx.resourceType(), ctx.resourceId(), ctx.subjectId());
+ *     .extend(e -> e.addInterceptor(new SdkInterceptor() {
+ *         @Override public CheckResult interceptCheck(CheckChain chain) {
+ *             log.debug("→ CHECK {}", chain.request());
+ *             CheckResult result = chain.proceed(chain.request());
+ *             log.debug("← CHECK {}", result.permissionship());
+ *             return result;
  *         }
- *         @Override public void after(OperationContext ctx) {
- *             log.debug("← {} {}ms result={}", ctx.action(), ctx.durationMs(), ctx.result());
- *         }
- *     })
+ *     }))
  *     .build();
  * </pre>
  *
- * <p>Interceptors execute synchronously on the calling thread, in registration order (before)
- * and reverse order (after). Keep them fast.
+ * <p>Interceptors execute synchronously on the calling thread, in registration order.
+ * Keep them fast.
  */
 public interface SdkInterceptor {
-
-    /**
-     * Called BEFORE the operation is executed. Can inspect/modify context.
-     * Throw to abort the operation.
-     */
-    default void before(OperationContext ctx) {}
-
-    /**
-     * Called AFTER the operation completes (success or failure).
-     * Context includes duration and result/error.
-     */
-    default void after(OperationContext ctx) {}
-
-    // ---- OkHttp-style chain methods ----
 
     /**
      * OkHttp-style chain for check operations. Override for full control:
      * modify request, short-circuit, wrap errors, measure timing.
      *
-     * <p>Default implementation bridges to the legacy {@link #before}/{@link #after} pattern
-     * so existing interceptors work without changes.
+     * <p>Default implementation passes through to the next interceptor in the chain.
      */
     default CheckResult interceptCheck(CheckChain chain) {
-        var ctx = chain.operationContext();
-        before(ctx);
-        try {
-            CheckResult result = chain.proceed(chain.request());
-            ctx.setResult(result.permissionship().name());
-            after(ctx);
-            return result;
-        } catch (Exception e) {
-            ctx.setError(e);
-            after(ctx);
-            throw e;
-        }
+        return chain.proceed(chain.request());
     }
 
     /**
      * OkHttp-style chain for write operations. Override for full control:
      * modify request, short-circuit, wrap errors, measure timing.
      *
-     * <p>Default implementation bridges to the legacy {@link #before}/{@link #after} pattern.
+     * <p>Default implementation passes through to the next interceptor in the chain.
      */
     default GrantResult interceptWrite(WriteChain chain) {
-        var ctx = chain.operationContext();
-        before(ctx);
-        try {
-            GrantResult result = chain.proceed(chain.request());
-            after(ctx);
-            return result;
-        } catch (Exception e) {
-            ctx.setError(e);
-            after(ctx);
-            throw e;
-        }
+        return chain.proceed(chain.request());
     }
 
     // ---- Chain interfaces ----
@@ -134,10 +97,8 @@ public interface SdkInterceptor {
         private final String permission;
         private final String subjectType;
         private final String subjectId;
-        /** Legacy string-keyed attributes for backward compatibility. */
-        private final Map<String, Object> attributes = new java.util.concurrent.ConcurrentHashMap<>();
         /** Typed attribute map keyed by {@link AttributeKey} identity — no collision risk. */
-        private final Map<AttributeKey<?>, Object> typedAttributes = new java.util.HashMap<>();
+        private final java.util.Map<AttributeKey<?>, Object> typedAttributes = new java.util.HashMap<>();
 
         // Set after execution
         private long durationMs;
@@ -164,12 +125,6 @@ public interface SdkInterceptor {
         public String result() { return result; }
         public Throwable error() { return error; }
         public boolean hasError() { return error != null; }
-
-        /** Legacy string-keyed setter — kept for backward compatibility. */
-        public void setAttribute(String key, Object value) { attributes.put(key, value); }
-        /** Legacy string-keyed getter — kept for backward compatibility. */
-        @SuppressWarnings("unchecked")
-        public <T> T getAttribute(String key) { return (T) attributes.get(key); }
 
         /** Type-safe getter using {@link AttributeKey} identity. */
         @SuppressWarnings("unchecked")
