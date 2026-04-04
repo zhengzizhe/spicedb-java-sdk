@@ -118,13 +118,8 @@ Interceptor → Coalescing → PolicyAwareConsistency → Cache(TwoLevel) → In
 - `GrpcTransport.writeRelationships()` 根据每个 update 的 `operation()` 字段映射 gRPC 操作
 - 禁止拆成多次调用（非原子 + 丢 token）
 
-## SDK 模块边界
+## 依赖边界
 
-```
-sdk-api     → 零依赖纯 Java record（平台 ↔ SDK 共享契约）
-sdk-core    → 依赖 authzed-grpc + Jackson + Resilience4j + HdrHistogram（业务方引入的核心库）
-sdk-typed   → 依赖 sdk-core（codegen 生成的常量包）
-sdk-codegen → 内部工具，不发布
-```
+SDK 依赖 authzed-grpc + Jackson + Resilience4j + HdrHistogram + OpenTelemetry API。
 
-**sdk-core 禁止依赖 platform 代码。**
+**禁止依赖 platform 代码。**
