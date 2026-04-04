@@ -1,7 +1,7 @@
 package com.authcses.sdk;
 
 import com.authcses.sdk.cache.CaffeineCache;
-import com.authcses.sdk.event.SdkEventBus;
+import com.authcses.sdk.event.DefaultTypedEventBus;
 import com.authcses.sdk.model.*;
 import com.authcses.sdk.policy.PolicyRegistry;
 import com.authcses.sdk.transport.*;
@@ -54,7 +54,7 @@ public class SdkConcurrencyBenchmark {
         var inner4 = new InMemoryTransport();
         seedData(inner4, docCount, userCount);
         SdkTransport fullChain = inner4;
-        fullChain = new ResilientTransport(fullChain, PolicyRegistry.withDefaults(), new SdkEventBus());
+        fullChain = new ResilientTransport(fullChain, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
         fullChain = new CachedTransport(fullChain, new CaffeineCache<>(100_000, Duration.ofSeconds(10), com.authcses.sdk.model.CheckKey::resourceIndex));
         fullChain = new CoalescingTransport(fullChain);
         warmCache(fullChain, docCount, userCount);
@@ -65,7 +65,7 @@ public class SdkConcurrencyBenchmark {
         var inner5 = new InMemoryTransport();
         seedData(inner5, docCount, userCount);
         SdkTransport coldChain = inner5;
-        coldChain = new ResilientTransport(coldChain, PolicyRegistry.withDefaults(), new SdkEventBus());
+        coldChain = new ResilientTransport(coldChain, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
         coldChain = new CachedTransport(coldChain, new CaffeineCache<>(100_000, Duration.ofMillis(1), com.authcses.sdk.model.CheckKey::resourceIndex)); // 1ms TTL = always miss
         coldChain = new CoalescingTransport(coldChain);
         runBenchmark("Full chain cold", coldChain, docCount, userCount);
@@ -75,7 +75,7 @@ public class SdkConcurrencyBenchmark {
         var inner6 = new InMemoryTransport();
         seedData(inner6, 1, 1);
         SdkTransport contentionChain = inner6;
-        contentionChain = new ResilientTransport(contentionChain, PolicyRegistry.withDefaults(), new SdkEventBus());
+        contentionChain = new ResilientTransport(contentionChain, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
         contentionChain = new CachedTransport(contentionChain, new CaffeineCache<>(100_000, Duration.ofSeconds(10), com.authcses.sdk.model.CheckKey::resourceIndex));
         contentionChain = new CoalescingTransport(contentionChain);
         warmCache(contentionChain, 1, 1);

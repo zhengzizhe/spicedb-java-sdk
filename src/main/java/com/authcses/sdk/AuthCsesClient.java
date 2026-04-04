@@ -67,7 +67,7 @@ public class AuthCsesClient implements AutoCloseable {
     }
 
     public static AuthCsesClient inMemory() {
-        var bus = new com.authcses.sdk.event.SdkEventBus();
+        var bus = new com.authcses.sdk.event.DefaultTypedEventBus();
         var lm = new com.authcses.sdk.lifecycle.LifecycleManager(bus);
         lm.begin(); lm.complete();
         var infra = new SdkInfrastructure(null, null, Runnable::run, lm);
@@ -245,7 +245,7 @@ public class AuthCsesClient implements AutoCloseable {
     // ---- Observability ----
 
     public com.authcses.sdk.metrics.SdkMetrics metrics() { return observability.metrics(); }
-    public com.authcses.sdk.event.SdkEventBus eventBus() { return observability.eventBus(); }
+    public com.authcses.sdk.event.TypedEventBus eventBus() { return observability.eventBus(); }
     public com.authcses.sdk.lifecycle.LifecycleManager lifecycle() { return infra.lifecycle(); }
     public SchemaClient schema() { return schemaClient; }
     public CacheHandle cache() { return caching.handle(); }
@@ -270,7 +270,7 @@ public class AuthCsesClient implements AutoCloseable {
     @Override
     public void close() {
         if (!infra.markClosed()) return; // prevent double-close
-        observability.eventBus().fire(com.authcses.sdk.event.SdkEvent.CLIENT_STOPPING, "SDK shutting down");
+        observability.eventBus().publish(new com.authcses.sdk.event.SdkTypedEvent.ClientStopping(java.time.Instant.now()));
         infra.lifecycle().stopping();
 
         // Shutdown order: scheduler → watch → telemetry flush → transport → channel → hook
@@ -280,7 +280,7 @@ public class AuthCsesClient implements AutoCloseable {
         transport.close();
 
         infra.lifecycle().stopped();
-        observability.eventBus().fire(com.authcses.sdk.event.SdkEvent.CLIENT_STOPPED, "SDK stopped");
+        observability.eventBus().publish(new com.authcses.sdk.event.SdkTypedEvent.ClientStopped(java.time.Instant.now()));
     }
 
     // ============================================================
@@ -333,7 +333,7 @@ public class AuthCsesClient implements AutoCloseable {
 
         // Extensibility
         private PolicyRegistry policyRegistry;
-        private com.authcses.sdk.event.SdkEventBus eventBus;
+        private com.authcses.sdk.event.TypedEventBus eventBus;
         private com.authcses.sdk.spi.SdkComponents components;
         private final java.util.List<com.authcses.sdk.spi.SdkInterceptor> interceptors = new java.util.ArrayList<>();
         private final java.util.List<com.authcses.sdk.watch.WatchStrategy> watchStrategies = new java.util.ArrayList<>();
@@ -392,7 +392,7 @@ public class AuthCsesClient implements AutoCloseable {
 
         public class ExtendConfig {
             public ExtendConfig policies(PolicyRegistry p) { Builder.this.policyRegistry = p; return this; }
-            public ExtendConfig eventBus(com.authcses.sdk.event.SdkEventBus b) { Builder.this.eventBus = b; return this; }
+            public ExtendConfig eventBus(com.authcses.sdk.event.TypedEventBus b) { Builder.this.eventBus = b; return this; }
             public ExtendConfig components(com.authcses.sdk.spi.SdkComponents c) { Builder.this.components = c; return this; }
             public ExtendConfig addInterceptor(com.authcses.sdk.spi.SdkInterceptor i) { Builder.this.interceptors.add(i); return this; }
             /** Register a Watch strategy for a resource type. Requires watchInvalidation(true). */
@@ -419,7 +419,7 @@ public class AuthCsesClient implements AutoCloseable {
         public Builder telemetryEnabled(boolean e) { this.telemetryEnabled = e; return this; }
         public Builder defaultSubjectType(String t) { this.defaultSubjectType = t; return this; }
         public Builder policies(PolicyRegistry p) { this.policyRegistry = p; return this; }
-        public Builder eventBus(com.authcses.sdk.event.SdkEventBus b) { this.eventBus = b; return this; }
+        public Builder eventBus(com.authcses.sdk.event.TypedEventBus b) { this.eventBus = b; return this; }
         public Builder components(com.authcses.sdk.spi.SdkComponents c) { this.components = c; return this; }
         public Builder addInterceptor(com.authcses.sdk.spi.SdkInterceptor i) { this.interceptors.add(i); return this; }
         public Builder addWatchStrategy(com.authcses.sdk.watch.WatchStrategy s) { this.watchStrategies.add(s); return this; }
@@ -430,7 +430,7 @@ public class AuthCsesClient implements AutoCloseable {
 
             var policies = policyRegistry != null ? policyRegistry : PolicyRegistry.withDefaults();
             var spi = components != null ? components : com.authcses.sdk.spi.SdkComponents.defaults();
-            var bus = eventBus != null ? eventBus : new com.authcses.sdk.event.SdkEventBus();
+            var bus = eventBus != null ? eventBus : new com.authcses.sdk.event.DefaultTypedEventBus();
             var lm = new com.authcses.sdk.lifecycle.LifecycleManager(bus);
             var sdkMetrics = new com.authcses.sdk.metrics.SdkMetrics();
             var schemaCache = new SchemaCache();

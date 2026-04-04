@@ -1,6 +1,6 @@
 package com.authcses.sdk.transport;
 
-import com.authcses.sdk.event.SdkEventBus;
+import com.authcses.sdk.event.DefaultTypedEventBus;
 import com.authcses.sdk.exception.AuthCsesConnectionException;
 import com.authcses.sdk.exception.CircuitBreakerOpenException;
 import com.authcses.sdk.model.*;
@@ -32,7 +32,7 @@ class ResilientTransportTest {
                         ResourceRef.of("document", "doc-1"),
                         Relation.of("viewer"),
                         SubjectRef.of("user", "alice", null))));
-        var transport = new ResilientTransport(delegate, PolicyRegistry.withDefaults(), new SdkEventBus());
+        var transport = new ResilientTransport(delegate, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
 
         var result = transport.check(CheckRequest.from("document", "doc-1", "viewer", "user", "alice", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
@@ -50,7 +50,7 @@ class ResilientTransportTest {
 
         // Delegate that fails twice then succeeds
         SdkTransport delegate = failingDelegate(callCount, 2, OK);
-        var transport = new ResilientTransport(delegate, policy, new SdkEventBus());
+        var transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         var result = transport.check(CheckRequest.from("document", "doc-1", "view", "user", "alice", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
@@ -73,7 +73,7 @@ class ResilientTransportTest {
 
         var callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        var transport = new ResilientTransport(delegate, policy, new SdkEventBus());
+        var transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // Exhaust the sliding window
         for (int i = 0; i < 4; i++) {
@@ -104,7 +104,7 @@ class ResilientTransportTest {
 
         var callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        var transport = new ResilientTransport(delegate, policy, new SdkEventBus());
+        var transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // Open the circuit
         for (int i = 0; i < 4; i++) {
@@ -138,7 +138,7 @@ class ResilientTransportTest {
 
         var callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        var transport = new ResilientTransport(delegate, policy, new SdkEventBus());
+        var transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // Fail "document" breaker
         for (int i = 0; i < 4; i++) {
@@ -168,7 +168,7 @@ class ResilientTransportTest {
 
         var callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        var transport = new ResilientTransport(delegate, policy, new SdkEventBus());
+        var transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // Even after many failures, no CircuitBreakerOpenException
         for (int i = 0; i < 100; i++) {
@@ -199,7 +199,7 @@ class ResilientTransportTest {
 
         var callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        var transport = new ResilientTransport(delegate, policy, new SdkEventBus());
+        var transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // 2 logical calls, each generating 3 retry attempts = 6 CB failure recordings
         for (int i = 0; i < 2; i++) {
@@ -215,7 +215,7 @@ class ResilientTransportTest {
 
     @Test
     void close_cleansUpInstances() {
-        var transport = new ResilientTransport(new InMemoryTransport(), PolicyRegistry.withDefaults(), new SdkEventBus());
+        var transport = new ResilientTransport(new InMemoryTransport(), PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
         transport.check(CheckRequest.from("document", "1", "viewer", "user", "a", Consistency.minimizeLatency()));
         transport.close(); // should not throw
     }

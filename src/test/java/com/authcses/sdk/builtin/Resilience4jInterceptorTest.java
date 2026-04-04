@@ -1,6 +1,6 @@
 package com.authcses.sdk.builtin;
 
-import com.authcses.sdk.event.SdkEventBus;
+import com.authcses.sdk.event.DefaultTypedEventBus;
 import com.authcses.sdk.exception.AuthCsesException;
 import com.authcses.sdk.model.enums.SdkAction;
 import com.authcses.sdk.spi.SdkInterceptor;
@@ -15,7 +15,7 @@ class Resilience4jInterceptorTest {
     void rateLimiter_rejectsOverLimit() {
         var interceptor = Resilience4jInterceptor.builder()
                 .rateLimiter(1)
-                .eventBus(new SdkEventBus())
+                .eventBus(new DefaultTypedEventBus())
                 .build();
 
         var ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
@@ -30,7 +30,7 @@ class Resilience4jInterceptorTest {
     void bulkhead_rejectsOverLimit() {
         var interceptor = Resilience4jInterceptor.builder()
                 .bulkhead(1)
-                .eventBus(new SdkEventBus())
+                .eventBus(new DefaultTypedEventBus())
                 .build();
 
         var ctx1 = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
@@ -48,7 +48,7 @@ class Resilience4jInterceptorTest {
     @Test
     void bothDisabled_isNoop() {
         var interceptor = Resilience4jInterceptor.builder()
-                .eventBus(new SdkEventBus())
+                .eventBus(new DefaultTypedEventBus())
                 .build();
 
         var ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");

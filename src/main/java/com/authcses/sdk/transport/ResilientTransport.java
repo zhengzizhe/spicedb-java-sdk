@@ -1,7 +1,8 @@
 package com.authcses.sdk.transport;
 
-import com.authcses.sdk.event.SdkEvent;
-import com.authcses.sdk.event.SdkEventBus;
+import com.authcses.sdk.event.DefaultTypedEventBus;
+import com.authcses.sdk.event.SdkTypedEvent;
+import com.authcses.sdk.event.TypedEventBus;
 import com.authcses.sdk.exception.CircuitBreakerOpenException;
 import com.authcses.sdk.model.*;
 import com.authcses.sdk.model.enums.Permissionship;
@@ -14,6 +15,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -30,14 +32,14 @@ public class ResilientTransport extends ForwardingTransport {
 
     private final SdkTransport delegate;
     private final PolicyRegistry policyRegistry;
-    private final SdkEventBus eventBus;
+    private final TypedEventBus eventBus;
     private final ConcurrentHashMap<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Retry> retries = new ConcurrentHashMap<>();
 
-    public ResilientTransport(SdkTransport delegate, PolicyRegistry policyRegistry, SdkEventBus eventBus) {
+    public ResilientTransport(SdkTransport delegate, PolicyRegistry policyRegistry, TypedEventBus eventBus) {
         this.delegate = delegate;
         this.policyRegistry = policyRegistry;
-        this.eventBus = eventBus != null ? eventBus : new SdkEventBus();
+        this.eventBus = eventBus != null ? eventBus : new DefaultTypedEventBus();
     }
 
     @Override
@@ -178,21 +180,21 @@ public class ResilientTransport extends ForwardingTransport {
             breaker.transitionToDisabledState();
         }
 
-        // Bridge events to SdkEventBus
+        // Bridge events to TypedEventBus
         breaker.getEventPublisher().onStateTransition(event -> {
             var transition = event.getStateTransition();
-            SdkEvent sdkEvent = switch (transition) {
+            SdkTypedEvent sdkEvent = switch (transition) {
                 case CLOSED_TO_OPEN, HALF_OPEN_TO_OPEN, CLOSED_TO_FORCED_OPEN ->
-                        SdkEvent.CIRCUIT_OPENED;
+                        new SdkTypedEvent.CircuitOpened(Instant.now(), resourceType, null);
                 case OPEN_TO_HALF_OPEN, FORCED_OPEN_TO_HALF_OPEN ->
-                        SdkEvent.CIRCUIT_HALF_OPENED;
+                        new SdkTypedEvent.CircuitHalfOpened(Instant.now(), resourceType);
                 case HALF_OPEN_TO_CLOSED, FORCED_OPEN_TO_CLOSED ->
-                        SdkEvent.CIRCUIT_CLOSED;
+                        new SdkTypedEvent.CircuitClosed(Instant.now(), resourceType);
                 default -> null;
             };
             if (sdkEvent != null) {
                 LOG.log(System.Logger.Level.INFO, "Circuit breaker [{0}]: {1}", resourceType, transition);
-                eventBus.fire(sdkEvent, resourceType + ": " + transition);
+                eventBus.publish(sdkEvent);
             }
         });
 

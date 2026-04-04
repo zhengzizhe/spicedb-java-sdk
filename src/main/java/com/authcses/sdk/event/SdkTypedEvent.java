@@ -25,7 +25,9 @@ public sealed interface SdkTypedEvent permits
         SdkTypedEvent.WatchConnected,
         SdkTypedEvent.WatchDisconnected,
         SdkTypedEvent.SchemaRefreshed,
-        SdkTypedEvent.SchemaLoadFailed {
+        SdkTypedEvent.SchemaLoadFailed,
+        SdkTypedEvent.RateLimited,
+        SdkTypedEvent.BulkheadRejected {
 
     Instant timestamp();
 
@@ -55,4 +57,8 @@ public sealed interface SdkTypedEvent permits
     // ---- Schema ----
     record SchemaRefreshed(Instant timestamp, int definitionCount) implements SdkTypedEvent {}
     record SchemaLoadFailed(Instant timestamp, Throwable error) implements SdkTypedEvent {}
+
+    // ---- Rate Limiting ----
+    record RateLimited(Instant timestamp, String action) implements SdkTypedEvent {}
+    record BulkheadRejected(Instant timestamp, String action) implements SdkTypedEvent {}
 }
