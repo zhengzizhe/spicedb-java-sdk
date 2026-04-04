@@ -10,22 +10,31 @@ import java.util.Map;
  * InMemory impl stores relationships in a HashMap for testing.
  *
  * <p>All methods accept value objects instead of scattered String parameters.
+ *
+ * <p>Method groups are split into focused sub-interfaces:
+ * <ul>
+ *   <li>{@link SdkCheckTransport} — check, checkBulk, checkBulkMulti</li>
+ *   <li>{@link SdkWriteTransport} — writeRelationships, deleteRelationships, deleteByFilter</li>
+ *   <li>{@link SdkLookupTransport} — lookupSubjects, lookupResources</li>
+ *   <li>{@link SdkReadTransport} — readRelationships</li>
+ *   <li>{@link SdkExpandTransport} — expand</li>
+ * </ul>
  */
-public interface SdkTransport extends AutoCloseable {
+public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkLookupTransport,
+                                       SdkReadTransport, SdkExpandTransport, AutoCloseable {
 
-    // ---- Permission checks ----
-    CheckResult check(CheckRequest request);
+    @Override
+    void close();
 
-    BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects);
+    // ---- Default implementations for optional operations ----
 
     /**
      * Bulk check: multiple (resource, permission, subject) tuples in one RPC.
      * Used by checkAll() to avoid N sequential calls.
+     * Default implementation falls back to sequential individual checks.
      */
-    record BulkCheckItem(ResourceRef resource, Permission permission, SubjectRef subject) {}
-
-    default List<CheckResult> checkBulkMulti(List<BulkCheckItem> items,
-                                              Consistency consistency) {
+    @Override
+    default List<CheckResult> checkBulkMulti(List<BulkCheckItem> items, Consistency consistency) {
         List<CheckResult> results = new java.util.ArrayList<>(items.size());
         for (var item : items) {
             results.add(check(CheckRequest.of(item.resource(), item.permission(), item.subject(), consistency)));
@@ -33,27 +42,13 @@ public interface SdkTransport extends AutoCloseable {
         return results;
     }
 
-    // ---- Relationship write/delete ----
-    GrantResult writeRelationships(List<RelationshipUpdate> updates);
-
-    RevokeResult deleteRelationships(List<RelationshipUpdate> updates);
-
-    // ---- Relationship read ----
-    List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency);
-
-    // ---- Lookup ----
-    List<String> lookupSubjects(LookupSubjectsRequest request, Consistency consistency);
-
-    List<String> lookupResources(LookupResourcesRequest request, Consistency consistency);
-
-    // ---- Filter-based delete (atomic, no TOCTOU) ----
-
     /**
      * Delete all relationships matching the filter atomically.
      * Used by revokeAll() to avoid read-then-delete race conditions.
      *
      * @param optionalRelation null to delete ALL relations for this subject on this resource
      */
+    @Override
     default RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
         // Default fallback: read-then-delete (InMemoryTransport, etc.)
@@ -75,13 +70,21 @@ public interface SdkTransport extends AutoCloseable {
         return deleteRelationships(updates);
     }
 
-    // ---- Expand ----
+    /**
+     * Expand the permission tree for a resource/permission pair.
+     * Default throws UnsupportedOperationException — only GrpcTransport implements this.
+     */
+    @Override
     default ExpandTree expand(ResourceRef resource, Permission permission, Consistency consistency) {
         throw new UnsupportedOperationException("expand not supported by this transport");
     }
 
-    @Override
-    void close();
+    // ---- Nested shared records ----
+
+    /**
+     * Bulk check item: a single (resource, permission, subject) tuple.
+     */
+    record BulkCheckItem(ResourceRef resource, Permission permission, SubjectRef subject) {}
 
     /**
      * A relationship write/delete operation.
