@@ -33,6 +33,9 @@ import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.MetadataUtils;
 
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
+
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -70,6 +73,33 @@ public class GrpcTransport implements SdkTransport {
                 .build();
 
         var response = withErrorHandling(() -> stub().checkPermission(request));
+        String token = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
+
+        return switch (response.getPermissionship()) {
+            case PERMISSIONSHIP_HAS_PERMISSION ->
+                    new CheckResult(Permissionship.HAS_PERMISSION, token, Optional.empty());
+            case PERMISSIONSHIP_CONDITIONAL_PERMISSION ->
+                    new CheckResult(Permissionship.CONDITIONAL_PERMISSION, token, Optional.empty());
+            default ->
+                    new CheckResult(Permissionship.NO_PERMISSION, token, Optional.empty());
+        };
+    }
+
+    @Override
+    public CheckResult check(String resourceType, String resourceId,
+                             String permission, String subjectType, String subjectId,
+                             Consistency consistency, Map<String, Object> context) {
+        var requestBuilder = CheckPermissionRequest.newBuilder()
+                .setResource(objRef(resourceType, resourceId))
+                .setPermission(permission)
+                .setSubject(subRef(subjectType, subjectId, null))
+                .setConsistency(toGrpc(consistency));
+
+        if (context != null && !context.isEmpty()) {
+            requestBuilder.setContext(toStruct(context));
+        }
+
+        var response = withErrorHandling(() -> stub().checkPermission(requestBuilder.build()));
         String token = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
         return switch (response.getPermissionship()) {
@@ -396,6 +426,29 @@ public class GrpcTransport implements SdkTransport {
             case Consistency.MinimizeLatency ignored ->
                     com.authzed.api.v1.Consistency.newBuilder().setMinimizeLatency(true).build();
         };
+    }
+
+    private static Struct toStruct(Map<String, Object> map) {
+        var builder = Struct.newBuilder();
+        for (var entry : map.entrySet()) {
+            builder.putFields(entry.getKey(), toValue(entry.getValue()));
+        }
+        return builder.build();
+    }
+
+    private static Value toValue(Object obj) {
+        if (obj == null) {
+            return Value.newBuilder().setNullValueValue(0).build();
+        } else if (obj instanceof String s) {
+            return Value.newBuilder().setStringValue(s).build();
+        } else if (obj instanceof Number n) {
+            return Value.newBuilder().setNumberValue(n.doubleValue()).build();
+        } else if (obj instanceof Boolean b) {
+            return Value.newBuilder().setBoolValue(b).build();
+        } else {
+            // Fallback: convert to string
+            return Value.newBuilder().setStringValue(obj.toString()).build();
+        }
     }
 
     private <T> T withErrorHandling(java.util.function.Supplier<T> call) {
