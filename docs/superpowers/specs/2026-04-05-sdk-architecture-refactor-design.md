@@ -38,14 +38,16 @@ SDK 当前 81 个文件，接口 8 个，泛型 0 个，抽象类 1 个。核心
 package com.authcses.sdk.model;
 
 // 资源引用 — 替代 (String resourceType, String resourceId) 散装参数
-public record ResourceRef<T>(String type, String id) {
-    public static <T> ResourceRef<T> of(String type, String id) {
+// 不加泛型参数 — 当前无 phantom type 使用场景，YAGNI
+public record ResourceRef(String type, String id) {
+    public static ResourceRef of(String type, String id) {
         Objects.requireNonNull(type); Objects.requireNonNull(id);
-        return new ResourceRef<>(type, id);
+        return new ResourceRef(type, id);
     }
 }
 
-// 主体引用 — 替代 (String subjectType, String subjectId, String subjectRelation)
+// 主体引用 — 替代现有 Ref 类 + (String subjectType, String subjectId, String subjectRelation)
+// 注意：现有 com.authcses.sdk.model.Ref 将被 SubjectRef 替代并删除
 public record SubjectRef(String type, String id, @Nullable String relation) {
     public static SubjectRef user(String id) { return new SubjectRef("user", id, null); }
     public static SubjectRef wildcard(String type) { return new SubjectRef(type, "*", null); }
@@ -64,8 +66,8 @@ public record Relation(String name) {
 }
 
 // 缓存键 — 替代 5 个 String 拼接
-public record CheckKey(ResourceRef<?> resource, Permission permission, SubjectRef subject) {
-    public static CheckKey of(ResourceRef<?> resource, Permission permission, SubjectRef subject) {
+public record CheckKey(ResourceRef resource, Permission permission, SubjectRef subject) {
+    public static CheckKey of(ResourceRef resource, Permission permission, SubjectRef subject) {
         return new CheckKey(resource, permission, subject);
     }
     // 供 IndexedCache 使用的资源索引键
@@ -78,14 +80,14 @@ public record CheckKey(ResourceRef<?> resource, Permission permission, SubjectRe
 ```java
 // 替代 check 方法的 6-7 个参数
 public record CheckRequest(
-    ResourceRef<?> resource,
+    ResourceRef resource,
     Permission permission,
     SubjectRef subject,
     Consistency consistency,
     @Nullable Map<String, Object> caveatContext
 ) {
     // 便捷构造
-    public static CheckRequest of(ResourceRef<?> r, Permission p, SubjectRef s, Consistency c) {
+    public static CheckRequest of(ResourceRef r, Permission p, SubjectRef s, Consistency c) {
         return new CheckRequest(r, p, s, c, null);
     }
     // 从当前参数构造（内部桥接用）
@@ -100,12 +102,18 @@ public record CheckRequest(
 // 替代 writeRelationships 的 RelationshipUpdate 散装字段
 public record WriteRequest(List<RelationshipUpdate> updates) {}
 
-// 替代 lookup 方法的 5 个参数
-public record LookupRequest(
-    String resourceType,       // lookup 不针对具体资源 ID
+// 两种 lookup 操作参数不同，拆成两个 record（不用 @Nullable 凑合）
+public record LookupSubjectsRequest(
+    ResourceRef resource,
     Permission permission,
-    @Nullable SubjectRef subject, // lookupResources 需要, lookupSubjects 不需要
-    @Nullable ResourceRef<?> resource, // lookupSubjects 需要
+    String subjectType,
+    int limit
+) {}
+
+public record LookupResourcesRequest(
+    String resourceType,
+    Permission permission,
+    SubjectRef subject,
     int limit
 ) {}
 ```
@@ -116,13 +124,13 @@ public record LookupRequest(
 // 现在 10 个字段 → 改后 6 个
 public record RelationshipUpdate(
     Operation operation,
-    ResourceRef<?> resource,        // 替代 resourceType + resourceId
+    ResourceRef resource,        // 替代 resourceType + resourceId
     Relation relation,              // 替代 String relation
     SubjectRef subject,             // 替代 subjectType + subjectId + subjectRelation
     @Nullable CaveatRef caveat,     // 替代 caveatName + caveatContext
     @Nullable Instant expiresAt
 ) {
-    public enum Operation { TOUCH, DELETE, CREATE }
+    public enum Operation { TOUCH, DELETE } // CREATE 暂不加，避免 GrpcTransport/InMemoryTransport 未处理
 }
 
 public record CaveatRef(String name, @Nullable Map<String, Object> context) {}
@@ -182,16 +190,18 @@ public class AuthCsesClient implements AutoCloseable {
 #### 组件定义
 
 ```java
-// 基础设施 — 生命周期资源
-public record SdkInfrastructure(
-    ManagedChannel channel,
-    ScheduledExecutorService scheduler,
-    Executor asyncExecutor,
-    LifecycleManager lifecycle,
-    AtomicBoolean closed
-) implements AutoCloseable {
+// 基础设施 — 持有可变生命周期状态，用 class 不用 record
+public final class SdkInfrastructure implements AutoCloseable {
+    private final ManagedChannel channel;
+    private final ScheduledExecutorService scheduler;
+    private final Executor asyncExecutor;
+    private final LifecycleManager lifecycle;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+
     public boolean isClosed() { return closed.get(); }
     public boolean markClosed() { return closed.compareAndSet(false, true); }
+    public ManagedChannel channel() { return channel; }
+    public Executor asyncExecutor() { return asyncExecutor; }
 
     @Override
     public void close() {
@@ -289,7 +299,7 @@ public static class Builder {
 // 现在 ~10 个字段
 // 改后
 public class ResourceHandle {
-    private final ResourceRef<?> ref;          // 替代 resourceType + resourceId
+    private final ResourceRef ref;          // 替代 resourceType + resourceId
     private final SdkTransport transport;
     private final SdkConfig config;            // 替代 defaultSubjectType 等散装配置
     private final Executor asyncExecutor;
@@ -434,10 +444,15 @@ public interface SdkInterceptor {
         return chain.proceed(chain.request());
     }
 
+    // Lookup 拦截（默认透传）
+    default LookupResult interceptLookup(LookupChain chain) {
+        return chain.proceed(chain.request());
+    }
+
     // Check 链
     interface CheckChain {
         CheckRequest request();
-        CheckResult proceed(CheckRequest request);  // 可修改 request 再传递
+        CheckResult proceed(CheckRequest request);
         <T> T attr(AttributeKey<T> key);
         <T> void attr(AttributeKey<T> key, T value);
     }
@@ -446,6 +461,13 @@ public interface SdkInterceptor {
     interface WriteChain {
         WriteRequest request();
         WriteResult proceed(WriteRequest request);
+        <T> T attr(AttributeKey<T> key);
+    }
+
+    // Lookup 链
+    interface LookupChain {
+        Object request(); // LookupSubjectsRequest 或 LookupResourcesRequest
+        LookupResult proceed(Object request);
         <T> T attr(AttributeKey<T> key);
     }
 }
@@ -487,38 +509,38 @@ class RealCheckChain implements SdkInterceptor.CheckChain {
 
 ```java
 // 按职责拆分为子接口
-public interface CheckTransport {
+public interface SdkCheckTransport {
     CheckResult check(CheckRequest request);
     BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects);
     List<CheckResult> checkBulkMulti(List<CheckRequest> requests);
 }
 
-public interface WriteTransport {
+public interface SdkWriteTransport {
     WriteResult writeRelationships(WriteRequest request);
     WriteResult deleteRelationships(WriteRequest request);
-    WriteResult deleteByFilter(ResourceRef<?> resource, SubjectRef subject, @Nullable Relation relation);
+    WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject, @Nullable Relation relation);
 }
 
-public interface LookupTransport {
-    List<SubjectRef> lookupSubjects(LookupRequest request);
-    List<ResourceRef<?>> lookupResources(LookupRequest request);
+public interface SdkLookupTransport {
+    List<SubjectRef> lookupSubjects(LookupSubjectsRequest request);
+    List<ResourceRef> lookupResources(LookupResourcesRequest request);
 }
 
-public interface ReadTransport {
-    List<Tuple> readRelationships(ResourceRef<?> resource, @Nullable Relation relation);
+public interface SdkReadTransport {
+    List<Tuple> readRelationships(ResourceRef resource, @Nullable Relation relation);
 }
 
-public interface ExpandTransport {
-    ExpandTree expand(ResourceRef<?> resource, Permission permission);
+public interface SdkExpandTransport {
+    ExpandTree expand(ResourceRef resource, Permission permission);
 }
 
-// 组合接口（现有 SdkTransport 的替代）
-public interface Transport extends CheckTransport, WriteTransport, LookupTransport,
-                                   ReadTransport, ExpandTransport, AutoCloseable {}
+// 组合接口（保留 Sdk 前缀避免 io.grpc.internal.Transport 冲突）
+public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkLookupTransport,
+                                      SdkReadTransport, SdkExpandTransport, AutoCloseable {}
 
-// ForwardingTransport 实现 Transport，默认全部委托
-public abstract class ForwardingTransport implements Transport {
-    protected abstract Transport delegate();
+// ForwardingTransport 实现 SdkTransport，默认全部委托
+public abstract class ForwardingTransport implements SdkTransport {
+    protected abstract SdkTransport delegate();
     // 所有方法默认转发...
 }
 ```
@@ -551,7 +573,7 @@ public record CircuitEvent(Instant timestamp, String resourceType,
 }
 
 public record TransportEvent(Instant timestamp, SdkAction action,
-                              @Nullable ResourceRef<?> resource, Duration latency,
+                              @Nullable ResourceRef resource, Duration latency,
                               boolean success) implements SdkEvent {}
 
 public record WatchEvent(Instant timestamp,
