@@ -38,6 +38,15 @@ dependencies {
     // OpenTelemetry (no-op when no OTel SDK configured)
     implementation("io.opentelemetry:opentelemetry-api:1.40.0")
 
+    // Resilience4j — circuit breaker, retry, rate limiter, bulkhead (requires Java 17+)
+    implementation("io.github.resilience4j:resilience4j-circuitbreaker:2.4.0")
+    implementation("io.github.resilience4j:resilience4j-retry:2.4.0")
+    implementation("io.github.resilience4j:resilience4j-ratelimiter:2.4.0")
+    implementation("io.github.resilience4j:resilience4j-bulkhead:2.4.0")
+
+    // HdrHistogram — lock-free latency percentile tracking
+    implementation("org.hdrhistogram:HdrHistogram:2.2.2")
+
     // Optional
     compileOnly("com.github.ben-manes.caffeine:caffeine:3.1.8")
     compileOnly("io.micrometer:micrometer-core:1.13.0")

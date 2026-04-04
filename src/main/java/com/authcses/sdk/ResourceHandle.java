@@ -318,8 +318,12 @@ public class ResourceHandle {
                             handle.resourceType, handle.resourceId,
                             perm, handle.defaultSubjectType, userId))
                     .toList();
-            Map<String, CheckResult> results = handle.transport.checkBulkMulti(items, consistency);
-            return new PermissionSet(results);
+            List<CheckResult> results = handle.transport.checkBulkMulti(items, consistency);
+            Map<String, CheckResult> map = new LinkedHashMap<>();
+            for (int i = 0; i < permissions.length; i++) {
+                map.put(permissions[i], results.get(i));
+            }
+            return new PermissionSet(map);
         }
 
         public PermissionMatrix byAll(String... userIds) {
@@ -478,6 +482,14 @@ public class ResourceHandle {
             return fetch().stream().collect(Collectors.groupingBy(
                     Tuple::relation,
                     Collectors.mapping(Tuple::subjectId, Collectors.toList())));
+        }
+
+        /**
+         * Fetch all relationships and group subject IDs by relation name.
+         * Example: {"editor": ["alice","bob"], "viewer": ["charlie"]}
+         */
+        public Map<String, List<String>> fetchGroupByRelationSubjectIds() {
+            return groupByRelation();
         }
     }
 

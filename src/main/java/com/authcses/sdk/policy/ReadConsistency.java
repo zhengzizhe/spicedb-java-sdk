@@ -26,6 +26,15 @@ public sealed interface ReadConsistency {
     /** Absolute latest state, highest latency. SpiceDB: fully_consistent=true */
     static ReadConsistency strong() { return Strong.INSTANCE; }
 
+    /**
+     * Read data no older than the given staleness bound.
+     * SpiceDB: at_least_as_fresh with a time-based bound.
+     * Planned — exact gRPC mapping depends on SpiceDB version.
+     */
+    static ReadConsistency boundedStaleness(Duration maxStaleness) {
+        return new BoundedStaleness(maxStaleness);
+    }
+
     record MinimizeLatency() implements ReadConsistency {
         static final MinimizeLatency INSTANCE = new MinimizeLatency();
     }
@@ -38,4 +47,5 @@ public sealed interface ReadConsistency {
     record Strong() implements ReadConsistency {
         static final Strong INSTANCE = new Strong();
     }
+    record BoundedStaleness(Duration maxStaleness) implements ReadConsistency {}
 }

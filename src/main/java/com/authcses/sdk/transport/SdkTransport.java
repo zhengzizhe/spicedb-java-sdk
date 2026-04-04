@@ -36,15 +36,13 @@ public interface SdkTransport extends AutoCloseable {
     record BulkCheckItem(String resourceType, String resourceId,
                          String permission, String subjectType, String subjectId) {}
 
-    default Map<String, CheckResult> checkBulkMulti(List<BulkCheckItem> items,
-                                                     Consistency consistency) {
-        // Default: sequential fallback (InMemoryTransport, etc.)
-        Map<String, CheckResult> results = new java.util.LinkedHashMap<>();
+    default List<CheckResult> checkBulkMulti(List<BulkCheckItem> items,
+                                              Consistency consistency) {
+        List<CheckResult> results = new java.util.ArrayList<>(items.size());
         for (var item : items) {
-            results.put(item.permission(),
-                    check(item.resourceType(), item.resourceId(),
-                            item.permission(), item.subjectType(), item.subjectId(),
-                            consistency));
+            results.add(check(item.resourceType(), item.resourceId(),
+                    item.permission(), item.subjectType(), item.subjectId(),
+                    consistency));
         }
         return results;
     }

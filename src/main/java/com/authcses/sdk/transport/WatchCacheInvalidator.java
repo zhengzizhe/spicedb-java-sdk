@@ -40,6 +40,12 @@ public class WatchCacheInvalidator implements AutoCloseable {
     private final AtomicReference<String> lastToken = new AtomicReference<>(null);
     private final Thread watchThread;
     private final List<Consumer<RelationshipChange>> listeners = new CopyOnWriteArrayList<>();
+    private final java.util.concurrent.ExecutorService listenerExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "authcses-sdk-watch-dispatch");
+                t.setDaemon(true);
+                return t;
+            });
 
     /** Register a listener for relationship changes. */
     public void addListener(Consumer<RelationshipChange> listener) {
@@ -130,7 +136,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
                         // 1. Invalidate cache
                         cache.invalidateResource(resourceType, resourceId);
 
-                        // 2. Notify user listeners
+                        // 2. Notify user listeners (async to avoid blocking watch thread)
                         if (!listeners.isEmpty()) {
                             var op = update.getOperation() == RelationshipUpdate.Operation.OPERATION_DELETE
                                     ? RelationshipChange.Operation.DELETE
@@ -141,14 +147,16 @@ public class WatchCacheInvalidator implements AutoCloseable {
                                     rel.getSubject().getObject().getObjectType(),
                                     rel.getSubject().getObject().getObjectId(),
                                     subRel.isEmpty() ? null : subRel, changeToken);
-                            for (var listener : listeners) {
-                                try {
-                                    listener.accept(change);
-                                } catch (Exception e) {
-                                    LOG.log(System.Logger.Level.WARNING,
-                                            "Watch listener error: {0}", e.getMessage());
+                            listenerExecutor.execute(() -> {
+                                for (var listener : listeners) {
+                                    try {
+                                        listener.accept(change);
+                                    } catch (Exception e) {
+                                        LOG.log(System.Logger.Level.WARNING,
+                                                "Watch listener error: {0}", e.getMessage());
+                                    }
                                 }
-                            }
+                            });
                         }
                     }
                 }
@@ -172,6 +180,20 @@ public class WatchCacheInvalidator implements AutoCloseable {
     public void close() {
         running.set(false);
         watchThread.interrupt();
+        try {
+            watchThread.join(3000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        listenerExecutor.shutdown();
+        try {
+            if (!listenerExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                listenerExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            listenerExecutor.shutdownNow();
+        }
         if (ownsChannel) {
             try {
                 channel.shutdown().awaitTermination(3, TimeUnit.SECONDS);

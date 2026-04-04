@@ -70,6 +70,11 @@ public class TokenTracker {
 
             case ReadConsistency.Strong ignored ->
                     Consistency.full();
+
+            case ReadConsistency.BoundedStaleness ignored ->
+                    // BoundedStaleness: minimize latency is the closest available mapping.
+                    // Full time-based bounded staleness requires SpiceDB API support (planned).
+                    Consistency.minimizeLatency();
         };
     }
 

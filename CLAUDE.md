@@ -32,19 +32,7 @@ SDK 在高并发环境下运行，所有公开类必须线程安全：
 - `AuthCsesClient` — 全应用共享单例
 - `ResourceHandle` — 无状态，每次操作独立
 - Transport 装饰器 — 通过 ConcurrentHashMap / AtomicReference 保证
-- `CircuitBreaker` — 不可变 Snapshot + CAS 原子转换，禁止用多个 AtomicXxx 独立字段
-
-```java
-// ✗ 禁止 — 多个原子字段独立更新有竞态
-AtomicReference<State> state;
-AtomicInteger failures;
-// state 和 failures 之间不是原子的
-
-// ✓ 正确 — 不可变快照 + 单一 CAS
-record Snapshot(State state, int failures) {}
-AtomicReference<Snapshot> snapshot;
-snapshot.compareAndSet(current, next);
-```
+- `CircuitBreaker` — 由 Resilience4j 管理，通过 ConcurrentHashMap.computeIfAbsent 为每个 resource type 创建独立实例
 
 ### 资源释放
 
@@ -66,7 +54,7 @@ snapshot.compareAndSet(current, next);
 ### Transport 链顺序（从外到内）
 
 ```
-Interceptor → Coalescing → PolicyAwareConsistency → Cache(TwoLevel) → PolicyAwareRetry → Instrumented → GrpcTransport
+Interceptor → Coalescing → PolicyAwareConsistency → Cache(TwoLevel) → Instrumented → Resilient(CircuitBreaker+Retry) → GrpcTransport
 ```
 
 **关键约束**：
@@ -93,6 +81,11 @@ Interceptor → Coalescing → PolicyAwareConsistency → Cache(TwoLevel) → Po
 - `ConnectionManager` — gRPC keepalive 替代
 - `SessionConsistencyTransport` — 被 `PolicyAwareConsistencyTransport` 替代
 - `RetryTransport` — 被 `PolicyAwareRetryTransport` 替代
+- `CircuitBreaker` (自研) — 被 Resilience4j CircuitBreaker 替代
+- `CircuitBreakerTransport` — 被 `ResilientTransport` 替代
+- `PolicyAwareRetryTransport` — 被 `ResilientTransport` 替代
+- `RateLimiterInterceptor` — 被 `Resilience4jInterceptor` 替代
+- `BulkheadInterceptor` — 被 `Resilience4jInterceptor` 替代
 
 ### 一致性模型
 
@@ -129,7 +122,7 @@ Interceptor → Coalescing → PolicyAwareConsistency → Cache(TwoLevel) → Po
 
 ```
 sdk-api     → 零依赖纯 Java record（平台 ↔ SDK 共享契约）
-sdk-core    → 依赖 authzed-grpc + Jackson（业务方引入的核心库）
+sdk-core    → 依赖 authzed-grpc + Jackson + Resilience4j + HdrHistogram（业务方引入的核心库）
 sdk-typed   → 依赖 sdk-core（codegen 生成的常量包）
 sdk-codegen → 内部工具，不发布
 ```
