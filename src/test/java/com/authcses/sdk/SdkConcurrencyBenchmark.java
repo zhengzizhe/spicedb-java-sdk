@@ -1,6 +1,6 @@
 package com.authcses.sdk;
 
-import com.authcses.sdk.cache.CaffeineCheckCache;
+import com.authcses.sdk.cache.CaffeineCache;
 import com.authcses.sdk.event.SdkEventBus;
 import com.authcses.sdk.model.*;
 import com.authcses.sdk.policy.PolicyRegistry;
@@ -36,7 +36,7 @@ public class SdkConcurrencyBenchmark {
         // --- Benchmark 2: With Caffeine Cache ---
         System.out.println("\n--- 2. InMemory + L1 Cache (Caffeine, TTL=10s) ---");
         var cachedTransport = new CachedTransport(
-                new InMemoryTransport(), new CaffeineCheckCache(Duration.ofSeconds(10), 100_000));
+                new InMemoryTransport(), new CaffeineCache<>(100_000, Duration.ofSeconds(10), com.authcses.sdk.model.CheckKey::resourceIndex));
         seedData(cachedTransport, docCount, userCount);
         // Warm up cache
         warmCache(cachedTransport, docCount, userCount);
@@ -55,7 +55,7 @@ public class SdkConcurrencyBenchmark {
         seedData(inner4, docCount, userCount);
         SdkTransport fullChain = inner4;
         fullChain = new ResilientTransport(fullChain, PolicyRegistry.withDefaults(), new SdkEventBus());
-        fullChain = new CachedTransport(fullChain, new CaffeineCheckCache(Duration.ofSeconds(10), 100_000));
+        fullChain = new CachedTransport(fullChain, new CaffeineCache<>(100_000, Duration.ofSeconds(10), com.authcses.sdk.model.CheckKey::resourceIndex));
         fullChain = new CoalescingTransport(fullChain);
         warmCache(fullChain, docCount, userCount);
         runBenchmark("Full chain", fullChain, docCount, userCount);
@@ -66,7 +66,7 @@ public class SdkConcurrencyBenchmark {
         seedData(inner5, docCount, userCount);
         SdkTransport coldChain = inner5;
         coldChain = new ResilientTransport(coldChain, PolicyRegistry.withDefaults(), new SdkEventBus());
-        coldChain = new CachedTransport(coldChain, new CaffeineCheckCache(Duration.ofMillis(1), 100_000)); // 1ms TTL = always miss
+        coldChain = new CachedTransport(coldChain, new CaffeineCache<>(100_000, Duration.ofMillis(1), com.authcses.sdk.model.CheckKey::resourceIndex)); // 1ms TTL = always miss
         coldChain = new CoalescingTransport(coldChain);
         runBenchmark("Full chain cold", coldChain, docCount, userCount);
 
@@ -76,7 +76,7 @@ public class SdkConcurrencyBenchmark {
         seedData(inner6, 1, 1);
         SdkTransport contentionChain = inner6;
         contentionChain = new ResilientTransport(contentionChain, PolicyRegistry.withDefaults(), new SdkEventBus());
-        contentionChain = new CachedTransport(contentionChain, new CaffeineCheckCache(Duration.ofSeconds(10), 100_000));
+        contentionChain = new CachedTransport(contentionChain, new CaffeineCache<>(100_000, Duration.ofSeconds(10), com.authcses.sdk.model.CheckKey::resourceIndex));
         contentionChain = new CoalescingTransport(contentionChain);
         warmCache(contentionChain, 1, 1);
         runContentionBenchmark("High contention", contentionChain);

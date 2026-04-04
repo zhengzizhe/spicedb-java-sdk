@@ -1,6 +1,9 @@
 package com.authcses.sdk.transport;
 
-import com.authcses.sdk.cache.CheckCache;
+import com.authcses.sdk.cache.Cache;
+import com.authcses.sdk.cache.IndexedCache;
+import com.authcses.sdk.model.CheckKey;
+import com.authcses.sdk.model.CheckResult;
 import com.authcses.sdk.model.RelationshipChange;
 import com.authzed.api.v1.*;
 import io.grpc.ManagedChannel;
@@ -32,7 +35,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(WatchCacheInvalidator.class.getName());
 
-    private final CheckCache cache;
+    private final Cache<CheckKey, CheckResult> cache;
     private final ManagedChannel channel;
     private final boolean ownsChannel;
     private final Metadata authMetadata;
@@ -59,7 +62,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
     /**
      * Create with a shared channel (preferred — reuses the main client's gRPC channel).
      */
-    public WatchCacheInvalidator(ManagedChannel channel, String presharedKey, CheckCache cache) {
+    public WatchCacheInvalidator(ManagedChannel channel, String presharedKey, Cache<CheckKey, CheckResult> cache) {
         this.cache = cache;
         this.channel = channel;
         this.ownsChannel = false;
@@ -75,11 +78,11 @@ public class WatchCacheInvalidator implements AutoCloseable {
     }
 
     /**
-     * @deprecated Use {@link #WatchCacheInvalidator(ManagedChannel, String, CheckCache)} instead.
+     * @deprecated Use {@link #WatchCacheInvalidator(ManagedChannel, String, Cache)} instead.
      */
     @Deprecated
     public WatchCacheInvalidator(List<String> endpoints, String presharedKey, boolean useTls,
-                                  CheckCache cache) {
+                                  Cache<CheckKey, CheckResult> cache) {
         this.cache = cache;
 
         String target = endpoints.getFirst();
@@ -134,7 +137,12 @@ public class WatchCacheInvalidator implements AutoCloseable {
                         String resourceId = rel.getResource().getObjectId();
 
                         // 1. Invalidate cache
-                        cache.invalidateResource(resourceType, resourceId);
+                        String indexKey = resourceType + ":" + resourceId;
+                        if (cache instanceof IndexedCache<CheckKey, CheckResult> indexed) {
+                            indexed.invalidateByIndex(indexKey);
+                        } else {
+                            cache.invalidateAll(key -> indexKey.equals(key.resourceIndex()));
+                        }
 
                         // 2. Notify user listeners (async to avoid blocking watch thread)
                         if (!listeners.isEmpty()) {

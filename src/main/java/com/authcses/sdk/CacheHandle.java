@@ -1,6 +1,9 @@
 package com.authcses.sdk;
 
-import com.authcses.sdk.cache.CheckCache;
+import com.authcses.sdk.cache.Cache;
+import com.authcses.sdk.cache.IndexedCache;
+import com.authcses.sdk.model.CheckKey;
+import com.authcses.sdk.model.CheckResult;
 
 /**
  * Manual cache control.
@@ -13,15 +16,21 @@ import com.authcses.sdk.cache.CheckCache;
  */
 public class CacheHandle {
 
-    private final CheckCache cache;
+    private final Cache<CheckKey, CheckResult> cache;
 
-    CacheHandle(CheckCache cache) {
+    CacheHandle(Cache<CheckKey, CheckResult> cache) {
         this.cache = cache;
     }
 
     /** Invalidate all cached entries for a specific resource. */
     public void invalidate(String resourceType, String resourceId) {
-        if (cache != null) cache.invalidateResource(resourceType, resourceId);
+        if (cache == null) return;
+        String indexKey = resourceType + ":" + resourceId;
+        if (cache instanceof IndexedCache<CheckKey, CheckResult> indexed) {
+            indexed.invalidateByIndex(indexKey);
+        } else {
+            cache.invalidateAll(key -> indexKey.equals(key.resourceIndex()));
+        }
     }
 
     /** Invalidate all cached entries. */

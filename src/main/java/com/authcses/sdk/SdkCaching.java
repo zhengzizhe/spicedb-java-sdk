@@ -1,7 +1,9 @@
 package com.authcses.sdk;
 
-import com.authcses.sdk.cache.CheckCache;
+import com.authcses.sdk.cache.Cache;
 import com.authcses.sdk.cache.SchemaCache;
+import com.authcses.sdk.model.CheckKey;
+import com.authcses.sdk.model.CheckResult;
 import com.authcses.sdk.transport.WatchCacheInvalidator;
 import com.authcses.sdk.watch.WatchDispatcher;
 
@@ -10,7 +12,7 @@ import com.authcses.sdk.watch.WatchDispatcher;
  * All fields are nullable — caching may be disabled.
  */
 public record SdkCaching(
-    CheckCache checkCache,
+    Cache<CheckKey, CheckResult> checkCache,
     SchemaCache schemaCache,
     WatchCacheInvalidator watchInvalidator,
     WatchDispatcher watchDispatcher

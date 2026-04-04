@@ -1,6 +1,14 @@
 package com.authcses.sdk;
 
-import com.authcses.sdk.cache.*;
+import com.authcses.sdk.cache.Cache;
+import com.authcses.sdk.cache.CaffeineCache;
+import com.authcses.sdk.cache.SchemaCache;
+import com.authcses.sdk.cache.TieredCache;
+import com.authcses.sdk.model.CheckKey;
+import com.authcses.sdk.model.CheckResult;
+import com.authcses.sdk.model.Permission;
+import com.authcses.sdk.model.ResourceRef;
+import com.authcses.sdk.model.SubjectRef;
 import com.authcses.sdk.policy.PolicyRegistry;
 import com.authcses.sdk.telemetry.TelemetryReporter;
 import com.authcses.sdk.transport.*;
@@ -152,7 +160,9 @@ public class AuthCsesClient implements AutoCloseable {
     public boolean check(String type, String id, String permission, String userId) {
         // L0 fast path: direct cache lookup, skip entire transport chain
         if (caching.checkCache() != null) {
-            var cached = caching.checkCache().getIfPresent(type, id, permission, config.defaultSubjectType(), userId);
+            var key = CheckKey.of(ResourceRef.of(type, id), Permission.of(permission),
+                    SubjectRef.of(config.defaultSubjectType(), userId, null));
+            var cached = caching.checkCache().getIfPresent(key);
             if (cached != null) return cached.hasPermission();
         }
         return on(type).check(id, permission, userId);
@@ -163,7 +173,9 @@ public class AuthCsesClient implements AutoCloseable {
                          com.authcses.sdk.model.Consistency consistency) {
         // L0 fast path: only for MinimizeLatency (cacheable)
         if (consistency instanceof com.authcses.sdk.model.Consistency.MinimizeLatency && caching.checkCache() != null) {
-            var cached = caching.checkCache().getIfPresent(type, id, permission, config.defaultSubjectType(), userId);
+            var key = CheckKey.of(ResourceRef.of(type, id), Permission.of(permission),
+                    SubjectRef.of(config.defaultSubjectType(), userId, null));
+            var cached = caching.checkCache().getIfPresent(key);
             if (cached != null) return cached.hasPermission();
         }
         return on(type).check(id, permission, userId, consistency);
@@ -465,7 +477,8 @@ public class AuthCsesClient implements AutoCloseable {
                         SchemaLoader.load(grpcChannel, authMetaFinal, schemaCache));
 
                 // Phase: TRANSPORT
-                final CheckCache[] cacheHolder = {null};
+                @SuppressWarnings("unchecked")
+                final Cache<CheckKey, CheckResult>[] cacheHolder = new Cache[]{null};
                 final TelemetryReporter[] telemetryHolder = {null};
                 final ResilientTransport[] resilientHolder = {null};
                 SdkTransport transport = lm.phase(com.authcses.sdk.lifecycle.SdkPhase.TRANSPORT, () -> {
@@ -482,14 +495,34 @@ public class AuthCsesClient implements AutoCloseable {
                     }
 
                     if (cacheEnabled) {
-                        CheckCache l1;
-                        try { l1 = new PolicyAwareCheckCache(policies, cacheMaxSize); }
-                        catch (NoClassDefFoundError e) { l1 = CheckCache.noop(); }
+                        Cache<CheckKey, CheckResult> effectiveCache;
+                        try {
+                            // Policy-aware variable expiry: per-(resourceType, permission) TTL
+                            var expiry = new com.github.benmanes.caffeine.cache.Expiry<CheckKey, CheckResult>() {
+                                @Override
+                                public long expireAfterCreate(CheckKey key, CheckResult value, long currentTime) {
+                                    return policies.resolveCacheTtl(
+                                            key.resource().type(), key.permission().name()).toNanos();
+                                }
+                                @Override
+                                public long expireAfterUpdate(CheckKey key, CheckResult value, long currentTime, long currentDuration) {
+                                    return currentDuration;
+                                }
+                                @Override
+                                public long expireAfterRead(CheckKey key, CheckResult value, long currentTime, long currentDuration) {
+                                    return currentDuration;
+                                }
+                            };
+                            var l1 = new CaffeineCache<>(cacheMaxSize, expiry, CheckKey::resourceIndex);
+                            effectiveCache = spi.l2Cache() != null
+                                    ? new TieredCache<>(l1, spi.l2Cache())
+                                    : l1;
+                        } catch (NoClassDefFoundError e) {
+                            effectiveCache = Cache.noop();
+                        }
 
-                        cacheHolder[0] = spi.l2Cache() != null
-                                ? new TwoLevelCache(l1, spi.l2Cache())
-                                : l1;
-                        t = new CachedTransport(t, cacheHolder[0], sdkMetrics);
+                        cacheHolder[0] = effectiveCache;
+                        t = new CachedTransport(t, effectiveCache, sdkMetrics);
                     }
 
                     t = new PolicyAwareConsistencyTransport(t, policies, tokenTracker);

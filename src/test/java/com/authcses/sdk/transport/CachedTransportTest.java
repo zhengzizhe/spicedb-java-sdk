@@ -1,6 +1,6 @@
 package com.authcses.sdk.transport;
 
-import com.authcses.sdk.cache.CaffeineCheckCache;
+import com.authcses.sdk.cache.CaffeineCache;
 import com.authcses.sdk.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,12 +17,12 @@ class CachedTransportTest {
 
     private InMemoryTransport inner;
     private CachedTransport cached;
-    private CaffeineCheckCache cache;
+    private CaffeineCache<CheckKey, CheckResult> cache;
 
     @BeforeEach
     void setup() {
         inner = new InMemoryTransport();
-        cache = new CaffeineCheckCache(Duration.ofSeconds(10), 1000);
+        cache = new CaffeineCache<>(1000, Duration.ofSeconds(10), CheckKey::resourceIndex);
         cached = new CachedTransport(inner, cache);
     }
 
