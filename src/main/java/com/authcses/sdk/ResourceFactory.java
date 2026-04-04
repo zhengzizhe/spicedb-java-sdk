@@ -26,6 +26,7 @@ public class ResourceFactory {
     private volatile String resourceType;
     private volatile SdkTransport transport;
     private volatile String defaultSubjectType;
+    private volatile java.util.concurrent.Executor asyncExecutor = Runnable::run;
 
     /** For reflective instantiation by {@link AuthCsesClient#create(Class)}. */
     protected ResourceFactory() {}
@@ -37,11 +38,27 @@ public class ResourceFactory {
         this.defaultSubjectType = defaultSubjectType;
     }
 
+    ResourceFactory(String resourceType, SdkTransport transport, String defaultSubjectType,
+                    java.util.concurrent.Executor asyncExecutor) {
+        this.resourceType = resourceType;
+        this.transport = transport;
+        this.defaultSubjectType = defaultSubjectType;
+        this.asyncExecutor = asyncExecutor;
+    }
+
     /** Called by {@link AuthCsesClient#create(Class)} after reflective construction. */
     void init(String resourceType, SdkTransport transport, String defaultSubjectType) {
         this.resourceType = resourceType;
         this.transport = transport;
         this.defaultSubjectType = defaultSubjectType;
+    }
+
+    void init(String resourceType, SdkTransport transport, String defaultSubjectType,
+              java.util.concurrent.Executor asyncExecutor) {
+        this.resourceType = resourceType;
+        this.transport = transport;
+        this.defaultSubjectType = defaultSubjectType;
+        this.asyncExecutor = asyncExecutor;
     }
 
     /**
@@ -57,7 +74,7 @@ public class ResourceFactory {
      * </pre>
      */
     public ResourceHandle resource(String id) {
-        return new ResourceHandle(resourceType, id, transport, defaultSubjectType);
+        return new ResourceHandle(resourceType, id, transport, defaultSubjectType, asyncExecutor);
     }
 
     /**

@@ -19,12 +19,19 @@ public class ResourceHandle {
     private final String resourceId;
     private final SdkTransport transport;
     private final String defaultSubjectType;
+    private final java.util.concurrent.Executor asyncExecutor;
 
     ResourceHandle(String resourceType, String resourceId, SdkTransport transport, String defaultSubjectType) {
+        this(resourceType, resourceId, transport, defaultSubjectType, Runnable::run);
+    }
+
+    ResourceHandle(String resourceType, String resourceId, SdkTransport transport,
+                   String defaultSubjectType, java.util.concurrent.Executor asyncExecutor) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
         this.defaultSubjectType = defaultSubjectType;
+        this.asyncExecutor = asyncExecutor;
     }
 
     public String resourceType() { return resourceType; }
@@ -276,9 +283,9 @@ public class ResourceHandle {
                     consistency);
         }
 
-        /** Async version. */
+        /** Async version. Uses the SDK's configured executor instead of ForkJoinPool.commonPool. */
         public java.util.concurrent.CompletableFuture<CheckResult> byAsync(String userId) {
-            return java.util.concurrent.CompletableFuture.supplyAsync(() -> by(userId));
+            return java.util.concurrent.CompletableFuture.supplyAsync(() -> by(userId), handle.asyncExecutor);
         }
 
         public BulkCheckResult byAll(String... userIds) {
@@ -412,7 +419,7 @@ public class ResourceHandle {
         }
 
         public java.util.concurrent.CompletableFuture<List<String>> fetchAsync() {
-            return java.util.concurrent.CompletableFuture.supplyAsync(this::fetch);
+            return java.util.concurrent.CompletableFuture.supplyAsync(this::fetch, handle.asyncExecutor);
         }
     }
 

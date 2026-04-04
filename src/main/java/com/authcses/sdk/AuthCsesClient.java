@@ -43,6 +43,7 @@ public class AuthCsesClient implements AutoCloseable {
     private final SchemaClient schemaClient;
     private final CacheHandle cacheHandle;
     private final com.authcses.sdk.watch.WatchDispatcher watchDispatcher;
+    private final java.util.concurrent.Executor asyncExecutor;
 
     AuthCsesClient(SdkTransport transport,
                    io.grpc.ManagedChannel grpcChannel,
@@ -55,7 +56,8 @@ public class AuthCsesClient implements AutoCloseable {
                    TelemetryReporter telemetryReporter,
                    ScheduledExecutorService scheduler,
                    String defaultSubjectType,
-                   com.authcses.sdk.watch.WatchDispatcher watchDispatcher) {
+                   com.authcses.sdk.watch.WatchDispatcher watchDispatcher,
+                   java.util.concurrent.Executor asyncExecutor) {
         this.transport = Objects.requireNonNull(transport);
         this.grpcChannel = grpcChannel;
         this.schemaCache = schemaCache;
@@ -70,6 +72,7 @@ public class AuthCsesClient implements AutoCloseable {
         this.schemaClient = new SchemaClient(schemaCache);
         this.cacheHandle = new CacheHandle(checkCache);
         this.watchDispatcher = watchDispatcher;
+        this.asyncExecutor = asyncExecutor != null ? asyncExecutor : Runnable::run;
 
         // Wire dispatcher into Watch stream
         if (watchInvalidator != null && watchDispatcher != null) {
@@ -87,7 +90,7 @@ public class AuthCsesClient implements AutoCloseable {
         lm.begin(); lm.complete();
         return new AuthCsesClient(new InMemoryTransport(), null, null, null,
                 new com.authcses.sdk.metrics.SdkMetrics(), bus, lm,
-                null, null, null, "user", null);
+                null, null, null, "user", null, null);
     }
 
     // ---- Business API ----
@@ -114,7 +117,7 @@ public class AuthCsesClient implements AutoCloseable {
     public ResourceFactory on(String resourceType) {
         return factories.computeIfAbsent(resourceType, type -> {
             if (schemaCache != null) schemaCache.validateResourceType(type);
-            return new ResourceFactory(type, transport, defaultSubjectType);
+            return new ResourceFactory(type, transport, defaultSubjectType, asyncExecutor);
         });
     }
 
@@ -143,7 +146,7 @@ public class AuthCsesClient implements AutoCloseable {
             var constructor = clazz.getDeclaredConstructor();
             constructor.setAccessible(true);
             T instance = constructor.newInstance();
-            instance.init(resourceType, transport, defaultSubjectType);
+            instance.init(resourceType, transport, defaultSubjectType, asyncExecutor);
             return instance;
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to create " + clazz.getSimpleName() + ": " + e.getMessage(), e);
@@ -155,7 +158,7 @@ public class AuthCsesClient implements AutoCloseable {
      */
     public ResourceHandle resource(String type, String id) {
         if (schemaCache != null) schemaCache.validateResourceType(type);
-        return new ResourceHandle(type, id, transport, defaultSubjectType);
+        return new ResourceHandle(type, id, transport, defaultSubjectType, asyncExecutor);
     }
 
     public LookupQuery lookup(String resourceType) {
@@ -555,8 +558,14 @@ public class AuthCsesClient implements AutoCloseable {
                         ? new com.authcses.sdk.watch.WatchDispatcher(watchStrategies)
                         : watchInvalidator != null ? new com.authcses.sdk.watch.WatchDispatcher(List.of()) : null;
 
+                // Async executor: virtual threads if enabled, otherwise direct (caller thread)
+                java.util.concurrent.Executor asyncExec = useVirtualThreads
+                        ? java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()
+                        : Runnable::run;
+
                 var client = new AuthCsesClient(transport, grpcChannel, schemaCache, cacheHolder[0], sdkMetrics,
-                        bus, lm, watchInvalidator, telemetryReporter, scheduler, defaultSubjectType, dispatcher);
+                        bus, lm, watchInvalidator, telemetryReporter, scheduler, defaultSubjectType, dispatcher,
+                        asyncExec);
 
                 if (registerShutdownHook) {
                     var hook = new Thread(client::close, "authcses-sdk-shutdown");
