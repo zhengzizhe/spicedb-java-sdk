@@ -480,6 +480,7 @@ public class AuthCsesClient implements AutoCloseable {
                     if (cacheEnabled && watchInvalidation && cacheHolder[0] != null) {
                         watchHolder[0] = new WatchCacheInvalidator(
                                 grpcChannel, presharedKey, cacheHolder[0]);
+                        watchHolder[0].start();
                     }
                 });
                 watchInvalidator = watchHolder[0];
