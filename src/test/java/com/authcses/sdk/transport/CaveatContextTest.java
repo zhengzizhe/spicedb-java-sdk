@@ -1,6 +1,6 @@
 package com.authcses.sdk.transport;
 
-import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.model.enums.Permissionship;
 import org.junit.jupiter.api.Test;
 
@@ -16,11 +16,16 @@ class CaveatContextTest {
     void check_withCaveatContext_doesNotThrow() {
         var transport = new InMemoryTransport();
         transport.writeRelationships(List.of(
-                new SdkTransport.RelationshipUpdate(TOUCH, "doc", "1", "viewer", "user", "alice", null)));
+                new SdkTransport.RelationshipUpdate(TOUCH,
+                        ResourceRef.of("doc", "1"), Relation.of("viewer"),
+                        SubjectRef.of("user", "alice", null))));
 
         var ctx = Map.<String, Object>of("ip_address", "192.168.1.1", "is_internal", true);
-        var result = transport.check("doc", "1", "viewer", "user", "alice",
+        var request = new CheckRequest(
+                ResourceRef.of("doc", "1"), Permission.of("viewer"),
+                SubjectRef.of("user", "alice", null),
                 Consistency.minimizeLatency(), ctx);
+        var result = transport.check(request);
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
     }
 
@@ -28,10 +33,15 @@ class CaveatContextTest {
     void check_withCaveatContext_nullContext_delegatesToBaseCheck() {
         var transport = new InMemoryTransport();
         transport.writeRelationships(List.of(
-                new SdkTransport.RelationshipUpdate(TOUCH, "doc", "2", "editor", "user", "bob", null)));
+                new SdkTransport.RelationshipUpdate(TOUCH,
+                        ResourceRef.of("doc", "2"), Relation.of("editor"),
+                        SubjectRef.of("user", "bob", null))));
 
-        var result = transport.check("doc", "2", "editor", "user", "bob",
+        var request = new CheckRequest(
+                ResourceRef.of("doc", "2"), Permission.of("editor"),
+                SubjectRef.of("user", "bob", null),
                 Consistency.minimizeLatency(), null);
+        var result = transport.check(request);
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
     }
 
@@ -45,8 +55,11 @@ class CaveatContextTest {
         ctx.put("score", 42.5);
         ctx.put("active", false);
         ctx.put("tag", null);
-        var result = transport.check("doc", "99", "viewer", "user", "unknown",
+        var request = new CheckRequest(
+                ResourceRef.of("doc", "99"), Permission.of("viewer"),
+                SubjectRef.of("user", "unknown", null),
                 Consistency.minimizeLatency(), ctx);
+        var result = transport.check(request);
         assertThat(result.permissionship()).isEqualTo(Permissionship.NO_PERMISSION);
     }
 }

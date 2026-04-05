@@ -1,7 +1,6 @@
 package com.authcses.sdk.transport;
 
-import com.authcses.sdk.model.CheckResult;
-import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.model.enums.Permissionship;
 import org.junit.jupiter.api.Test;
 
@@ -17,15 +16,25 @@ class CheckBulkMultiTest {
         transport.writeRelationships(List.of(
                 new SdkTransport.RelationshipUpdate(
                         SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                        "document", "doc-1", "viewer", "user", "alice", null),
+                        ResourceRef.of("document", "doc-1"),
+                        Relation.of("viewer"),
+                        SubjectRef.of("user", "alice", null)),
                 new SdkTransport.RelationshipUpdate(
                         SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                        "document", "doc-2", "viewer", "user", "bob", null)
+                        ResourceRef.of("document", "doc-2"),
+                        Relation.of("viewer"),
+                        SubjectRef.of("user", "bob", null))
         ));
 
         var items = List.of(
-                new SdkTransport.BulkCheckItem("document", "doc-1", "viewer", "user", "alice"),
-                new SdkTransport.BulkCheckItem("document", "doc-2", "viewer", "user", "bob")
+                new SdkTransport.BulkCheckItem(
+                        ResourceRef.of("document", "doc-1"),
+                        Permission.of("viewer"),
+                        SubjectRef.of("user", "alice", null)),
+                new SdkTransport.BulkCheckItem(
+                        ResourceRef.of("document", "doc-2"),
+                        Permission.of("viewer"),
+                        SubjectRef.of("user", "bob", null))
         );
 
         List<CheckResult> results = transport.checkBulkMulti(items, Consistency.minimizeLatency());

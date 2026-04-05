@@ -31,23 +31,25 @@ public class InstrumentedTransport extends ForwardingTransport {
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
-        return instrument(SdkAction.CHECK, resourceType, resourceId, subjectType, subjectId, permission,
+    public CheckResult check(CheckRequest request) {
+        return instrument(SdkAction.CHECK,
+                request.resource().type(), request.resource().id(),
+                request.subject().type(), request.subject().id(),
+                request.permission().name(),
                 () -> {
-                    var r = delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency);
+                    var r = delegate.check(request);
                     return new InstrumentedResult<>(r, r.permissionship().name());
                 });
     }
 
     @Override
-    public BulkCheckResult checkBulk(String resourceType, String resourceId,
-                                     String permission, List<String> subjectIds, String defaultSubjectType,
-                                     Consistency consistency) {
-        return instrument(SdkAction.CHECK_BULK, resourceType, resourceId, defaultSubjectType, "", permission,
+    public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
+        return instrument(SdkAction.CHECK_BULK,
+                request.resource().type(), request.resource().id(),
+                request.subject().type(), "",
+                request.permission().name(),
                 () -> new InstrumentedResult<>(
-                        delegate.checkBulk(resourceType, resourceId, permission, subjectIds, defaultSubjectType, consistency),
+                        delegate.checkBulk(request, subjects),
                         "SUCCESS"));
     }
 
@@ -64,31 +66,34 @@ public class InstrumentedTransport extends ForwardingTransport {
     }
 
     @Override
-    public List<Tuple> readRelationships(String resourceType, String resourceId,
-                                          String relation, Consistency consistency) {
-        return instrument(SdkAction.READ, resourceType, resourceId, "", "", relation,
+    public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
+        return instrument(SdkAction.READ,
+                resource.type(), resource.id(), "", "",
+                relation != null ? relation.name() : "",
                 () -> new InstrumentedResult<>(
-                        delegate.readRelationships(resourceType, resourceId, relation, consistency),
+                        delegate.readRelationships(resource, relation, consistency),
                         "SUCCESS"));
     }
 
     @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency) {
-        return instrument(SdkAction.LOOKUP_SUBJECTS, resourceType, resourceId, subjectType, "", permission,
+    public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
+        return instrument(SdkAction.LOOKUP_SUBJECTS,
+                request.resource().type(), request.resource().id(),
+                request.subjectType(), "",
+                request.permission().name(),
                 () -> new InstrumentedResult<>(
-                        delegate.lookupSubjects(resourceType, resourceId, permission, subjectType, consistency),
+                        delegate.lookupSubjects(request),
                         "SUCCESS"));
     }
 
     @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency) {
-        return instrument(SdkAction.LOOKUP_RESOURCES, resourceType, "", subjectType, subjectId, permission,
+    public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
+        return instrument(SdkAction.LOOKUP_RESOURCES,
+                request.resourceType(), "",
+                request.subject().type(), request.subject().id(),
+                request.permission().name(),
                 () -> new InstrumentedResult<>(
-                        delegate.lookupResources(resourceType, permission, subjectType, subjectId, consistency),
+                        delegate.lookupResources(request),
                         "SUCCESS"));
     }
 

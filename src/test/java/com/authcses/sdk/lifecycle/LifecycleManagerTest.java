@@ -1,8 +1,8 @@
 package com.authcses.sdk.lifecycle;
 
 import com.authcses.sdk.AuthCsesClient;
-import com.authcses.sdk.event.SdkEvent;
-import com.authcses.sdk.event.SdkEventBus;
+import com.authcses.sdk.event.DefaultTypedEventBus;
+import com.authcses.sdk.event.SdkTypedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -14,7 +14,7 @@ class LifecycleManagerTest {
 
     @Test
     void phases_recordDurations() {
-        var bus = new SdkEventBus();
+        var bus = new DefaultTypedEventBus();
         var lm = new LifecycleManager(bus);
 
         lm.begin();
@@ -37,7 +37,7 @@ class LifecycleManagerTest {
 
     @Test
     void startupReport_formatted() {
-        var lm = new LifecycleManager(new SdkEventBus());
+        var lm = new LifecycleManager(new DefaultTypedEventBus());
         lm.begin();
         lm.phase(SdkPhase.CHANNEL, () -> {});
         lm.phase(SdkPhase.SCHEMA, () -> {});
@@ -50,20 +50,20 @@ class LifecycleManagerTest {
 
     @Test
     void complete_firesClientReadyEvent() {
-        var bus = new SdkEventBus();
-        List<SdkEvent> events = new ArrayList<>();
-        bus.onAll(e -> events.add(e.event()));
+        var bus = new DefaultTypedEventBus();
+        List<SdkTypedEvent> events = new ArrayList<>();
+        bus.subscribeAll(events::add);
 
         var lm = new LifecycleManager(bus);
         lm.begin();
         lm.complete();
 
-        assertTrue(events.contains(SdkEvent.CLIENT_READY));
+        assertTrue(events.stream().anyMatch(e -> e instanceof SdkTypedEvent.ClientReady));
     }
 
     @Test
     void degraded_and_recovered() {
-        var lm = new LifecycleManager(new SdkEventBus());
+        var lm = new LifecycleManager(new DefaultTypedEventBus());
         lm.begin();
         lm.complete();
 
@@ -83,7 +83,7 @@ class LifecycleManagerTest {
 
     @Test
     void stopping_stopped() {
-        var lm = new LifecycleManager(new SdkEventBus());
+        var lm = new LifecycleManager(new DefaultTypedEventBus());
         lm.begin();
         lm.complete();
 
@@ -97,7 +97,7 @@ class LifecycleManagerTest {
 
     @Test
     void phaseFailed_propagatesException() {
-        var lm = new LifecycleManager(new SdkEventBus());
+        var lm = new LifecycleManager(new DefaultTypedEventBus());
         lm.begin();
 
         assertThrows(RuntimeException.class, () ->

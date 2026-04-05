@@ -81,13 +81,10 @@ public class SdkRealBenchmark {
 
     static AuthCsesClient buildClient(boolean cacheEnabled) {
         return AuthCsesClient.builder()
-                .target("localhost:50051")
-                
-                .presharedKey("dev-token")
-                .requestTimeout(Duration.ofSeconds(10))
-                .cacheEnabled(cacheEnabled)
-                
-                .telemetryEnabled(false)  // don't pollute telemetry during benchmarks
+                .connection(c -> c.target("localhost:50051").presharedKey("dev-token")
+                        .requestTimeout(Duration.ofSeconds(10)))
+                .cache(c -> c.enabled(cacheEnabled))
+                .features(f -> f.telemetry(false))
                 .build();
     }
 

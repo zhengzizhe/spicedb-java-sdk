@@ -44,10 +44,10 @@ public class RealisticNestingBenchmark {
         System.out.println("  ALL CHECKS HIT SPICEDB (no cache)\n");
 
         try (var client = AuthCsesClient.builder()
-                .target("localhost:50051").presharedKey("dev-token")
-                .requestTimeout(Duration.ofSeconds(30))
-                .cacheEnabled(false).telemetryEnabled(false)
-                .coalescingEnabled(false)
+                .connection(c -> c.target("localhost:50051").presharedKey("dev-token")
+                        .requestTimeout(Duration.ofSeconds(30)))
+                .cache(c -> c.enabled(false))
+                .features(f -> f.telemetry(false).coalescing(false))
                 .build()) {
 
             // --- Setup ---

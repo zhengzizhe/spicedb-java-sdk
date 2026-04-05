@@ -1,9 +1,8 @@
 package com.authcses.sdk;
 
-import com.authcses.sdk.cache.CaffeineCheckCache;
-import com.authcses.sdk.event.SdkEventBus;
-import com.authcses.sdk.model.CheckResult;
-import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.cache.CaffeineCache;
+import com.authcses.sdk.event.DefaultTypedEventBus;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.policy.PolicyRegistry;
 import com.authcses.sdk.transport.*;
 
@@ -37,7 +36,7 @@ public class SdkConcurrencyBenchmark {
         // --- Benchmark 2: With Caffeine Cache ---
         System.out.println("\n--- 2. InMemory + L1 Cache (Caffeine, TTL=10s) ---");
         var cachedTransport = new CachedTransport(
-                new InMemoryTransport(), new CaffeineCheckCache(Duration.ofSeconds(10), 100_000));
+                new InMemoryTransport(), new CaffeineCache<>(100_000, Duration.ofSeconds(10), com.authcses.sdk.model.CheckKey::resourceIndex));
         seedData(cachedTransport, docCount, userCount);
         // Warm up cache
         warmCache(cachedTransport, docCount, userCount);
@@ -55,8 +54,8 @@ public class SdkConcurrencyBenchmark {
         var inner4 = new InMemoryTransport();
         seedData(inner4, docCount, userCount);
         SdkTransport fullChain = inner4;
-        fullChain = new ResilientTransport(fullChain, PolicyRegistry.withDefaults(), new SdkEventBus());
-        fullChain = new CachedTransport(fullChain, new CaffeineCheckCache(Duration.ofSeconds(10), 100_000));
+        fullChain = new ResilientTransport(fullChain, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
+        fullChain = new CachedTransport(fullChain, new CaffeineCache<>(100_000, Duration.ofSeconds(10), com.authcses.sdk.model.CheckKey::resourceIndex));
         fullChain = new CoalescingTransport(fullChain);
         warmCache(fullChain, docCount, userCount);
         runBenchmark("Full chain", fullChain, docCount, userCount);
@@ -66,8 +65,8 @@ public class SdkConcurrencyBenchmark {
         var inner5 = new InMemoryTransport();
         seedData(inner5, docCount, userCount);
         SdkTransport coldChain = inner5;
-        coldChain = new ResilientTransport(coldChain, PolicyRegistry.withDefaults(), new SdkEventBus());
-        coldChain = new CachedTransport(coldChain, new CaffeineCheckCache(Duration.ofMillis(1), 100_000)); // 1ms TTL = always miss
+        coldChain = new ResilientTransport(coldChain, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
+        coldChain = new CachedTransport(coldChain, new CaffeineCache<>(100_000, Duration.ofMillis(1), com.authcses.sdk.model.CheckKey::resourceIndex)); // 1ms TTL = always miss
         coldChain = new CoalescingTransport(coldChain);
         runBenchmark("Full chain cold", coldChain, docCount, userCount);
 
@@ -76,8 +75,8 @@ public class SdkConcurrencyBenchmark {
         var inner6 = new InMemoryTransport();
         seedData(inner6, 1, 1);
         SdkTransport contentionChain = inner6;
-        contentionChain = new ResilientTransport(contentionChain, PolicyRegistry.withDefaults(), new SdkEventBus());
-        contentionChain = new CachedTransport(contentionChain, new CaffeineCheckCache(Duration.ofSeconds(10), 100_000));
+        contentionChain = new ResilientTransport(contentionChain, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
+        contentionChain = new CachedTransport(contentionChain, new CaffeineCache<>(100_000, Duration.ofSeconds(10), com.authcses.sdk.model.CheckKey::resourceIndex));
         contentionChain = new CoalescingTransport(contentionChain);
         warmCache(contentionChain, 1, 1);
         runContentionBenchmark("High contention", contentionChain);
@@ -114,7 +113,7 @@ public class SdkConcurrencyBenchmark {
                     String userId = "user-" + rng.nextInt(userCount);
 
                     long opStart = System.nanoTime();
-                    transport.check("document", docId, "editor", "user", userId, Consistency.minimizeLatency());
+                    transport.check(CheckRequest.from("document", docId, "editor", "user", userId, Consistency.minimizeLatency()));
                     long opNanos = System.nanoTime() - opStart;
 
                     totalNanos.addAndGet(opNanos);
@@ -171,7 +170,7 @@ public class SdkConcurrencyBenchmark {
                 }
                 for (int i = 0; i < opsPerThread; i++) {
                     long opStart = System.nanoTime();
-                    transport.check("document", "doc-0", "editor", "user", "user-0", Consistency.minimizeLatency());
+                    transport.check(CheckRequest.from("document", "doc-0", "editor", "user", "user-0", Consistency.minimizeLatency()));
                     long opNanos = System.nanoTime() - opStart;
 
                     totalNanos.addAndGet(opNanos);
@@ -210,8 +209,9 @@ public class SdkConcurrencyBenchmark {
                 if ((d + u) % 5 == 0) { // ~20% hit rate
                     updates.add(new SdkTransport.RelationshipUpdate(
                             SdkTransport.RelationshipUpdate.Operation.TOUCH,
-                            "document", "doc-" + d, "editor",
-                            "user", "user-" + u, null));
+                            ResourceRef.of("document", "doc-" + d),
+                            Relation.of("editor"),
+                            SubjectRef.of("user", "user-" + u, null)));
                 }
             }
         }
@@ -221,7 +221,7 @@ public class SdkConcurrencyBenchmark {
     static void warmCache(SdkTransport transport, int docCount, int userCount) {
         for (int d = 0; d < docCount; d++) {
             for (int u = 0; u < userCount; u++) {
-                transport.check("document", "doc-" + d, "editor", "user", "user-" + u, Consistency.minimizeLatency());
+                transport.check(CheckRequest.from("document", "doc-" + d, "editor", "user", "user-" + u, Consistency.minimizeLatency()));
             }
         }
     }

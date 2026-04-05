@@ -301,7 +301,7 @@ class AuthCsesClientTest {
     void builder_requiresPresharedKey() {
         assertThrows(NullPointerException.class, () ->
                 AuthCsesClient.builder()
-                        .target("localhost:50051")
+                        .connection(c -> c.target("localhost:50051"))
                         .build());
     }
 
@@ -309,7 +309,7 @@ class AuthCsesClientTest {
     void builder_requiresTarget() {
         assertThrows(IllegalArgumentException.class, () ->
                 AuthCsesClient.builder()
-                        .presharedKey("key")
+                        .connection(c -> c.presharedKey("key"))
                         .build());
     }
 }

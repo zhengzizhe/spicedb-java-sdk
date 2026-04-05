@@ -1,8 +1,10 @@
 package com.authcses.sdk.lifecycle;
 
-import com.authcses.sdk.event.SdkEvent;
-import com.authcses.sdk.event.SdkEventBus;
+import com.authcses.sdk.event.SdkTypedEvent;
+import com.authcses.sdk.event.TypedEventBus;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -31,12 +33,12 @@ public class LifecycleManager {
     private static final System.Logger LOG = System.getLogger(LifecycleManager.class.getName());
 
     private final AtomicReference<SdkState> state = new AtomicReference<>(SdkState.CREATED);
-    private final SdkEventBus eventBus;
+    private final TypedEventBus eventBus;
     private final Map<SdkPhase, Long> phaseDurations = java.util.Collections.synchronizedMap(new LinkedHashMap<>());
     private volatile long startupStartTime;
     private volatile long totalStartupMs;
 
-    public LifecycleManager(SdkEventBus eventBus) {
+    public LifecycleManager(TypedEventBus eventBus) {
         this.eventBus = eventBus;
     }
 
@@ -95,8 +97,7 @@ public class LifecycleManager {
 
         String report = startupReport();
         LOG.log(System.Logger.Level.INFO, "SDK started in {0}ms [{1}]", totalStartupMs, report);
-        eventBus.fire(SdkEvent.CLIENT_READY, "Started in " + totalStartupMs + "ms",
-                Map.of("phases", Map.copyOf(phaseDurations), "totalMs", totalStartupMs));
+        eventBus.publish(new SdkTypedEvent.ClientReady(Instant.now(), Duration.ofMillis(totalStartupMs)));
     }
 
     /**

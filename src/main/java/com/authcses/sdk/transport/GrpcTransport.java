@@ -2,13 +2,7 @@ package com.authcses.sdk.transport;
 
 import com.authcses.sdk.exception.AuthCsesConnectionException;
 import com.authcses.sdk.exception.AuthCsesTimeoutException;
-import com.authcses.sdk.model.BulkCheckResult;
-import com.authcses.sdk.model.CheckResult;
-import com.authcses.sdk.model.Consistency;
-import com.authcses.sdk.model.ExpandTree;
-import com.authcses.sdk.model.GrantResult;
-import com.authcses.sdk.model.RevokeResult;
-import com.authcses.sdk.model.Tuple;
+import com.authcses.sdk.model.*;
 import com.authcses.sdk.model.enums.Permissionship;
 import com.authzed.api.v1.AlgebraicSubjectSet;
 import com.authzed.api.v1.DeleteRelationshipsRequest;
@@ -18,8 +12,6 @@ import com.authzed.api.v1.SubjectFilter;
 import com.authzed.api.v1.CheckBulkPermissionsRequest;
 import com.authzed.api.v1.CheckBulkPermissionsRequestItem;
 import com.authzed.api.v1.CheckPermissionRequest;
-import com.authzed.api.v1.LookupResourcesRequest;
-import com.authzed.api.v1.LookupSubjectsRequest;
 import com.authzed.api.v1.ObjectReference;
 import com.authzed.api.v1.PermissionsServiceGrpc;
 import com.authzed.api.v1.ReadRelationshipsRequest;
@@ -62,44 +54,18 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
-        var request = CheckPermissionRequest.newBuilder()
-                .setResource(objRef(resourceType, resourceId))
-                .setPermission(permission)
-                .setSubject(subRef(subjectType, subjectId, null))
-                .setConsistency(toGrpc(consistency))
-                .build();
+    public CheckResult check(CheckRequest request) {
+        var grpcRequestBuilder = CheckPermissionRequest.newBuilder()
+                .setResource(objRef(request.resource()))
+                .setPermission(request.permission().name())
+                .setSubject(subRef(request.subject()))
+                .setConsistency(toGrpc(request.consistency()));
 
-        var response = withErrorHandling(() -> stub().checkPermission(request));
-        String token = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
-
-        return switch (response.getPermissionship()) {
-            case PERMISSIONSHIP_HAS_PERMISSION ->
-                    new CheckResult(Permissionship.HAS_PERMISSION, token, Optional.empty());
-            case PERMISSIONSHIP_CONDITIONAL_PERMISSION ->
-                    new CheckResult(Permissionship.CONDITIONAL_PERMISSION, token, Optional.empty());
-            default ->
-                    new CheckResult(Permissionship.NO_PERMISSION, token, Optional.empty());
-        };
-    }
-
-    @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency, Map<String, Object> context) {
-        var requestBuilder = CheckPermissionRequest.newBuilder()
-                .setResource(objRef(resourceType, resourceId))
-                .setPermission(permission)
-                .setSubject(subRef(subjectType, subjectId, null))
-                .setConsistency(toGrpc(consistency));
-
-        if (context != null && !context.isEmpty()) {
-            requestBuilder.setContext(toStruct(context));
+        if (request.caveatContext() != null && !request.caveatContext().isEmpty()) {
+            grpcRequestBuilder.setContext(toStruct(request.caveatContext()));
         }
 
-        var response = withErrorHandling(() -> stub().checkPermission(requestBuilder.build()));
+        var response = withErrorHandling(() -> stub().checkPermission(grpcRequestBuilder.build()));
         String token = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
         return switch (response.getPermissionship()) {
@@ -113,16 +79,16 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
-    public BulkCheckResult checkBulk(String resourceType, String resourceId,
-                                     String permission, List<String> subjectIds, String defaultSubjectType,
-                                     Consistency consistency) {
+    public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
         var builder = CheckBulkPermissionsRequest.newBuilder()
-                .setConsistency(toGrpc(consistency));
-        for (String sid : subjectIds) {
+                .setConsistency(toGrpc(request.consistency()));
+        List<String> subjectIds = new ArrayList<>(subjects.size());
+        for (SubjectRef sub : subjects) {
+            subjectIds.add(sub.id());
             builder.addItems(CheckBulkPermissionsRequestItem.newBuilder()
-                    .setResource(objRef(resourceType, resourceId))
-                    .setPermission(permission)
-                    .setSubject(subRef(defaultSubjectType, sid, null)));
+                    .setResource(objRef(request.resource()))
+                    .setPermission(request.permission().name())
+                    .setSubject(subRef(sub)));
         }
 
         var response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
@@ -133,7 +99,6 @@ public class GrpcTransport implements SdkTransport {
             var pair = response.getPairs(i);
             CheckResult cr;
             if (pair.hasError()) {
-                // SpiceDB returned an error for this specific item
                 cr = new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
             } else {
                 var item = pair.getItem();
@@ -158,9 +123,9 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(consistency));
         for (var item : items) {
             builder.addItems(CheckBulkPermissionsRequestItem.newBuilder()
-                    .setResource(objRef(item.resourceType(), item.resourceId()))
-                    .setPermission(item.permission())
-                    .setSubject(subRef(item.subjectType(), item.subjectId(), null)));
+                    .setResource(objRef(item.resource()))
+                    .setPermission(item.permission().name())
+                    .setSubject(subRef(item.subject())));
         }
 
         var response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
@@ -214,13 +179,12 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
-    public List<Tuple> readRelationships(String resourceType, String resourceId,
-                                          String relation, Consistency consistency) {
+    public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
         var filterBuilder = RelationshipFilter.newBuilder()
-                .setResourceType(resourceType)
-                .setOptionalResourceId(resourceId);
+                .setResourceType(resource.type())
+                .setOptionalResourceId(resource.id());
         if (relation != null) {
-            filterBuilder.setOptionalRelation(relation);
+            filterBuilder.setOptionalRelation(relation.name());
         }
         var request = ReadRelationshipsRequest.newBuilder()
                 .setRelationshipFilter(filterBuilder.build())
@@ -243,69 +207,50 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency) {
-        return lookupSubjects(resourceType, resourceId, permission, subjectType, consistency, 0);
-    }
+    public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
+        var builder = com.authzed.api.v1.LookupSubjectsRequest.newBuilder()
+                .setResource(objRef(request.resource()))
+                .setPermission(request.permission().name())
+                .setSubjectObjectType(request.subjectType())
+                .setConsistency(toGrpc(request.consistency()));
+        if (request.limit() > 0) builder.setOptionalConcreteLimit(request.limit());
 
-    @Override
-    public List<String> lookupSubjects(String resourceType, String resourceId,
-                                        String permission, String subjectType,
-                                        Consistency consistency, int limit) {
-        var builder = LookupSubjectsRequest.newBuilder()
-                .setResource(objRef(resourceType, resourceId))
-                .setPermission(permission)
-                .setSubjectObjectType(subjectType)
-                .setConsistency(toGrpc(consistency));
-        if (limit > 0) builder.setOptionalConcreteLimit(limit);
-
-        List<String> subjects = new ArrayList<>();
+        List<SubjectRef> subjects = new ArrayList<>();
         var iterator = withErrorHandling(() -> stub().lookupSubjects(builder.build()));
         iterator.forEachRemaining(resp ->
-                subjects.add(resp.getSubject().getSubjectObjectId()));
+                subjects.add(SubjectRef.of(request.subjectType(), resp.getSubject().getSubjectObjectId(), null)));
         return subjects;
     }
 
     @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency) {
-        return lookupResources(resourceType, permission, subjectType, subjectId, consistency, 0);
-    }
+    public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
+        var builder = com.authzed.api.v1.LookupResourcesRequest.newBuilder()
+                .setResourceObjectType(request.resourceType())
+                .setPermission(request.permission().name())
+                .setSubject(subRef(request.subject()))
+                .setConsistency(toGrpc(request.consistency()));
+        if (request.limit() > 0) builder.setOptionalLimit(request.limit());
 
-    @Override
-    public List<String> lookupResources(String resourceType, String permission,
-                                         String subjectType, String subjectId,
-                                         Consistency consistency, int limit) {
-        var builder = LookupResourcesRequest.newBuilder()
-                .setResourceObjectType(resourceType)
-                .setPermission(permission)
-                .setSubject(subRef(subjectType, subjectId, null))
-                .setConsistency(toGrpc(consistency));
-        if (limit > 0) builder.setOptionalLimit(limit);
-
-        List<String> resources = new ArrayList<>();
+        List<ResourceRef> resources = new ArrayList<>();
         var iterator = withErrorHandling(() -> stub().lookupResources(builder.build()));
         iterator.forEachRemaining(resp ->
-                resources.add(resp.getResourceObjectId()));
+                resources.add(ResourceRef.of(request.resourceType(), resp.getResourceObjectId())));
         return resources;
     }
 
     @Override
-    public RevokeResult deleteByFilter(String resourceType, String resourceId,
-                                        String subjectType, String subjectId,
-                                        String optionalRelation) {
+    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+                                        Relation optionalRelation) {
         var filterBuilder = RelationshipFilter.newBuilder()
-                .setResourceType(resourceType)
-                .setOptionalResourceId(resourceId);
+                .setResourceType(resource.type())
+                .setOptionalResourceId(resource.id());
         if (optionalRelation != null) {
-            filterBuilder.setOptionalRelation(optionalRelation);
+            filterBuilder.setOptionalRelation(optionalRelation.name());
         }
 
         var subFilter = SubjectFilter.newBuilder()
-                .setSubjectType(subjectType)
-                .setOptionalSubjectId(subjectId);
+                .setSubjectType(subject.type())
+                .setOptionalSubjectId(subject.id());
         filterBuilder.setOptionalSubjectFilter(subFilter);
 
         var request = DeleteRelationshipsRequest.newBuilder()
@@ -318,11 +263,10 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
-    public ExpandTree expand(String resourceType, String resourceId,
-                             String permission, Consistency consistency) {
+    public ExpandTree expand(ResourceRef resource, Permission permission, Consistency consistency) {
         var request = ExpandPermissionTreeRequest.newBuilder()
-                .setResource(objRef(resourceType, resourceId))
-                .setPermission(permission)
+                .setResource(objRef(resource))
+                .setPermission(permission.name())
                 .setConsistency(toGrpc(consistency))
                 .build();
 
@@ -388,13 +332,14 @@ public class GrpcTransport implements SdkTransport {
                 .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(headers));
     }
 
-    private static ObjectReference objRef(String type, String id) {
-        return ObjectReference.newBuilder().setObjectType(type).setObjectId(id).build();
+    private static ObjectReference objRef(ResourceRef ref) {
+        return ObjectReference.newBuilder().setObjectType(ref.type()).setObjectId(ref.id()).build();
     }
 
-    private static SubjectReference subRef(String type, String id, String relation) {
-        var b = SubjectReference.newBuilder().setObject(objRef(type, id));
-        if (relation != null) b.setOptionalRelation(relation);
+    private static SubjectReference subRef(SubjectRef ref) {
+        var b = SubjectReference.newBuilder().setObject(
+                ObjectReference.newBuilder().setObjectType(ref.type()).setObjectId(ref.id()).build());
+        if (ref.relation() != null) b.setOptionalRelation(ref.relation());
         return b.build();
     }
 
@@ -406,11 +351,19 @@ public class GrpcTransport implements SdkTransport {
     }
 
     private static Relationship toGrpcRel(RelationshipUpdate u) {
-        return Relationship.newBuilder()
-                .setResource(objRef(u.resourceType(), u.resourceId()))
-                .setRelation(u.relation())
-                .setSubject(subRef(u.subjectType(), u.subjectId(), u.subjectRelation()))
-                .build();
+        var builder = Relationship.newBuilder()
+                .setResource(objRef(u.resource()))
+                .setRelation(u.relation().name())
+                .setSubject(subRef(u.subject()));
+        if (u.caveat() != null) {
+            var caveatBuilder = com.authzed.api.v1.ContextualizedCaveat.newBuilder()
+                    .setCaveatName(u.caveat().name());
+            if (u.caveat().context() != null && !u.caveat().context().isEmpty()) {
+                caveatBuilder.setContext(toStruct(u.caveat().context()));
+            }
+            builder.setOptionalCaveat(caveatBuilder.build());
+        }
+        return builder.build();
     }
 
     private static com.authzed.api.v1.Consistency toGrpc(Consistency c) {

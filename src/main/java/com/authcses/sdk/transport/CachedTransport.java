@@ -1,6 +1,7 @@
 package com.authcses.sdk.transport;
 
-import com.authcses.sdk.cache.CheckCache;
+import com.authcses.sdk.cache.Cache;
+import com.authcses.sdk.cache.IndexedCache;
 import com.authcses.sdk.metrics.SdkMetrics;
 import com.authcses.sdk.model.*;
 
@@ -9,20 +10,23 @@ import java.util.List;
 /**
  * Wraps a SdkTransport with L1 check cache.
  * Only caches check() results. Write operations invalidate the cache for the affected resource.
+ *
+ * <p>If the cache implements {@link IndexedCache}, resource invalidation uses O(k)
+ * {@code invalidateByIndex}. Otherwise falls back to O(n) predicate scan.
  */
 public class CachedTransport extends ForwardingTransport {
 
     private final SdkTransport delegate;
-    private final CheckCache cache;
+    private final Cache<CheckKey, CheckResult> cache;
     private final SdkMetrics metrics;
 
-    public CachedTransport(SdkTransport delegate, CheckCache cache, SdkMetrics metrics) {
+    public CachedTransport(SdkTransport delegate, Cache<CheckKey, CheckResult> cache, SdkMetrics metrics) {
         this.delegate = delegate;
         this.cache = cache;
         this.metrics = metrics;
     }
 
-    public CachedTransport(SdkTransport delegate, CheckCache cache) {
+    public CachedTransport(SdkTransport delegate, Cache<CheckKey, CheckResult> cache) {
         this(delegate, cache, null);
     }
 
@@ -32,33 +36,27 @@ public class CachedTransport extends ForwardingTransport {
     }
 
     @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency) {
-        if (consistency instanceof Consistency.MinimizeLatency) {
-            var cached = cache.get(resourceType, resourceId, permission, subjectType, subjectId);
-            if (cached.isPresent()) {
+    public CheckResult check(CheckRequest request) {
+        boolean hasCaveat = request.caveatContext() != null && !request.caveatContext().isEmpty();
+
+        if (!hasCaveat && request.consistency() instanceof Consistency.MinimizeLatency) {
+            var key = request.toKey();
+            var cached = cache.getIfPresent(key);
+            if (cached != null) {
                 if (metrics != null) metrics.recordCacheHit();
-                return cached.get();
+                return cached;
             }
             if (metrics != null) metrics.recordCacheMiss();
         }
 
-        var result = delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency);
+        var result = delegate.check(request);
 
-        if (consistency instanceof Consistency.MinimizeLatency) {
-            cache.put(resourceType, resourceId, permission, subjectType, subjectId, result);
+        if (!hasCaveat && request.consistency() instanceof Consistency.MinimizeLatency) {
+            var key = request.toKey();
+            cache.put(key, result);
         }
         if (metrics != null) metrics.updateCacheSize(cache.size());
         return result;
-    }
-
-    @Override
-    public CheckResult check(String resourceType, String resourceId,
-                             String permission, String subjectType, String subjectId,
-                             Consistency consistency, java.util.Map<String, Object> context) {
-        // Context-aware checks bypass cache — different contexts produce different results
-        return delegate.check(resourceType, resourceId, permission, subjectType, subjectId, consistency, context);
     }
 
     @Override
@@ -76,11 +74,10 @@ public class CachedTransport extends ForwardingTransport {
     }
 
     @Override
-    public RevokeResult deleteByFilter(String resourceType, String resourceId,
-                                        String subjectType, String subjectId,
-                                        String optionalRelation) {
-        var result = delegate.deleteByFilter(resourceType, resourceId, subjectType, subjectId, optionalRelation);
-        cache.invalidateResource(resourceType, resourceId);
+    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+                                        Relation optionalRelation) {
+        var result = delegate.deleteByFilter(resource, subject, optionalRelation);
+        invalidateByResource(resource.type() + ":" + resource.id());
         return result;
     }
 
@@ -91,10 +88,17 @@ public class CachedTransport extends ForwardingTransport {
     }
 
     private void invalidateAffectedResources(List<RelationshipUpdate> updates) {
-        record ResourceKey(String type, String id) {}
         updates.stream()
-                .map(u -> new ResourceKey(u.resourceType(), u.resourceId()))
+                .map(u -> u.resource().type() + ":" + u.resource().id())
                 .distinct()
-                .forEach(k -> cache.invalidateResource(k.type, k.id));
+                .forEach(this::invalidateByResource);
+    }
+
+    private void invalidateByResource(String indexKey) {
+        if (cache instanceof IndexedCache<CheckKey, CheckResult> indexed) {
+            indexed.invalidateByIndex(indexKey);
+        } else {
+            cache.invalidateAll(key -> indexKey.equals(key.resourceIndex()));
+        }
     }
 }
