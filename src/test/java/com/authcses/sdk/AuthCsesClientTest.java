@@ -238,7 +238,7 @@ class AuthCsesClientTest {
         doc.grant("editor").to("alice");
         doc.grant("viewer").to("bob", "carol");
 
-        Map<String, List<String>> grouped = doc.relations().fetchGroupByRelationSubjectIds();
+        Map<String, List<String>> grouped = doc.relations().groupByRelation();
         assertEquals(1, grouped.get("editor").size());
         assertEquals(2, grouped.get("viewer").size());
     }

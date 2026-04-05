@@ -205,7 +205,7 @@ public class RealWorldScenarios {
         doc.grant("viewer").to("junior-dev", "intern-1", "intern-2");
 
         // 按角色分组
-        Map<String, List<String>> grouped = doc.relations().fetchGroupByRelationSubjectIds();
+        Map<String, List<String>> grouped = doc.relations().groupByRelation();
         for (var entry : grouped.entrySet()) {
             System.out.printf("  %s: %s%n", entry.getKey(), entry.getValue());
         }
