@@ -442,7 +442,17 @@ public class ResourceHandle {
         }
 
         public boolean fetchExists() {
-            return !fetch().isEmpty();
+            // Fetch with limit=1 to avoid pulling all subjects just to check existence
+            ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
+            if (isPermission) {
+                var request = new LookupSubjectsRequest(resource,
+                        Permission.of(permissionOrRelation), handle.defaultSubjectType, 1, consistency);
+                return !handle.transport.lookupSubjects(request).isEmpty();
+            } else {
+                var results = handle.transport.readRelationships(
+                        resource, Relation.of(permissionOrRelation), consistency);
+                return !results.isEmpty();
+            }
         }
 
         public java.util.concurrent.CompletableFuture<List<String>> fetchAsync() {
