@@ -98,7 +98,7 @@ public interface SdkInterceptor {
         private final String subjectType;
         private final String subjectId;
         /** Typed attribute map keyed by {@link AttributeKey} identity — no collision risk. */
-        private final java.util.Map<AttributeKey<?>, Object> typedAttributes = new java.util.HashMap<>();
+        private final java.util.concurrent.ConcurrentHashMap<AttributeKey<?>, Object> typedAttributes = new java.util.concurrent.ConcurrentHashMap<>();
 
         // Set after execution
         private long durationMs;
