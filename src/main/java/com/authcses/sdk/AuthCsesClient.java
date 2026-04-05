@@ -375,6 +375,15 @@ public class AuthCsesClient implements AutoCloseable {
             public ExtendConfig addWatchStrategy(com.authcses.sdk.watch.WatchStrategy s) { Builder.this.watchStrategies.add(s); return this; }
         }
 
+        /** Mutable holder for intermediate build artifacts. Replaces single-element array hacks. */
+        private static class BuildContext {
+            Cache<CheckKey, CheckResult> checkCache;
+            TelemetryReporter telemetryReporter;
+            ResilientTransport resilientTransport;
+            ScheduledExecutorService scheduler;
+            WatchCacheInvalidator watchInvalidator;
+        }
+
         public AuthCsesClient build() {
             Objects.requireNonNull(presharedKey, "presharedKey is required");
             if (target == null && targets == null) throw new IllegalArgumentException("target or targets is required");
@@ -415,21 +424,18 @@ public class AuthCsesClient implements AutoCloseable {
                         SchemaLoader.load(grpcChannel, authMetaFinal, schemaCache));
 
                 // Phase: TRANSPORT
-                @SuppressWarnings("unchecked")
-                final Cache<CheckKey, CheckResult>[] cacheHolder = new Cache[]{null};
-                final TelemetryReporter[] telemetryHolder = {null};
-                final ResilientTransport[] resilientHolder = {null};
+                final var ctx = new BuildContext();
                 SdkTransport transport = lm.phase(com.authcses.sdk.lifecycle.SdkPhase.TRANSPORT, () -> {
                     SdkTransport t = new GrpcTransport(grpcChannel, presharedKey, requestTimeout.toMillis());
 
                     // Resilience (circuit breaker + retry via Resilience4j)
                     var resilientTransport = new ResilientTransport(t, policies, bus);
-                    resilientHolder[0] = resilientTransport;
+                    ctx.resilientTransport = resilientTransport;
                     t = resilientTransport;
 
                     if (telemetryEnabled) {
-                        telemetryHolder[0] = new TelemetryReporter(spi.telemetrySink(), useVirtualThreads);
-                        t = new InstrumentedTransport(t, telemetryHolder[0], sdkMetrics);
+                        ctx.telemetryReporter = new TelemetryReporter(spi.telemetrySink(), useVirtualThreads);
+                        t = new InstrumentedTransport(t, ctx.telemetryReporter, sdkMetrics);
                     }
 
                     if (cacheEnabled) {
@@ -459,7 +465,7 @@ public class AuthCsesClient implements AutoCloseable {
                             effectiveCache = Cache.noop();
                         }
 
-                        cacheHolder[0] = effectiveCache;
+                        ctx.checkCache = effectiveCache;
                         t = new CachedTransport(t, effectiveCache, sdkMetrics);
                     }
 
@@ -468,36 +474,34 @@ public class AuthCsesClient implements AutoCloseable {
                     if (!interceptors.isEmpty()) t = new InterceptorTransport(t, interceptors);
                     return t;
                 });
-                telemetryReporter = telemetryHolder[0];
-                if (resilientHolder[0] != null) {
+                telemetryReporter = ctx.telemetryReporter;
+                if (ctx.resilientTransport != null) {
                     sdkMetrics.setCircuitBreakerStateSupplier(
-                            () -> resilientHolder[0].getCircuitBreakerState("_default").name());
+                            () -> ctx.resilientTransport.getCircuitBreakerState("_default").name());
                 }
 
                 // Phase: WATCH
-                final WatchCacheInvalidator[] watchHolder = {null};
                 lm.phase(com.authcses.sdk.lifecycle.SdkPhase.WATCH, () -> {
-                    if (cacheEnabled && watchInvalidation && cacheHolder[0] != null) {
-                        watchHolder[0] = new WatchCacheInvalidator(
-                                grpcChannel, presharedKey, cacheHolder[0]);
-                        watchHolder[0].start();
+                    if (cacheEnabled && watchInvalidation && ctx.checkCache != null) {
+                        ctx.watchInvalidator = new WatchCacheInvalidator(
+                                grpcChannel, presharedKey, ctx.checkCache);
+                        ctx.watchInvalidator.start();
                     }
                 });
-                watchInvalidator = watchHolder[0];
+                watchInvalidator = ctx.watchInvalidator;
 
                 // Phase: SCHEDULER (schema refresh)
-                final ScheduledExecutorService[] schedHolder = {null};
                 lm.phase(com.authcses.sdk.lifecycle.SdkPhase.SCHEDULER, () -> {
                     java.util.concurrent.ThreadFactory tf = useVirtualThreads
                             ? Thread.ofVirtual().name("authcses-sdk-", 0).factory()
                             : r -> { Thread th = new Thread(r, "authcses-sdk-refresh"); th.setDaemon(true); return th; };
-                    schedHolder[0] = Executors.newSingleThreadScheduledExecutor(tf);
+                    ctx.scheduler = Executors.newSingleThreadScheduledExecutor(tf);
                     // Refresh schema every 5 minutes
-                    schedHolder[0].scheduleAtFixedRate(
+                    ctx.scheduler.scheduleAtFixedRate(
                             () -> SchemaLoader.load(grpcChannel, authMetaFinal, schemaCache),
                             300, 300, TimeUnit.SECONDS);
                 });
-                scheduler = schedHolder[0];
+                scheduler = ctx.scheduler;
 
                 lm.complete();
 
@@ -524,7 +528,7 @@ public class AuthCsesClient implements AutoCloseable {
                 // Build aggregation objects
                 var infraObj = new SdkInfrastructure(grpcChannel, scheduler, asyncExec, lm);
                 var observabilityObj = new SdkObservability(sdkMetrics, bus, telemetryReporter);
-                var cachingObj = new SdkCaching(cacheHolder[0], schemaCache, watchInvalidator, dispatcher);
+                var cachingObj = new SdkCaching(ctx.checkCache, schemaCache, watchInvalidator, dispatcher);
                 var configObj = new SdkConfig(defaultSubjectType, policies, coalescingEnabled, useVirtualThreads);
 
                 var client = new AuthCsesClient(transport, infraObj, observabilityObj, cachingObj, configObj);
