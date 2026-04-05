@@ -274,8 +274,8 @@ doc.relations("editor").fetchSubjectIds();          // List<String> (just IDs)
 doc.relations("editor").fetchSubjectIdSet();        // Set<String>
 
 // Grouping
-doc.relations().fetchGroupByRelation();                    // Map<String, List<Tuple>>
-doc.relations().fetchGroupByRelationSubjectIds();          // Map<String, List<String>>
+doc.relations().groupByRelationTuples();                   // Map<String, List<Tuple>>
+doc.relations().groupByRelation();                         // Map<String, List<String>>
 ```
 
 **Tuple fields:** `resourceType()`, `resourceId()`, `relation()`, `subjectType()`, `subjectId()`, `subjectRelation()`, `subject()` (formatted string), `resource()` (formatted string)

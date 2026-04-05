@@ -344,9 +344,29 @@ public class ResourceHandle {
         }
 
         public PermissionMatrix byAll(Collection<String> userIds) {
+            List<String> uidList = userIds instanceof List ? (List<String>) userIds : new ArrayList<>(userIds);
+            // Build all (user × permission) items in one flat list
+            List<SdkTransport.BulkCheckItem> items = new ArrayList<>(uidList.size() * permissions.length);
+            for (String uid : uidList) {
+                for (String perm : permissions) {
+                    items.add(new SdkTransport.BulkCheckItem(
+                            ResourceRef.of(handle.resourceType, handle.resourceId),
+                            Permission.of(perm),
+                            SubjectRef.of(handle.defaultSubjectType, uid, null)));
+                }
+            }
+
+            List<CheckResult> results = handle.transport.checkBulkMulti(items, consistency);
+
+            // Unpack flat results back into matrix[user][permission]
             Map<String, PermissionSet> matrix = new LinkedHashMap<>();
-            for (String uid : userIds) {
-                matrix.put(uid, by(uid));
+            int idx = 0;
+            for (String uid : uidList) {
+                Map<String, CheckResult> permMap = new LinkedHashMap<>();
+                for (String perm : permissions) {
+                    permMap.put(perm, results.get(idx++));
+                }
+                matrix.put(uid, new PermissionSet(permMap));
             }
             return new PermissionMatrix(matrix);
         }
@@ -422,7 +442,17 @@ public class ResourceHandle {
         }
 
         public boolean fetchExists() {
-            return !fetch().isEmpty();
+            // Fetch with limit=1 to avoid pulling all subjects just to check existence
+            ResourceRef resource = ResourceRef.of(handle.resourceType, handle.resourceId);
+            if (isPermission) {
+                var request = new LookupSubjectsRequest(resource,
+                        Permission.of(permissionOrRelation), handle.defaultSubjectType, 1, consistency);
+                return !handle.transport.lookupSubjects(request).isEmpty();
+            } else {
+                var results = handle.transport.readRelationships(
+                        resource, Relation.of(permissionOrRelation), consistency);
+                return !results.isEmpty();
+            }
         }
 
         public java.util.concurrent.CompletableFuture<List<String>> fetchAsync() {
@@ -497,13 +527,6 @@ public class ResourceHandle {
                     Collectors.mapping(Tuple::subjectId, Collectors.toList())));
         }
 
-        /**
-         * Fetch all relationships and group subject IDs by relation name.
-         * Example: {"editor": ["alice","bob"], "viewer": ["charlie"]}
-         */
-        public Map<String, List<String>> fetchGroupByRelationSubjectIds() {
-            return groupByRelation();
-        }
     }
 
     public static class BatchBuilder {

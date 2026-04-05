@@ -16,6 +16,7 @@ class WatchCacheInvalidatorTest {
                 io.grpc.ManagedChannelBuilder.forTarget("localhost:0").usePlaintext().build(),
                 "test-key",
                 noop);
+        invalidator.start();
 
         assertThat(invalidator.isRunning()).isTrue();
         invalidator.close();

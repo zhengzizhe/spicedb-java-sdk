@@ -40,6 +40,7 @@ public class GrpcTransport implements SdkTransport {
     private final ManagedChannel channel;
     private final Metadata authMetadata;
     private final long deadlineMs;
+    private final PermissionsServiceGrpc.PermissionsServiceBlockingStub baseStub;
 
     /**
      * Create with a pre-built channel (preferred — Builder configures keepalive, LB, TLS).
@@ -51,6 +52,8 @@ public class GrpcTransport implements SdkTransport {
         authMetadata.put(
                 Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
                 "Bearer " + presharedKey);
+        this.baseStub = PermissionsServiceGrpc.newBlockingStub(channel)
+                .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(authMetadata));
     }
 
     @Override
@@ -318,18 +321,17 @@ public class GrpcTransport implements SdkTransport {
             Metadata.Key.of("traceparent", Metadata.ASCII_STRING_MARSHALLER);
 
     private PermissionsServiceGrpc.PermissionsServiceBlockingStub stub() {
-        Metadata headers = new Metadata();
-        headers.merge(authMetadata);
+        var s = baseStub.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS);
 
-        // W3C traceparent: from OTel active span (if available) or fallback
+        // W3C traceparent: from OTel active span (if available)
         String traceparent = com.authcses.sdk.trace.TraceContext.traceparent();
         if (traceparent != null) {
-            headers.put(TRACEPARENT_KEY, traceparent);
+            Metadata traceHeaders = new Metadata();
+            traceHeaders.put(TRACEPARENT_KEY, traceparent);
+            s = s.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(traceHeaders));
         }
 
-        return PermissionsServiceGrpc.newBlockingStub(channel)
-                .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
-                .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(headers));
+        return s;
     }
 
     private static ObjectReference objRef(ResourceRef ref) {

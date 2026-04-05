@@ -74,7 +74,14 @@ public class WatchCacheInvalidator implements AutoCloseable {
 
         this.watchThread = new Thread(this::watchLoop, "authcses-sdk-watch");
         this.watchThread.setDaemon(true);
-        this.watchThread.start();
+        // Thread not started here — caller must call start()
+    }
+
+    /** Start the watch stream. Must be called after construction. */
+    public void start() {
+        if (watchThread.getState() == Thread.State.NEW) {
+            watchThread.start();
+        }
     }
 
     /**
@@ -98,7 +105,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
 
         this.watchThread = new Thread(this::watchLoop, "authcses-sdk-watch");
         this.watchThread.setDaemon(true);
-        this.watchThread.start();
+        // Thread not started here — caller must call start()
     }
 
     private void watchLoop() {

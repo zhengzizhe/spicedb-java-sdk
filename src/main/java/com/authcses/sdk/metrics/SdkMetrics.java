@@ -81,10 +81,29 @@ public class SdkMetrics {
         return total == 0 ? 0.0 : (double) totalErrors.sum() / total;
     }
 
-    /** Check latency p50 in milliseconds. Uses snapshot() for consistent multi-percentile reads. */
+    /**
+     * @deprecated Use {@link #snapshot()} to read all percentiles in one call.
+     *             Each individual call acquires a lock and resets the interval histogram.
+     */
+    @Deprecated(since = "1.0.0")
     public double checkLatencyP50() { return snapshot().latencyP50Ms(); }
+
+    /**
+     * @deprecated Use {@link #snapshot()} to read all percentiles in one call.
+     */
+    @Deprecated(since = "1.0.0")
     public double checkLatencyP95() { return snapshot().latencyP95Ms(); }
+
+    /**
+     * @deprecated Use {@link #snapshot()} to read all percentiles in one call.
+     */
+    @Deprecated(since = "1.0.0")
     public double checkLatencyP99() { return snapshot().latencyP99Ms(); }
+
+    /**
+     * @deprecated Use {@link #snapshot()} to read all metrics in one call.
+     */
+    @Deprecated(since = "1.0.0")
     public double checkLatencyAvg() { return snapshot().latencyAvgMs(); }
 
     public String circuitBreakerState() {

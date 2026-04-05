@@ -10,6 +10,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class DefaultTypedEventBus implements TypedEventBus {
 
+    private static final System.Logger LOG = System.getLogger(DefaultTypedEventBus.class.getName());
+
     private final ConcurrentHashMap<Class<?>, List<TypedEventListener<?>>> listeners = new ConcurrentHashMap<>();
     private final List<TypedEventListener<SdkTypedEvent>> globalListeners = new CopyOnWriteArrayList<>();
 
@@ -36,7 +38,9 @@ public class DefaultTypedEventBus implements TypedEventBus {
                 try {
                     ((TypedEventListener<SdkTypedEvent>) listener).onEvent(event);
                 } catch (Exception e) {
-                    // Don't let one listener failure break others
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Event listener error for {0}: {1}",
+                            event.getClass().getSimpleName(), e.getMessage());
                 }
             }
         }
@@ -44,7 +48,11 @@ public class DefaultTypedEventBus implements TypedEventBus {
         for (var listener : globalListeners) {
             try {
                 listener.onEvent(event);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Global event listener error for {0}: {1}",
+                        event.getClass().getSimpleName(), e.getMessage());
+            }
         }
     }
 }
