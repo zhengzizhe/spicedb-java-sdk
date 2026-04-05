@@ -8,7 +8,6 @@ import com.authcses.sdk.model.CheckKey;
 import com.authcses.sdk.model.CheckResult;
 import com.authcses.sdk.model.Permission;
 import com.authcses.sdk.model.ResourceRef;
-import com.authcses.sdk.model.SubjectRef;
 import com.authcses.sdk.policy.PolicyRegistry;
 import com.authcses.sdk.telemetry.TelemetryReporter;
 import com.authcses.sdk.transport.*;
@@ -157,26 +156,12 @@ public class AuthCsesClient implements AutoCloseable {
 
     /** Check a single permission. Returns true if allowed. Default: minimize_latency. */
     public boolean check(String type, String id, String permission, String userId) {
-        // L0 fast path: direct cache lookup, skip entire transport chain
-        if (caching.checkCache() != null) {
-            var key = CheckKey.of(ResourceRef.of(type, id), Permission.of(permission),
-                    SubjectRef.of(config.defaultSubjectType(), userId, null));
-            var cached = caching.checkCache().getIfPresent(key);
-            if (cached != null) return cached.hasPermission();
-        }
         return on(type).check(id, permission, userId);
     }
 
     /** Check with explicit consistency. */
     public boolean check(String type, String id, String permission, String userId,
                          com.authcses.sdk.model.Consistency consistency) {
-        // L0 fast path: only for MinimizeLatency (cacheable)
-        if (consistency instanceof com.authcses.sdk.model.Consistency.MinimizeLatency && caching.checkCache() != null) {
-            var key = CheckKey.of(ResourceRef.of(type, id), Permission.of(permission),
-                    SubjectRef.of(config.defaultSubjectType(), userId, null));
-            var cached = caching.checkCache().getIfPresent(key);
-            if (cached != null) return cached.hasPermission();
-        }
         return on(type).check(id, permission, userId, consistency);
     }
 
