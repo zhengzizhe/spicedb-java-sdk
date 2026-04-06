@@ -38,11 +38,4 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
     useJUnitPlatform()
-    maxHeapSize = "4g"
-    // Forward custom system properties to test JVM
-    ["load.users", "load.rels", "load.checks", "scale.tier"].each { key ->
-        if (System.getProperty(key) != null) {
-            systemProperty key, System.getProperty(key)
-        }
-    }
 }
