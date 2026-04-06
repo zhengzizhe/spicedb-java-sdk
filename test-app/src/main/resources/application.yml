@@ -1,11 +1,23 @@
 server:
   port: 8081
 
+# OpenTelemetry — export traces to Jaeger
+otel:
+  sdk:
+    disabled: ${OTEL_SDK_DISABLED:false}
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+  service:
+    name: ${OTEL_SERVICE_NAME:authcses-test-app}
+  traces:
+    sampler: ${OTEL_TRACES_SAMPLER:always_on}
+
 spicedb:
   target: "${SPICEDB_TARGET:localhost:50051}"
   target-secondary: "${SPICEDB_TARGET_SECONDARY:localhost:50052}"
   preshared-key: "${SPICEDB_PRESHARED_KEY:somerandomkeyhere}"
   cache-enabled: true
   cache-max-size: 10000
-  watch-invalidation: ${SPICEDB_WATCH:false}
+  watch-invalidation: ${SPICEDB_WATCH:true}
   virtual-threads: true

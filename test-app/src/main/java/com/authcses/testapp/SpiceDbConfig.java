@@ -56,7 +56,7 @@ public class SpiceDbConfig {
                         .requestTimeout(Duration.ofSeconds(30)))
                 .cache(c -> c.enabled(cacheEnabled).maxSize(cacheMaxSize)
                         .watchInvalidation(watchInvalidation))
-                .features(f -> f.virtualThreads(virtualThreads))
+                .features(f -> f.virtualThreads(virtualThreads).telemetry(true))
                 .extend(e -> e.policies(loadTestPolicies()))
                 .build();
     }
@@ -69,7 +69,7 @@ public class SpiceDbConfig {
                         .requestTimeout(Duration.ofSeconds(30)))
                 .cache(c -> c.enabled(cacheEnabled).maxSize(cacheMaxSize)
                         .watchInvalidation(watchInvalidation))
-                .features(f -> f.virtualThreads(virtualThreads))
+                .features(f -> f.virtualThreads(virtualThreads).telemetry(true))
                 .extend(e -> e.policies(loadTestPolicies()))
                 .build();
     }

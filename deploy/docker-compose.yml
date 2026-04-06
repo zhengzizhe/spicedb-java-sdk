@@ -67,6 +67,8 @@ services:
       SPICEDB_GRPC_PRESHARED_KEY: "testkey"
       SPICEDB_DATASTORE_ENGINE: cockroachdb
       SPICEDB_DATASTORE_CONN_URI: "postgresql://root@crdb-1:26257/spicedb?sslmode=disable"
+      SPICEDB_OTEL_ENDPOINT: "jaeger:4317"
+      SPICEDB_OTEL_INSECURE: "true"
     ports:
       - "50051:50051"   # gRPC
       - "8443:8443"     # HTTP gateway
@@ -88,6 +90,8 @@ services:
       SPICEDB_GRPC_PRESHARED_KEY: "testkey"
       SPICEDB_DATASTORE_ENGINE: cockroachdb
       SPICEDB_DATASTORE_CONN_URI: "postgresql://root@crdb-2:26257/spicedb?sslmode=disable"
+      SPICEDB_OTEL_ENDPOINT: "jaeger:4317"
+      SPICEDB_OTEL_INSECURE: "true"
     ports:
       - "50052:50051"   # gRPC (different host port)
       - "8444:8443"
@@ -95,6 +99,17 @@ services:
     depends_on:
       crdb-init:
         condition: service_completed_successfully
+
+  # ---- Jaeger (trace collector + UI) ----
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
 
   # ---- Schema migration (one-shot, writes schema to SpiceDB) ----
 
