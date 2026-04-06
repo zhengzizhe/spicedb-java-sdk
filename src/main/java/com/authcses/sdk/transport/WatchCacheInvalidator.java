@@ -133,11 +133,17 @@ public class WatchCacheInvalidator implements AutoCloseable {
 
                 Iterator<WatchResponse> stream = stub.watch(requestBuilder.build());
 
-                LOG.log(System.Logger.Level.INFO, "Watch stream connected");
-                backoffMs = 1000; // reset backoff on successful connection
-                consecutiveFailures = 0; // reset on successful connection
+                // Don't reset here — stub.watch() is lazy.
+                // Reset only after first successful stream.hasNext().
+                boolean connected = false;
 
                 while (stream.hasNext() && running.get()) {
+                    if (!connected) {
+                        connected = true;
+                        LOG.log(System.Logger.Level.INFO, "Watch stream connected");
+                        backoffMs = 1000;
+                        consecutiveFailures = 0;
+                    }
                     WatchResponse response = stream.next();
 
                     // Track token for reconnection
