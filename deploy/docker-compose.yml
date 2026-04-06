@@ -50,6 +50,7 @@ services:
         done;
         cockroach sql --insecure --host=crdb-1 -e '
           CREATE DATABASE IF NOT EXISTS spicedb;
+          SET CLUSTER SETTING kv.rangefeed.enabled = true;
         ';
         echo 'CockroachDB cluster initialized.'
       "
@@ -69,8 +70,9 @@ services:
       SPICEDB_DATASTORE_CONN_URI: "postgresql://root@crdb-1:26257/spicedb?sslmode=disable"
       SPICEDB_OTEL_ENDPOINT: "jaeger:4317"
       SPICEDB_OTEL_INSECURE: "true"
+      SPICEDB_OTEL_SAMPLE_RATIO: "1.0"
     ports:
-      - "50051:50051"   # gRPC
+      - "50061:50051"   # gRPC (avoid conflict with k3d on 50051)
       - "8443:8443"     # HTTP gateway
       - "9090:9090"     # metrics
     depends_on:
@@ -92,8 +94,9 @@ services:
       SPICEDB_DATASTORE_CONN_URI: "postgresql://root@crdb-2:26257/spicedb?sslmode=disable"
       SPICEDB_OTEL_ENDPOINT: "jaeger:4317"
       SPICEDB_OTEL_INSECURE: "true"
+      SPICEDB_OTEL_SAMPLE_RATIO: "1.0"
     ports:
-      - "50052:50051"   # gRPC (different host port)
+      - "50062:50051"   # gRPC (different host port)
       - "8444:8443"
       - "9091:9090"
     depends_on:
@@ -103,7 +106,7 @@ services:
   # ---- Jaeger (trace collector + UI) ----
 
   jaeger:
-    image: jaegertracing/all-in-one:1.62
+    image: jaegertracing/all-in-one:latest
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:

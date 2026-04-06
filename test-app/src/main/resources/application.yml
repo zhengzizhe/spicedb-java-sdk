@@ -14,8 +14,8 @@ otel:
     sampler: ${OTEL_TRACES_SAMPLER:always_on}
 
 spicedb:
-  target: "${SPICEDB_TARGET:localhost:50051}"
-  target-secondary: "${SPICEDB_TARGET_SECONDARY:localhost:50052}"
+  target: "${SPICEDB_TARGET:localhost:50061}"
+  target-secondary: "${SPICEDB_TARGET_SECONDARY:localhost:50062}"
   preshared-key: "${SPICEDB_PRESHARED_KEY:somerandomkeyhere}"
   cache-enabled: true
   cache-max-size: 10000
