@@ -116,9 +116,13 @@ public class WatchCacheInvalidator implements AutoCloseable {
         // Thread not started here — caller must call start()
     }
 
+    private static final int MAX_FAILURES_NEVER_CONNECTED = 3;
+    private static final int MAX_FAILURES_AFTER_CONNECTED = 20;
+
     private void watchLoop() {
         long backoffMs = 1000;
         int consecutiveFailures = 0;
+        boolean everConnected = false;
         while (running.get()) {
             try {
                 var requestBuilder = WatchRequest.newBuilder();
@@ -140,6 +144,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
                 while (stream.hasNext() && running.get()) {
                     if (!connected) {
                         connected = true;
+                        everConnected = true;
                         LOG.log(System.Logger.Level.INFO, "Watch stream connected");
                         backoffMs = 1000;
                         consecutiveFailures = 0;
@@ -204,22 +209,27 @@ public class WatchCacheInvalidator implements AutoCloseable {
                 }
 
                 consecutiveFailures++;
-                if (consecutiveFailures >= 20) {
-                    LOG.log(System.Logger.Level.ERROR,
-                            "Watch stopped after {0} consecutive failures. Last error: {1}",
-                            consecutiveFailures, e.getMessage());
+                int maxFailures = everConnected
+                        ? MAX_FAILURES_AFTER_CONNECTED : MAX_FAILURES_NEVER_CONNECTED;
+                if (consecutiveFailures >= maxFailures) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Watch stopped after {0} consecutive failures ({1}). " +
+                            "Cache invalidation will rely on TTL expiration only. Last error: {2}",
+                            consecutiveFailures,
+                            everConnected ? "server went away" : "never connected — check target address",
+                            e.getMessage());
                     running.set(false);
                     return;
                 }
 
                 metrics.recordWatchReconnect();
-                // Log at WARNING on 1st attempt, then at power-of-2 intervals (2,4,8,16) to avoid spam
+                // Log at WARNING on 1st attempt, then at power-of-2 intervals to avoid spam
                 boolean shouldLog = consecutiveFailures == 1
-                        || (consecutiveFailures & (consecutiveFailures - 1)) == 0; // power of 2
+                        || (consecutiveFailures & (consecutiveFailures - 1)) == 0;
                 if (shouldLog) {
                     LOG.log(System.Logger.Level.WARNING,
                             "Watch stream disconnected ({0}/{1}), reconnecting in {2}ms: {3}",
-                            consecutiveFailures, 20, backoffMs, e.getMessage());
+                            consecutiveFailures, maxFailures, backoffMs, e.getMessage());
                 }
                 try {
                     long jitter = ThreadLocalRandom.current().nextLong(backoffMs / 4 + 1);
