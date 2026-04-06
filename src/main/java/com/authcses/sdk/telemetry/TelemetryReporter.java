@@ -22,6 +22,9 @@ public class TelemetryReporter implements AutoCloseable {
     private final int batchSize;
     private final LinkedBlockingQueue<Map<String, Object>> buffer;
     private final ScheduledExecutorService scheduler;
+    private final java.util.concurrent.atomic.AtomicBoolean flushScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.LongAdder droppedEvents = new java.util.concurrent.atomic.LongAdder();
+    private volatile int consecutiveFlushFailures = 0;
 
     public TelemetryReporter(TelemetrySink sink, int bufferCapacity, int batchSize,
                              long flushIntervalMs, boolean useVirtualThreads) {
@@ -56,8 +59,11 @@ public class TelemetryReporter implements AutoCloseable {
 
         buffer.offer(event);
 
-        if (buffer.size() >= batchSize) {
-            scheduler.execute(this::flush);
+        if (buffer.size() >= batchSize && flushScheduled.compareAndSet(false, true)) {
+            scheduler.execute(() -> {
+                try { flush(); }
+                finally { flushScheduled.set(false); }
+            });
         }
     }
 
@@ -70,11 +76,24 @@ public class TelemetryReporter implements AutoCloseable {
 
         try {
             sink.send(batch);
+            consecutiveFlushFailures = 0;
         } catch (Exception e) {
-            LOG.log(System.Logger.Level.WARNING, "Telemetry flush failed ({0} events dropped): {1}",
-                    batch.size(), e.getMessage());
+            droppedEvents.add(batch.size());
+            consecutiveFlushFailures++;
+            if (consecutiveFlushFailures <= 3) {
+                LOG.log(System.Logger.Level.WARNING, "Telemetry flush failed ({0} events dropped): {1}",
+                        batch.size(), e.getMessage());
+            } else if (consecutiveFlushFailures == 4) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Telemetry sink consistently failing, suppressing further warnings (total dropped: {0})",
+                        droppedEvents.sum());
+            }
+            // After 4 failures, stop logging but keep trying (sink may recover)
         }
     }
+
+    /** Total number of events dropped due to sink failures. */
+    public long droppedEventCount() { return droppedEvents.sum(); }
 
     @Override
     public void close() {

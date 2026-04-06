@@ -53,6 +53,16 @@ public class Resilience4jInterceptor implements SdkInterceptor {
         }
     }
 
+    @Override
+    public void beforeOperation(OperationContext ctx) {
+        acquirePermissions(ctx);
+    }
+
+    @Override
+    public void afterOperation(OperationContext ctx) {
+        releasePermissions(ctx);
+    }
+
     private void acquirePermissions(OperationContext ctx) {
         // Rate limiter first — waitForPermission() throws RequestNotPermitted on rejection
         if (rateLimiter != null) {
@@ -60,7 +70,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
                 RateLimiter.waitForPermission(rateLimiter);
             } catch (io.github.resilience4j.ratelimiter.RequestNotPermitted e) {
                 eventBus.publish(new SdkTypedEvent.RateLimited(Instant.now(), ctx.action().name()));
-                throw new AuthCsesException("Rate limited: max requests/second exceeded");
+                throw new AuthCsesException("Rate limited: max requests/second exceeded", e);
             }
         }
         if (bulkhead != null) {
@@ -100,7 +110,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
         public Builder bulkhead(int maxConcurrent) {
             this.bulkhead = Bulkhead.of("authcses-sdk", BulkheadConfig.custom()
                     .maxConcurrentCalls(maxConcurrent)
-                    .maxWaitDuration(Duration.ZERO)
+                    .maxWaitDuration(Duration.ofMillis(100))
                     .build());
             return this;
         }

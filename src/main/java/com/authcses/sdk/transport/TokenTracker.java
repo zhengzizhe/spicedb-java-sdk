@@ -4,25 +4,30 @@ import com.authcses.sdk.model.Consistency;
 import com.authcses.sdk.policy.ReadConsistency;
 import com.authcses.sdk.spi.DistributedTokenStore;
 
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Tracks ZedTokens for SESSION consistency.
+ * Tracks ZedTokens for SESSION consistency, per resource type.
  *
- * <p>Maintains the last write token so that reads after writes
- * always see at least the written state.
+ * <p>Maintains the last write token per resource type so that reads after writes
+ * always see at least the written state, without forcing unrelated resource types
+ * to skip cache.
  *
  * <p>When a {@link DistributedTokenStore} is provided, tokens are shared across
  * SDK instances (e.g., via Redis), enabling cross-instance SESSION consistency.
+ * If the distributed store becomes unavailable, silently degrades to local-only
+ * tokens (logs a single warning, does not spam on every call).
  *
- * <p>Thread-safe: all fields use atomic data structures.
+ * <p>Thread-safe: uses ConcurrentHashMap for per-resource-type token storage.
  */
 public class TokenTracker {
 
     private static final System.Logger LOG = System.getLogger(TokenTracker.class.getName());
 
-    private final AtomicReference<String> lastWriteToken = new AtomicReference<>(null);
+    private final ConcurrentHashMap<String, String> lastWriteTokens = new ConcurrentHashMap<>();
     private final DistributedTokenStore distributed;
+    private final AtomicBoolean distributedAvailable = new AtomicBoolean(true);
 
     public TokenTracker() {
         this(null);
@@ -32,17 +37,33 @@ public class TokenTracker {
         this.distributed = distributed;
     }
 
-    public void recordWrite(String token) {
-        if (token == null) return;
-        lastWriteToken.set(token);
+    /**
+     * Record a write token for a specific resource type.
+     */
+    public void recordWrite(String resourceType, String token) {
+        if (token == null || resourceType == null) return;
+        lastWriteTokens.put(resourceType, token);
 
         if (distributed != null) {
             try {
-                distributed.set("last_write", token);
+                distributed.set("last_write:" + resourceType, token);
+                distributedAvailable.set(true); // recovered
             } catch (Exception e) {
-                LOG.log(System.Logger.Level.WARNING, "Failed to share write token: {0}", e.getMessage());
+                if (distributedAvailable.compareAndSet(true, false)) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Distributed token store unavailable, SESSION consistency degraded to local-only: {0}",
+                            e.getMessage());
+                }
             }
         }
+    }
+
+    /**
+     * Record a write token without resource type (backward compatibility).
+     * Stores under the global key "_global".
+     */
+    public void recordWrite(String token) {
+        recordWrite("_global", token);
     }
 
     public void recordRead(String token) {
@@ -50,16 +71,16 @@ public class TokenTracker {
     }
 
     /**
-     * Resolve a ReadConsistency policy into a concrete SpiceDB Consistency.
+     * Resolve a ReadConsistency policy into a concrete SpiceDB Consistency for a specific resource type.
      */
-    public Consistency resolve(ReadConsistency policy) {
+    public Consistency resolve(ReadConsistency policy, String resourceType) {
         return switch (policy) {
             case ReadConsistency.MinimizeLatency ignored ->
                     Consistency.minimizeLatency();
 
             case ReadConsistency.Session ignored -> {
-                String token = getDistributedToken("last_write");
-                if (token == null) token = lastWriteToken.get();
+                String token = getDistributedToken("last_write:" + resourceType);
+                if (token == null) token = lastWriteTokens.get(resourceType);
                 yield token != null ? Consistency.atLeast(token) : Consistency.minimizeLatency();
             }
 
@@ -78,17 +99,43 @@ public class TokenTracker {
         };
     }
 
+    /**
+     * Resolve without resource type (backward compatibility). Uses global key.
+     */
+    public Consistency resolve(ReadConsistency policy) {
+        return resolve(policy, "_global");
+    }
+
     private String getDistributedToken(String key) {
         if (distributed == null) return null;
         try {
-            return distributed.get(key);
+            String value = distributed.get(key);
+            distributedAvailable.set(true); // recovered
+            return value;
         } catch (Exception e) {
-            LOG.log(System.Logger.Level.WARNING, "Failed to read distributed token: {0}", e.getMessage());
+            if (distributedAvailable.compareAndSet(true, false)) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Distributed token store unavailable, SESSION consistency degraded to local-only: {0}",
+                        e.getMessage());
+            }
             return null;
         }
     }
 
+    /**
+     * Get the last write token for a specific resource type.
+     */
+    public String getLastWriteToken(String resourceType) {
+        if (resourceType == null) return getLastWriteToken();
+        return lastWriteTokens.get(resourceType);
+    }
+
+    /**
+     * Get any last write token (backward compatibility).
+     * Returns an arbitrary token if multiple resource types have tokens, or null if none.
+     */
     public String getLastWriteToken() {
-        return lastWriteToken.get();
+        var values = lastWriteTokens.values();
+        return values.isEmpty() ? null : values.iterator().next();
     }
 }

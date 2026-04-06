@@ -39,6 +39,13 @@ public class TieredCache<K, V> implements Cache<K, V> {
     @Override public void invalidate(K key) { l1.invalidate(key); l2.invalidate(key); }
     @Override public void invalidateAll(Predicate<K> filter) { l1.invalidateAll(filter); l2.invalidateAll(filter); }
     @Override public void invalidateAll() { l1.invalidateAll(); l2.invalidateAll(); }
-    @Override public long size() { return l1.size(); }
-    @Override public CacheStats stats() { return l1.stats(); }
+    @Override public long size() { return l1.size() + l2.size(); }
+    @Override public CacheStats stats() {
+        var s1 = l1.stats();
+        var s2 = l2.stats();
+        // Hits: L1 hits + L2 hits (L2 is only queried on L1 miss, so L2 hits are tier-level hits)
+        // Misses: L2 misses (entries that missed both levels — the true cache miss count)
+        // Evictions: sum of both levels
+        return new CacheStats(s1.hitCount() + s2.hitCount(), s2.missCount(), s1.evictionCount() + s2.evictionCount());
+    }
 }

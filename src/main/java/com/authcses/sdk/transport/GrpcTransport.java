@@ -1,7 +1,13 @@
 package com.authcses.sdk.transport;
 
+import com.authcses.sdk.exception.AuthCsesAuthException;
 import com.authcses.sdk.exception.AuthCsesConnectionException;
+import com.authcses.sdk.exception.AuthCsesException;
+import com.authcses.sdk.exception.AuthCsesInvalidArgumentException;
+import com.authcses.sdk.exception.AuthCsesPreconditionException;
+import com.authcses.sdk.exception.AuthCsesResourceExhaustedException;
 import com.authcses.sdk.exception.AuthCsesTimeoutException;
+import com.authcses.sdk.exception.AuthCsesUnimplementedException;
 import com.authcses.sdk.model.*;
 import com.authcses.sdk.model.enums.Permissionship;
 import com.authzed.api.v1.AlgebraicSubjectSet;
@@ -20,6 +26,7 @@ import com.authzed.api.v1.RelationshipFilter;
 import com.authzed.api.v1.SubjectReference;
 import com.authzed.api.v1.WriteRelationshipsRequest;
 import com.authzed.api.v1.ZedToken;
+import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
@@ -37,6 +44,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class GrpcTransport implements SdkTransport {
 
+    private static final System.Logger LOG = System.getLogger(GrpcTransport.class.getName());
+    private static final int MAX_BATCH_SIZE = 500;
+
     private final ManagedChannel channel;
     private final Metadata authMetadata;
     private final long deadlineMs;
@@ -52,7 +62,8 @@ public class GrpcTransport implements SdkTransport {
         authMetadata.put(
                 Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
                 "Bearer " + presharedKey);
-        this.baseStub = PermissionsServiceGrpc.newBlockingStub(channel)
+        var tracedChannel = ClientInterceptors.intercept(channel, new TraceParentInterceptor());
+        this.baseStub = PermissionsServiceGrpc.newBlockingStub(tracedChannel)
                 .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(authMetadata));
     }
 
@@ -71,14 +82,7 @@ public class GrpcTransport implements SdkTransport {
         var response = withErrorHandling(() -> stub().checkPermission(grpcRequestBuilder.build()));
         String token = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
-        return switch (response.getPermissionship()) {
-            case PERMISSIONSHIP_HAS_PERMISSION ->
-                    new CheckResult(Permissionship.HAS_PERMISSION, token, Optional.empty());
-            case PERMISSIONSHIP_CONDITIONAL_PERMISSION ->
-                    new CheckResult(Permissionship.CONDITIONAL_PERMISSION, token, Optional.empty());
-            default ->
-                    new CheckResult(Permissionship.NO_PERMISSION, token, Optional.empty());
-        };
+        return mapPermissionship(response.getPermissionship(), token);
     }
 
     @Override
@@ -102,17 +106,12 @@ public class GrpcTransport implements SdkTransport {
             var pair = response.getPairs(i);
             CheckResult cr;
             if (pair.hasError()) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Bulk check item error (treating as NO_PERMISSION): {0}",
+                        pair.getError().getMessage());
                 cr = new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
             } else {
-                var item = pair.getItem();
-                cr = switch (item.getPermissionship()) {
-                    case PERMISSIONSHIP_HAS_PERMISSION ->
-                            new CheckResult(Permissionship.HAS_PERMISSION, bulkToken, Optional.empty());
-                    case PERMISSIONSHIP_CONDITIONAL_PERMISSION ->
-                            new CheckResult(Permissionship.CONDITIONAL_PERMISSION, bulkToken, Optional.empty());
-                    default ->
-                            new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
-                };
+                cr = mapPermissionship(pair.getItem().getPermissionship(), bulkToken);
             }
             results.put(subjectIds.get(i), cr);
         }
@@ -122,6 +121,20 @@ public class GrpcTransport implements SdkTransport {
     @Override
     public List<CheckResult> checkBulkMulti(List<BulkCheckItem> items,
                                              Consistency consistency) {
+        if (items.isEmpty()) return List.of();
+        if (items.size() <= MAX_BATCH_SIZE) {
+            return checkBulkBatch(items, consistency);
+        }
+        List<CheckResult> allResults = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i += MAX_BATCH_SIZE) {
+            var batch = items.subList(i, Math.min(i + MAX_BATCH_SIZE, items.size()));
+            allResults.addAll(checkBulkBatch(batch, consistency));
+        }
+        return allResults;
+    }
+
+    private List<CheckResult> checkBulkBatch(List<BulkCheckItem> items,
+                                              Consistency consistency) {
         var builder = CheckBulkPermissionsRequest.newBuilder()
                 .setConsistency(toGrpc(consistency));
         for (var item : items) {
@@ -134,21 +147,17 @@ public class GrpcTransport implements SdkTransport {
         var response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
         String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
-        List<CheckResult> results = new java.util.ArrayList<>(items.size());
+        List<CheckResult> results = new ArrayList<>(items.size());
         for (int i = 0; i < items.size() && i < response.getPairsCount(); i++) {
             var pair = response.getPairs(i);
             CheckResult cr;
             if (pair.hasError()) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Bulk check item error (treating as NO_PERMISSION): {0}",
+                        pair.getError().getMessage());
                 cr = new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
             } else {
-                cr = switch (pair.getItem().getPermissionship()) {
-                    case PERMISSIONSHIP_HAS_PERMISSION ->
-                            new CheckResult(Permissionship.HAS_PERMISSION, bulkToken, Optional.empty());
-                    case PERMISSIONSHIP_CONDITIONAL_PERMISSION ->
-                            new CheckResult(Permissionship.CONDITIONAL_PERMISSION, bulkToken, Optional.empty());
-                    default ->
-                            new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
-                };
+                cr = mapPermissionship(pair.getItem().getPermissionship(), bulkToken);
             }
             results.add(cr);
         }
@@ -189,24 +198,29 @@ public class GrpcTransport implements SdkTransport {
         if (relation != null) {
             filterBuilder.setOptionalRelation(relation.name());
         }
-        var request = ReadRelationshipsRequest.newBuilder()
+        var requestBuilder = ReadRelationshipsRequest.newBuilder()
                 .setRelationshipFilter(filterBuilder.build())
-                .setConsistency(toGrpc(consistency))
-                .build();
+                .setConsistency(toGrpc(consistency));
+        var request = requestBuilder.build();
 
-        List<Tuple> tuples = new ArrayList<>();
-        var iterator = withErrorHandling(() -> stub().readRelationships(request));
-        iterator.forEachRemaining(resp -> {
-            var rel = resp.getRelationship();
-            String subRel = rel.getSubject().getOptionalRelation();
-            tuples.add(new Tuple(
-                    rel.getResource().getObjectType(), rel.getResource().getObjectId(),
-                    rel.getRelation(),
-                    rel.getSubject().getObject().getObjectType(),
-                    rel.getSubject().getObject().getObjectId(),
-                    subRel.isEmpty() ? null : subRel));
-        });
-        return tuples;
+        try {
+            List<Tuple> tuples = new ArrayList<>();
+            var iterator = stub().readRelationships(request);
+            while (iterator.hasNext()) {
+                var resp = iterator.next();
+                var rel = resp.getRelationship();
+                String subRel = rel.getSubject().getOptionalRelation();
+                tuples.add(new Tuple(
+                        rel.getResource().getObjectType(), rel.getResource().getObjectId(),
+                        rel.getRelation(),
+                        rel.getSubject().getObject().getObjectType(),
+                        rel.getSubject().getObject().getObjectId(),
+                        subRel.isEmpty() ? null : subRel));
+            }
+            return tuples;
+        } catch (StatusRuntimeException e) {
+            throw mapGrpcException(e);
+        }
     }
 
     @Override
@@ -218,11 +232,18 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(request.consistency()));
         if (request.limit() > 0) builder.setOptionalConcreteLimit(request.limit());
 
-        List<SubjectRef> subjects = new ArrayList<>();
-        var iterator = withErrorHandling(() -> stub().lookupSubjects(builder.build()));
-        iterator.forEachRemaining(resp ->
-                subjects.add(SubjectRef.of(request.subjectType(), resp.getSubject().getSubjectObjectId(), null)));
-        return subjects;
+        int limit = request.limit();
+        try {
+            List<SubjectRef> subjects = new ArrayList<>();
+            var iterator = stub().lookupSubjects(builder.build());
+            while (iterator.hasNext() && (limit <= 0 || subjects.size() < limit)) {
+                var resp = iterator.next();
+                subjects.add(SubjectRef.of(request.subjectType(), resp.getSubject().getSubjectObjectId(), null));
+            }
+            return subjects;
+        } catch (StatusRuntimeException e) {
+            throw mapGrpcException(e);
+        }
     }
 
     @Override
@@ -234,11 +255,18 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(request.consistency()));
         if (request.limit() > 0) builder.setOptionalLimit(request.limit());
 
-        List<ResourceRef> resources = new ArrayList<>();
-        var iterator = withErrorHandling(() -> stub().lookupResources(builder.build()));
-        iterator.forEachRemaining(resp ->
-                resources.add(ResourceRef.of(request.resourceType(), resp.getResourceObjectId())));
-        return resources;
+        int rlimit = request.limit();
+        try {
+            List<ResourceRef> resources = new ArrayList<>();
+            var iterator = stub().lookupResources(builder.build());
+            while (iterator.hasNext() && (rlimit <= 0 || resources.size() < rlimit)) {
+                var resp = iterator.next();
+                resources.add(ResourceRef.of(request.resourceType(), resp.getResourceObjectId()));
+            }
+            return resources;
+        } catch (StatusRuntimeException e) {
+            throw mapGrpcException(e);
+        }
     }
 
     @Override
@@ -317,21 +345,8 @@ public class GrpcTransport implements SdkTransport {
 
     // ---- Helpers ----
 
-    private static final Metadata.Key<String> TRACEPARENT_KEY =
-            Metadata.Key.of("traceparent", Metadata.ASCII_STRING_MARSHALLER);
-
     private PermissionsServiceGrpc.PermissionsServiceBlockingStub stub() {
-        var s = baseStub.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS);
-
-        // W3C traceparent: from OTel active span (if available)
-        String traceparent = com.authcses.sdk.trace.TraceContext.traceparent();
-        if (traceparent != null) {
-            Metadata traceHeaders = new Metadata();
-            traceHeaders.put(TRACEPARENT_KEY, traceparent);
-            s = s.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(traceHeaders));
-        }
-
-        return s;
+        return baseStub.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS);
     }
 
     private static ObjectReference objRef(ResourceRef ref) {
@@ -406,20 +421,46 @@ public class GrpcTransport implements SdkTransport {
         }
     }
 
+    private static CheckResult mapPermissionship(
+            com.authzed.api.v1.CheckPermissionResponse.Permissionship p, String token) {
+        return switch (p) {
+            case PERMISSIONSHIP_HAS_PERMISSION ->
+                    new CheckResult(Permissionship.HAS_PERMISSION, token, Optional.empty());
+            case PERMISSIONSHIP_CONDITIONAL_PERMISSION ->
+                    new CheckResult(Permissionship.CONDITIONAL_PERMISSION, token, Optional.empty());
+            default ->
+                    new CheckResult(Permissionship.NO_PERMISSION, token, Optional.empty());
+        };
+    }
+
+    private RuntimeException mapGrpcException(StatusRuntimeException e) {
+        return switch (e.getStatus().getCode()) {
+            case DEADLINE_EXCEEDED ->
+                    new AuthCsesTimeoutException("SpiceDB request timed out", e);
+            case UNAVAILABLE, CANCELLED ->
+                    new AuthCsesConnectionException("SpiceDB unavailable", e);
+            case UNAUTHENTICATED, PERMISSION_DENIED ->
+                    new AuthCsesAuthException("SpiceDB auth failed", e);
+            case RESOURCE_EXHAUSTED ->
+                    new AuthCsesResourceExhaustedException("SpiceDB resource exhausted", e);
+            case INVALID_ARGUMENT, NOT_FOUND, ALREADY_EXISTS, OUT_OF_RANGE ->
+                    new AuthCsesInvalidArgumentException("SpiceDB invalid request: " + e.getStatus(), e);
+            case UNIMPLEMENTED ->
+                    new AuthCsesUnimplementedException("SpiceDB does not support this operation: " + e.getStatus().getDescription(), e);
+            case FAILED_PRECONDITION ->
+                    new AuthCsesPreconditionException("SpiceDB precondition failed (schema not written or not migrated?): " + e.getStatus().getDescription(), e);
+            case ABORTED ->
+                    new AuthCsesConnectionException("SpiceDB transaction aborted (retry may help)", e);
+            default ->
+                    new AuthCsesException("SpiceDB error: " + e.getStatus(), e);
+        };
+    }
+
     private <T> T withErrorHandling(java.util.function.Supplier<T> call) {
         try {
             return call.get();
         } catch (StatusRuntimeException e) {
-            throw switch (e.getStatus().getCode()) {
-                case DEADLINE_EXCEEDED ->
-                        new AuthCsesTimeoutException("SpiceDB request timed out", e);
-                case UNAVAILABLE, CANCELLED ->
-                        new AuthCsesConnectionException("SpiceDB unavailable", e);
-                case UNAUTHENTICATED ->
-                        new com.authcses.sdk.exception.AuthCsesAuthException("SpiceDB auth failed", e);
-                default ->
-                        new com.authcses.sdk.exception.AuthCsesException("SpiceDB error: " + e.getStatus(), e);
-            };
+            throw mapGrpcException(e);
         }
     }
 }

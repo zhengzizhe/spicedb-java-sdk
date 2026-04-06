@@ -3,6 +3,8 @@ package com.authcses.sdk.metrics;
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.Recorder;
 
+import com.authcses.sdk.cache.CacheStats;
+
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
@@ -31,10 +33,16 @@ public class SdkMetrics {
     private final LongAdder totalErrors = new LongAdder();
     private final LongAdder coalescedRequests = new LongAdder();
 
+    // ---- Watch ----
+    private final LongAdder watchReconnects = new LongAdder();
+
     // ---- Latency (HdrHistogram dual-buffer, microseconds) ----
     private static final long MAX_TRACKABLE_MICROS = 60_000_000L;
     private final Recorder recorder = new Recorder(MAX_TRACKABLE_MICROS, 3);
     private volatile Histogram intervalHistogram;
+
+    // ---- Cache stats source (from Cache implementation, replaces manual hit/miss counting) ----
+    private volatile Supplier<CacheStats> cacheStatsSource;
 
     // ---- Circuit Breaker (injected via supplier) ----
     private volatile Supplier<String> circuitBreakerStateSupplier = () -> "N/A";
@@ -53,6 +61,11 @@ public class SdkMetrics {
     }
 
     public void recordCoalesced() { coalescedRequests.increment(); }
+    public void recordWatchReconnect() { watchReconnects.increment(); }
+
+    public void setCacheStatsSource(Supplier<CacheStats> source) {
+        this.cacheStatsSource = source;
+    }
 
     public void setCircuitBreakerStateSupplier(Supplier<String> supplier) {
         this.circuitBreakerStateSupplier = supplier;
@@ -62,19 +75,31 @@ public class SdkMetrics {
 
     /** Cache hit rate (0.0 to 1.0). Returns 0 if no cache activity. */
     public double cacheHitRate() {
-        long hits = cacheHits.sum();
-        long total = hits + cacheMisses.sum();
+        long hits = cacheHits();
+        long total = hits + cacheMisses();
         return total == 0 ? 0.0 : (double) hits / total;
     }
 
-    public long cacheHits() { return cacheHits.sum(); }
-    public long cacheMisses() { return cacheMisses.sum(); }
-    public long cacheEvictions() { return cacheEvictions.sum(); }
+    public long cacheHits() {
+        var source = cacheStatsSource;
+        return source != null ? source.get().hitCount() : cacheHits.sum();
+    }
+
+    public long cacheMisses() {
+        var source = cacheStatsSource;
+        return source != null ? source.get().missCount() : cacheMisses.sum();
+    }
+
+    public long cacheEvictions() {
+        var source = cacheStatsSource;
+        return source != null ? source.get().evictionCount() : cacheEvictions.sum();
+    }
     public long cacheSize() { return cacheSize.get(); }
 
     public long totalRequests() { return totalRequests.sum(); }
     public long totalErrors() { return totalErrors.sum(); }
     public long coalescedRequests() { return coalescedRequests.sum(); }
+    public long watchReconnects() { return watchReconnects.sum(); }
 
     public double errorRate() {
         long total = totalRequests.sum();
@@ -121,26 +146,35 @@ public class SdkMetrics {
                 cacheHitRate(), cacheHits(), cacheMisses(), cacheEvictions(), cacheSize(),
                 totalRequests(), totalErrors(), errorRate(), coalescedRequests(),
                 p50, p95, p99, avg,
-                circuitBreakerState());
+                circuitBreakerState(), watchReconnects());
     }
 
     public record Snapshot(
             double cacheHitRate, long cacheHits, long cacheMisses, long cacheEvictions, long cacheSize,
             long totalRequests, long totalErrors, double errorRate, long coalescedRequests,
             double latencyP50Ms, double latencyP95Ms, double latencyP99Ms, double latencyAvgMs,
-            String circuitBreakerState
+            String circuitBreakerState, long watchReconnects
     ) {
         @Override
         public String toString() {
             return String.format(
                     "SdkMetrics{cache=%.1f%% (%d/%d), size=%d, evictions=%d, " +
                     "requests=%d, errors=%d (%.2f%%), coalesced=%d, " +
-                    "latency=[p50=%.2fms p95=%.2fms p99=%.2fms avg=%.2fms], cb=%s}",
+                    "latency=[p50=%.2fms p95=%.2fms p99=%.2fms avg=%.2fms], cb=%s, watchReconnects=%d}",
                     cacheHitRate * 100, cacheHits, cacheHits + cacheMisses, cacheSize, cacheEvictions,
                     totalRequests, totalErrors, errorRate * 100, coalescedRequests,
                     latencyP50Ms, latencyP95Ms, latencyP99Ms, latencyAvgMs,
-                    circuitBreakerState);
+                    circuitBreakerState, watchReconnects);
         }
+    }
+
+    /**
+     * Rotate the interval histogram. Called periodically by the scheduler (e.g. every 5s)
+     * so that snapshot() reads a stable, fixed-window histogram instead of
+     * "everything since last read".
+     */
+    public synchronized void rotateHistogram() {
+        intervalHistogram = recorder.getIntervalHistogram(intervalHistogram);
     }
 
     /**

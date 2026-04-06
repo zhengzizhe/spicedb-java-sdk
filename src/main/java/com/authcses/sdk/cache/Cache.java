@@ -1,6 +1,7 @@
 package com.authcses.sdk.cache;
 
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -18,6 +19,19 @@ public interface Cache<K, V> {
     V getIfPresent(K key);
 
     void put(K key, V value);
+
+    /**
+     * Get or compute: if key is present return its value, otherwise compute via loader,
+     * store and return. Same key is loaded by at most one thread (singleFlight).
+     * Default implementation is NOT singleFlight — override for atomicity.
+     */
+    default V getOrLoad(K key, Function<K, V> loader) {
+        V v = getIfPresent(key);
+        if (v != null) return v;
+        v = loader.apply(key);
+        if (v != null) put(key, v);
+        return v;
+    }
 
     void invalidate(K key);
 

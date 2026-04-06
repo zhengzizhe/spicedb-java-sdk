@@ -14,9 +14,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class CoalescingTransport extends ForwardingTransport {
 
+    /** Structured coalescing key — uses record equals/hashCode, avoids String allocation. */
+    private record CoalescingKey(ResourceRef resource, Permission permission, SubjectRef subject, Consistency consistency) {}
+
     private final SdkTransport delegate;
     private final SdkMetrics metrics;
-    private final ConcurrentHashMap<String, CompletableFuture<CheckResult>> inflight = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<CoalescingKey, CompletableFuture<CheckResult>> inflight = new ConcurrentHashMap<>();
 
     public CoalescingTransport(SdkTransport delegate, SdkMetrics metrics) {
         this.delegate = delegate;
@@ -34,7 +37,7 @@ public class CoalescingTransport extends ForwardingTransport {
 
     @Override
     public CheckResult check(CheckRequest request) {
-        String key = coalescingKey(request);
+        var key = new CoalescingKey(request.resource(), request.permission(), request.subject(), request.consistency());
 
         // Try to be the "owner" of this request
         CompletableFuture<CheckResult> myFuture = new CompletableFuture<>();
@@ -70,15 +73,4 @@ public class CoalescingTransport extends ForwardingTransport {
         delegate.close();
     }
 
-    private static String coalescingKey(CheckRequest request) {
-        String consistencyKey = switch (request.consistency()) {
-            case Consistency.MinimizeLatency ignored -> "min";
-            case Consistency.Full ignored -> "full";
-            case Consistency.AtLeast al -> "al:" + al.zedToken();
-            case Consistency.AtExactSnapshot aes -> "aes:" + aes.zedToken();
-        };
-        return request.resource().type() + ":" + request.resource().id() + "#" +
-                request.permission().name() + "@" +
-                request.subject().type() + ":" + request.subject().id() + "!" + consistencyKey;
-    }
 }

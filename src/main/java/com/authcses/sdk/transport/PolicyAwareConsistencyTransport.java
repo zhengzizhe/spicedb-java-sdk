@@ -36,10 +36,8 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     @Override
     public CheckResult check(CheckRequest request) {
-        var resolved = resolveConsistency(request.resource().type(), request.consistency());
-        CheckRequest adjusted = resolved == request.consistency()
-                ? request
-                : new CheckRequest(request.resource(), request.permission(), request.subject(), resolved, request.caveatContext());
+        var adjusted = request.withConsistency(
+                resolveConsistency(request.resource().type(), request.consistency()));
         var result = delegate.check(adjusted);
         tokenTracker.recordRead(result.zedToken());
         return result;
@@ -47,24 +45,24 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     @Override
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
-        var resolved = resolveConsistency(request.resource().type(), request.consistency());
-        CheckRequest adjusted = resolved == request.consistency()
-                ? request
-                : new CheckRequest(request.resource(), request.permission(), request.subject(), resolved, request.caveatContext());
+        var adjusted = request.withConsistency(
+                resolveConsistency(request.resource().type(), request.consistency()));
         return delegate.checkBulk(adjusted, subjects);
     }
 
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
         var result = delegate.writeRelationships(updates);
-        tokenTracker.recordWrite(result.zedToken());
+        String resType = updates.isEmpty() ? null : updates.getFirst().resource().type();
+        tokenTracker.recordWrite(resType, result.zedToken());
         return result;
     }
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
         var result = delegate.deleteRelationships(updates);
-        tokenTracker.recordWrite(result.zedToken());
+        String resType = updates.isEmpty() ? null : updates.getFirst().resource().type();
+        tokenTracker.recordWrite(resType, result.zedToken());
         return result;
     }
 
@@ -76,21 +74,15 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     @Override
     public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
-        var resolved = resolveConsistency(request.resource().type(), request.consistency());
-        LookupSubjectsRequest adjusted = resolved == request.consistency()
-                ? request
-                : new LookupSubjectsRequest(request.resource(), request.permission(),
-                        request.subjectType(), request.limit(), resolved);
+        var adjusted = request.withConsistency(
+                resolveConsistency(request.resource().type(), request.consistency()));
         return delegate.lookupSubjects(adjusted);
     }
 
     @Override
     public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
-        var resolved = resolveConsistency(request.resourceType(), request.consistency());
-        LookupResourcesRequest adjusted = resolved == request.consistency()
-                ? request
-                : new LookupResourcesRequest(request.resourceType(), request.permission(),
-                        request.subject(), request.limit(), resolved);
+        var adjusted = request.withConsistency(
+                resolveConsistency(request.resourceType(), request.consistency()));
         return delegate.lookupResources(adjusted);
     }
 
@@ -98,7 +90,7 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
         var result = delegate.deleteByFilter(resource, subject, optionalRelation);
-        tokenTracker.recordWrite(result.zedToken());
+        tokenTracker.recordWrite(resource.type(), result.zedToken());
         return result;
     }
 
@@ -112,6 +104,6 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
         }
 
         ReadConsistency policy = policyRegistry.resolveReadConsistency(resourceType);
-        return tokenTracker.resolve(policy);
+        return tokenTracker.resolve(policy, resourceType);
     }
 }

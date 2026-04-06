@@ -181,16 +181,15 @@ class ResilientTransportTest {
 
     @Test
     void retryExhaustion_feedsIntoCircuitBreaker() {
-        // maxAttempts=3 means 3 total attempts per logical call
-        // slidingWindowSize=4, failureRate=50% → 2 failures out of 4 opens the circuit
-        // Each logical call generates 3 CB failure recordings (3 retry attempts)
-        // So after 2 logical calls = 6 CB recordings, well above threshold
+        // With CB wrapping Retry, each logical call counts as 1 CB record regardless of retries.
+        // slidingWindowSize=6, failureRate=50%, minimumNumberOfCalls=6
+        // → need 6 logical calls, all failing, to open the circuit (100% > 50% threshold)
         var policy = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .retry(RetryPolicy.builder().maxAttempts(3).baseDelay(Duration.ofMillis(1)).build())
                         .circuitBreaker(CircuitBreakerPolicy.builder()
                                 .failureRateThreshold(50)
-                                .slidingWindowSize(10)
+                                .slidingWindowSize(6)
                                 .minimumNumberOfCalls(6)
                                 .waitInOpenState(Duration.ofHours(1))
                                 .build())
@@ -201,13 +200,13 @@ class ResilientTransportTest {
         SdkTransport delegate = alwaysFailingDelegate(callCount);
         var transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
-        // 2 logical calls, each generating 3 retry attempts = 6 CB failure recordings
-        for (int i = 0; i < 2; i++) {
+        // 6 logical calls to fill the sliding window — each exhausts retries internally
+        for (int i = 0; i < 6; i++) {
             try { transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
-        // Circuit should now be open
+        // Circuit should now be open (100% failure rate > 50% threshold)
         assertThatThrownBy(() ->
                 transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);

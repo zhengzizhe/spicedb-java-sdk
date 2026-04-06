@@ -6,6 +6,8 @@ import com.authcses.sdk.model.GrantResult;
 import com.authcses.sdk.model.WriteRequest;
 import com.authcses.sdk.model.enums.SdkAction;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Interceptor for SDK operations using OkHttp-style chain pattern.
  *
@@ -46,6 +48,23 @@ public interface SdkInterceptor {
     default GrantResult interceptWrite(WriteChain chain) {
         return chain.proceed(chain.request());
     }
+
+    /**
+     * Called before any operation that does not have a dedicated chain
+     * (lookup, read, delete, expand). Override to apply cross-cutting concerns
+     * such as rate limiting and bulkhead.
+     *
+     * <p>Default implementation is a no-op.
+     */
+    default void beforeOperation(OperationContext ctx) {}
+
+    /**
+     * Called after any operation that does not have a dedicated chain.
+     * Always called if {@link #beforeOperation} was called, even on failure.
+     *
+     * <p>Default implementation is a no-op.
+     */
+    default void afterOperation(OperationContext ctx) {}
 
     // ---- Chain interfaces ----
 
@@ -98,7 +117,7 @@ public interface SdkInterceptor {
         private final String subjectType;
         private final String subjectId;
         /** Typed attribute map keyed by {@link AttributeKey} identity — no collision risk. */
-        private final java.util.concurrent.ConcurrentHashMap<AttributeKey<?>, Object> typedAttributes = new java.util.concurrent.ConcurrentHashMap<>();
+        private final ConcurrentHashMap<AttributeKey<?>, Object> typedAttributes = new ConcurrentHashMap<>();
 
         // Set after execution
         private long durationMs;

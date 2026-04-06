@@ -1,0 +1,33 @@
+plugins {
+    id "java"
+    id "application"
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+application {
+    mainClass = System.getProperty("mainClass") ?: "com.authcses.benchmark.LoadSimulation"
+}
+
+dependencies {
+    implementation project(":")
+    implementation "com.github.ben-manes.caffeine:caffeine:3.1.8"
+    implementation "com.authzed.api:authzed:1.5.4"
+    implementation "io.grpc:grpc-netty-shaded:1.72.0"
+    implementation "io.grpc:grpc-stub:1.72.0"
+    implementation "io.grpc:grpc-protobuf:1.72.0"
+}
+
+tasks.named("run") {
+    jvmArgs = ["-Xms1g", "-Xmx4g", "-XX:+UseZGC"]
+    // Forward system properties
+    systemProperties System.properties.subMap(["bench.users", "bench.docs", "bench.duration", "bench.threads"])
+}

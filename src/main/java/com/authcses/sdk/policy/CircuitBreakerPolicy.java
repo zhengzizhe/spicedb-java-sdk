@@ -62,7 +62,7 @@ public class CircuitBreakerPolicy {
     public static class Builder {
         private boolean enabled = true;
         private double failureRateThreshold = 50.0;
-        private double slowCallRateThreshold = 100.0;
+        private double slowCallRateThreshold = 80.0;
         private Duration slowCallDuration = Duration.ofMillis(500);
         private SlidingWindowType slidingWindowType = SlidingWindowType.COUNT_BASED;
         private int slidingWindowSize = 100;

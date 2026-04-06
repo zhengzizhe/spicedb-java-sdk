@@ -74,6 +74,11 @@ public class TruthTable {
         return table;
     }
 
+    /** Public add — used by LargeScaleSeeder to build truth table from verified checks. */
+    public void addDirect(String type, String id, String perm, String user, boolean expected) {
+        add(type, id, perm, user, expected);
+    }
+
     private void add(String type, String id, String perm, String user, boolean expected) {
         var c = new CheckCase(type, id, perm, user, expected);
         cases.add(c);

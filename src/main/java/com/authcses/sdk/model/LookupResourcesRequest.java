@@ -17,6 +17,10 @@ public record LookupResourcesRequest(
         Objects.requireNonNull(consistency, "consistency");
     }
 
+    public LookupResourcesRequest withConsistency(Consistency c) {
+        return c == consistency ? this : new LookupResourcesRequest(resourceType, permission, subject, limit, c);
+    }
+
     public LookupResourcesRequest(String resourceType, Permission permission, SubjectRef subject) {
         this(resourceType, permission, subject, 0, Consistency.minimizeLatency());
     }

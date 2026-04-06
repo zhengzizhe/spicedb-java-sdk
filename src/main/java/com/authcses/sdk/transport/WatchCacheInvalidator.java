@@ -2,6 +2,7 @@ package com.authcses.sdk.transport;
 
 import com.authcses.sdk.cache.Cache;
 import com.authcses.sdk.cache.IndexedCache;
+import com.authcses.sdk.metrics.SdkMetrics;
 import com.authcses.sdk.model.CheckKey;
 import com.authcses.sdk.model.CheckResult;
 import com.authcses.sdk.model.RelationshipChange;
@@ -13,7 +14,11 @@ import io.grpc.stub.MetadataUtils;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -36,6 +41,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger(WatchCacheInvalidator.class.getName());
 
     private final Cache<CheckKey, CheckResult> cache;
+    private final SdkMetrics metrics;
     private final ManagedChannel channel;
     private final boolean ownsChannel;
     private final Metadata authMetadata;
@@ -43,12 +49,11 @@ public class WatchCacheInvalidator implements AutoCloseable {
     private final AtomicReference<String> lastToken = new AtomicReference<>(null);
     private final Thread watchThread;
     private final List<Consumer<RelationshipChange>> listeners = new CopyOnWriteArrayList<>();
-    private final java.util.concurrent.ExecutorService listenerExecutor =
-            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "authcses-sdk-watch-dispatch");
-                t.setDaemon(true);
-                return t;
-            });
+    private final ExecutorService listenerExecutor = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(10_000),
+            r -> { Thread t = new Thread(r, "authcses-sdk-watch-dispatch"); t.setDaemon(true); return t; },
+            new ThreadPoolExecutor.DiscardOldestPolicy());
 
     /** Register a listener for relationship changes. */
     public void addListener(Consumer<RelationshipChange> listener) {
@@ -62,8 +67,10 @@ public class WatchCacheInvalidator implements AutoCloseable {
     /**
      * Create with a shared channel (preferred — reuses the main client's gRPC channel).
      */
-    public WatchCacheInvalidator(ManagedChannel channel, String presharedKey, Cache<CheckKey, CheckResult> cache) {
+    public WatchCacheInvalidator(ManagedChannel channel, String presharedKey,
+                                  Cache<CheckKey, CheckResult> cache, SdkMetrics metrics) {
         this.cache = cache;
+        this.metrics = metrics;
         this.channel = channel;
         this.ownsChannel = false;
 
@@ -85,12 +92,13 @@ public class WatchCacheInvalidator implements AutoCloseable {
     }
 
     /**
-     * @deprecated Use {@link #WatchCacheInvalidator(ManagedChannel, String, Cache)} instead.
+     * @deprecated Use {@link #WatchCacheInvalidator(ManagedChannel, String, Cache, SdkMetrics)} instead.
      */
     @Deprecated
     public WatchCacheInvalidator(List<String> endpoints, String presharedKey, boolean useTls,
                                   Cache<CheckKey, CheckResult> cache) {
         this.cache = cache;
+        this.metrics = new SdkMetrics();
 
         String target = endpoints.getFirst();
         var builder = ManagedChannelBuilder.forTarget(target);
@@ -110,6 +118,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
 
     private void watchLoop() {
         long backoffMs = 1000;
+        int consecutiveFailures = 0;
         while (running.get()) {
             try {
                 var requestBuilder = WatchRequest.newBuilder();
@@ -126,6 +135,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
 
                 LOG.log(System.Logger.Level.INFO, "Watch stream connected");
                 backoffMs = 1000; // reset backoff on successful connection
+                consecutiveFailures = 0; // reset on successful connection
 
                 while (stream.hasNext() && running.get()) {
                     WatchResponse response = stream.next();
@@ -177,11 +187,32 @@ public class WatchCacheInvalidator implements AutoCloseable {
                 }
             } catch (Exception e) {
                 if (!running.get()) return;
+
+                // Check for permanent errors (UNIMPLEMENTED, UNAUTHENTICATED, PERMISSION_DENIED)
+                if (isPermanentError(e)) {
+                    String reason = getPermanentErrorReason(e);
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Watch stopped: {0}. Cache invalidation will rely on TTL expiration only.", reason);
+                    running.set(false);
+                    return;
+                }
+
+                consecutiveFailures++;
+                if (consecutiveFailures >= 20) {
+                    LOG.log(System.Logger.Level.ERROR,
+                            "Watch stopped after {0} consecutive failures. Last error: {1}",
+                            consecutiveFailures, e.getMessage());
+                    running.set(false);
+                    return;
+                }
+
+                metrics.recordWatchReconnect();
                 LOG.log(System.Logger.Level.WARNING,
                         "Watch stream disconnected, reconnecting in {0}ms: {1}",
                         backoffMs, e.getMessage());
                 try {
-                    Thread.sleep(backoffMs);
+                    long jitter = ThreadLocalRandom.current().nextLong(backoffMs / 4 + 1);
+                    Thread.sleep(backoffMs + jitter);
                     backoffMs = Math.min(backoffMs * 2, 30_000); // max 30s backoff
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
@@ -221,5 +252,37 @@ public class WatchCacheInvalidator implements AutoCloseable {
 
     public boolean isRunning() {
         return running.get() && watchThread.isAlive();
+    }
+
+    private static boolean isPermanentError(Exception e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof io.grpc.StatusRuntimeException sre) {
+                var code = sre.getStatus().getCode();
+                if (code == io.grpc.Status.Code.UNIMPLEMENTED
+                        || code == io.grpc.Status.Code.UNAUTHENTICATED
+                        || code == io.grpc.Status.Code.PERMISSION_DENIED) {
+                    return true;
+                }
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    private static String getPermanentErrorReason(Exception e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof io.grpc.StatusRuntimeException sre) {
+                return switch (sre.getStatus().getCode()) {
+                    case UNIMPLEMENTED -> "Watch not supported by this SpiceDB backend (use PostgreSQL or CockroachDB 3+ nodes)";
+                    case UNAUTHENTICATED -> "authentication failed (check preshared key)";
+                    case PERMISSION_DENIED -> "permission denied (check SpiceDB RBAC configuration)";
+                    default -> sre.getStatus().toString();
+                };
+            }
+            cause = cause.getCause();
+        }
+        return e.getMessage();
     }
 }

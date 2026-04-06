@@ -1,12 +1,23 @@
-
-
 /**
- * 类飞书文档库权限模型
+ * V2 — 高性能飞书文档权限模型
  *
- * 层级：organization → space → folder (可嵌套) → document
+ * 核心优化：ancestor 替代 parent 递归
+ *
+ * 旧方案（串行递归）：
+ *   folder#view = viewer + parent->view   ← 20 层 = 20 次串行 CRDB 查询
+ *
+ * 新方案（写入展平 + 并行查询）：
+ *   folder#view = viewer + ancestor->view_local   ← 20 个祖先并行查询，每个 O(1)
+ *
+ * 写入时：创建 folder-20 在 folder-19 下
+ *   → 写入 ancestor: [folder-19, folder-18, ..., folder-1]
+ *   → SpiceDB 并行 dispatch 所有 ancestor->view_local
+ *   → 总延迟 ≈ 1 次查询（并行）
+ *
+ * 层级：organization → space → folder (ancestor 展平) → document
  * 主体：user, department (层级), group
  * 权限：owner > manager > editor > commenter > viewer
- * 特性：层级继承、部门权限、链接分享、公开文档
+ * 特性：ancestor 并行继承、部门权限、链接分享、公开文档
  */
 
 // ============================================================
@@ -15,16 +26,12 @@
 
 definition user {}
 
-/** 部门（支持层级：子部门的 member 自动是父部门的 member） */
 definition department {
     relation member: user
     relation parent: department
-
-    /** 递归：本部门成员 + 所有子部门成员 */
     permission all_members = member + parent->all_members
 }
 
-/** 用户组（扁平，不继承） */
 definition group {
     relation member: user | department#all_members
 }
@@ -42,7 +49,7 @@ definition organization {
 }
 
 // ============================================================
-//  空间（Space）— 类似飞书的「知识空间」
+//  空间
 // ============================================================
 
 definition space {
@@ -52,41 +59,48 @@ definition space {
     relation member: user | group#member | department#all_members
     relation viewer: user | group#member | department#all_members | user:*
 
-    /** 空间管理 = 空间 owner + 空间 admin + 组织 admin */
     permission manage = owner + admin + org->manage
-    /** 空间编辑 = 管理者 + 成员 */
     permission edit = manage + member
-    /** 空间查看 = 编辑者 + viewer */
     permission view = edit + viewer
 }
 
 // ============================================================
-//  文件夹（支持嵌套，权限从父文件夹继承）
+//  文件夹 — ancestor 并行模型
+//
+//  *_local = 仅本文件夹的直接授权（不递归）
+//  *       = 本地 + 所有祖先的 local + 空间权限
+//
+//  ancestor 关系在创建/移动文件夹时写入所有祖先 ID，
+//  SpiceDB 对 ancestor->xxx_local 的 dispatch 是并行的。
 // ============================================================
 
 definition folder {
     relation space: space
-    relation parent: folder
+    /** 所有祖先文件夹（写入时展平，非仅 parent） */
+    relation ancestor: folder
 
     relation owner: user
     relation editor: user | group#member | department#all_members
     relation commenter: user | group#member | department#all_members
     relation viewer: user | group#member | department#all_members | user:*
 
-    /** 管理 = owner + 父文件夹管理 + 空间管理 */
-    permission manage = owner + parent->manage + space->manage
-    /** 编辑 = 管理 + editor + 父文件夹编辑 + 空间编辑 */
-    permission edit = manage + editor + parent->edit + space->edit
-    /** 评论 = 编辑 + commenter + 父文件夹评论 */
-    permission comment = edit + commenter + parent->comment
-    /** 查看 = 评论 + viewer + 父文件夹查看 + 空间查看 */
-    permission view = comment + viewer + parent->view + space->view
-    /** 创建子文件夹/文档 = 编辑权限 */
+    /** 仅本文件夹的直接权限（不递归，给 ancestor-> 箭头用） */
+    permission manage_local = owner
+    permission edit_local = manage_local + editor
+    permission comment_local = edit_local + commenter
+    permission view_local = comment_local + viewer
+
+    /** 完整权限 = 本地 + 祖先并行 + 空间 */
+    permission manage = manage_local + ancestor->manage_local + space->manage
+    permission edit = edit_local + ancestor->edit_local + space->edit
+    permission comment = comment_local + ancestor->comment_local
+    permission view = view_local + ancestor->view_local + space->view
+
     permission create_child = edit
 }
 
 // ============================================================
-//  文档（最细粒度，权限从文件夹 + 空间继承）
+//  文档 — 同样用 ancestor 模型
 // ============================================================
 
 definition document {
@@ -98,7 +112,6 @@ definition document {
     relation commenter: user | group#member | department#all_members
     relation viewer: user | group#member | department#all_members | user:*
 
-    /** 链接分享：任何人可查看/编辑 */
     relation link_viewer: user:*
     relation link_editor: user:*
 
@@ -110,8 +123,6 @@ definition document {
     permission comment = edit + commenter + folder->comment
     /** 查看 = 评论 + viewer + link_viewer + 文件夹查看 */
     permission view = comment + viewer + link_viewer + folder->view
-    /** 删除 = 管理者 */
     permission delete = manage
-    /** 分享 = 编辑者可分享 */
     permission share = edit
 }

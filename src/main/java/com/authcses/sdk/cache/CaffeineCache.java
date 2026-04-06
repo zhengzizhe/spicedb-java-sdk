@@ -77,13 +77,37 @@ public class CaffeineCache<K, V> implements IndexedCache<K, V> {
         return value;
     }
 
+    /**
+     * Atomic get-or-load: Caffeine guarantees only one thread loads for a given key.
+     * Other threads with the same key block until the loader completes (singleFlight).
+     *
+     * <p>Hit/miss counting: we use a boolean[] flag to distinguish "loader ran" (miss)
+     * from "value was already cached" (hit). This avoids double-counting for waiting threads.
+     */
+    @Override
+    public V getOrLoad(K key, Function<K, V> loader) {
+        boolean[] loaded = {false};
+        V value = cache.get(key, k -> {
+            loaded[0] = true;
+            return loader.apply(k);
+        });
+        if (loaded[0]) {
+            // This thread executed the loader — it's a miss
+            misses.increment();
+            if (value != null) addToIndex(key);
+        } else {
+            // Value was already cached — it's a hit
+            if (value != null) hits.increment();
+        }
+        return value;
+    }
+
     @Override
     public void put(K key, V value) {
+        // Add to index BEFORE cache — if invalidateByIndex runs between these two steps,
+        // the key is already in the index and will be invalidated correctly.
+        addToIndex(key);
         cache.put(key, value);
-        String indexKey = indexKeyExtractor.apply(key);
-        if (indexKey != null) {
-            index.computeIfAbsent(indexKey, k -> ConcurrentHashMap.newKeySet()).add(key);
-        }
     }
 
     @Override
@@ -116,7 +140,6 @@ public class CaffeineCache<K, V> implements IndexedCache<K, V> {
 
     @Override
     public long size() {
-        cache.cleanUp();
         return cache.estimatedSize();
     }
 
@@ -125,14 +148,25 @@ public class CaffeineCache<K, V> implements IndexedCache<K, V> {
         return new CacheStats(hits.sum(), misses.sum(), evictions.sum());
     }
 
+    private void addToIndex(K key) {
+        String indexKey = indexKeyExtractor.apply(key);
+        if (indexKey != null) {
+            index.compute(indexKey, (k, set) -> {
+                if (set == null) set = ConcurrentHashMap.newKeySet();
+                set.add(key);
+                return set;
+            });
+        }
+    }
+
     private void removeFromIndex(K key) {
         String indexKey = indexKeyExtractor.apply(key);
         if (indexKey != null) {
-            var keys = index.get(indexKey);
-            if (keys != null) {
-                keys.remove(key);
-                if (keys.isEmpty()) index.remove(indexKey, keys);
-            }
+            index.compute(indexKey, (k, set) -> {
+                if (set == null) return null;
+                set.remove(key);
+                return set.isEmpty() ? null : set;
+            });
         }
     }
 }

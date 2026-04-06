@@ -281,10 +281,16 @@ public class AuthCsesClient implements AutoCloseable {
         infra.lifecycle().stopping();
 
         // Shutdown order: scheduler → watch → telemetry flush → transport → channel → hook
-        infra.close(); // scheduler + channel + shutdownHook removal
+        // Close scheduler first (stops periodic tasks), but keep channel alive for watch/transport
+        if (infra.scheduler() != null) {
+            infra.scheduler().shutdown();
+            try { infra.scheduler().awaitTermination(5, TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
         if (caching.watchInvalidator() != null) caching.watchInvalidator().close();
         if (observability.telemetry() != null) observability.telemetry().close();
         transport.close();
+        infra.close(); // channel shutdown + hook removal (scheduler already stopped, will no-op)
 
         infra.lifecycle().stopped();
         observability.eventBus().publish(new SdkTypedEvent.ClientStopped(Instant.now()));
@@ -417,6 +423,7 @@ public class AuthCsesClient implements AutoCloseable {
             var lm = new LifecycleManager(bus);
             var sdkMetrics = new SdkMetrics();
             var schemaCache = new SchemaCache();
+            var schemaLoader = new SchemaLoader();
             var tokenTracker = new TokenTracker(spi.tokenStore());
 
             // Built-in interceptors
@@ -430,7 +437,9 @@ public class AuthCsesClient implements AutoCloseable {
             try {
                 lm.begin();
 
-                // Phase: CHANNEL
+                // Phase: CHANNEL — single HTTP/2 connection with multiplexing
+                // gRPC + HTTP/2 supports thousands of concurrent streams per connection.
+                // With DNS + round_robin, gRPC auto-creates subchannels to each backend.
                 final ManagedChannel grpcChannel = lm.phase(
                         SdkPhase.CHANNEL, () -> buildChannel());
                 channel = grpcChannel;
@@ -441,10 +450,10 @@ public class AuthCsesClient implements AutoCloseable {
                         "Bearer " + presharedKey);
                 final Metadata authMetaFinal = authMeta;
                 lm.phase(SdkPhase.SCHEMA, () ->
-                        SchemaLoader.load(grpcChannel, authMetaFinal, schemaCache));
+                        schemaLoader.load(grpcChannel, authMetaFinal, schemaCache));
                 // Enable on-miss refresh for schema validation
                 schemaCache.setRefreshCallback(() ->
-                        SchemaLoader.load(grpcChannel, authMetaFinal, schemaCache));
+                        schemaLoader.load(grpcChannel, authMetaFinal, schemaCache));
 
                 // Phase: TRANSPORT
                 final var ctx = new BuildContext();
@@ -468,8 +477,12 @@ public class AuthCsesClient implements AutoCloseable {
                             var expiry = new Expiry<CheckKey, CheckResult>() {
                                 @Override
                                 public long expireAfterCreate(CheckKey key, CheckResult value, long currentTime) {
-                                    return policies.resolveCacheTtl(
+                                    long baseNanos = policies.resolveCacheTtl(
                                             key.resource().type(), key.permission().name()).toNanos();
+                                    // ±10% jitter to prevent cache stampede
+                                    long jitter = java.util.concurrent.ThreadLocalRandom.current()
+                                            .nextLong(-baseNanos / 10, baseNanos / 10 + 1);
+                                    return baseNanos + jitter;
                                 }
                                 @Override
                                 public long expireAfterUpdate(CheckKey key, CheckResult value, long currentTime, long currentDuration) {
@@ -492,6 +505,11 @@ public class AuthCsesClient implements AutoCloseable {
                         t = new CachedTransport(t, effectiveCache, sdkMetrics);
                     }
 
+                    if (ctx.checkCache != null) {
+                        var cacheRef = ctx.checkCache;
+                        sdkMetrics.setCacheStatsSource(cacheRef::stats);
+                    }
+
                     t = new PolicyAwareConsistencyTransport(t, policies, tokenTracker);
                     if (coalescingEnabled) t = new CoalescingTransport(t, sdkMetrics);
                     if (!interceptors.isEmpty()) t = new InterceptorTransport(t, interceptors);
@@ -507,7 +525,7 @@ public class AuthCsesClient implements AutoCloseable {
                 lm.phase(SdkPhase.WATCH, () -> {
                     if (cacheEnabled && watchInvalidation && ctx.checkCache != null) {
                         ctx.watchInvalidator = new WatchCacheInvalidator(
-                                grpcChannel, presharedKey, ctx.checkCache);
+                                grpcChannel, presharedKey, ctx.checkCache, sdkMetrics);
                         ctx.watchInvalidator.start();
                     }
                 });
@@ -521,8 +539,16 @@ public class AuthCsesClient implements AutoCloseable {
                     ctx.scheduler = Executors.newSingleThreadScheduledExecutor(tf);
                     // Refresh schema every 5 minutes
                     ctx.scheduler.scheduleAtFixedRate(
-                            () -> SchemaLoader.load(grpcChannel, authMetaFinal, schemaCache),
+                            () -> schemaLoader.load(grpcChannel, authMetaFinal, schemaCache),
                             300, 300, TimeUnit.SECONDS);
+                    // Rotate metrics histogram every 5 seconds (single consumer, no contention)
+                    ctx.scheduler.scheduleAtFixedRate(sdkMetrics::rotateHistogram, 5, 5, TimeUnit.SECONDS);
+                    // Sample cache size periodically (not on hot path)
+                    if (cacheEnabled && ctx.checkCache != null) {
+                        var cache = ctx.checkCache;
+                        ctx.scheduler.scheduleAtFixedRate(
+                                () -> sdkMetrics.updateCacheSize(cache.size()), 5, 5, TimeUnit.SECONDS);
+                    }
                 });
                 scheduler = ctx.scheduler;
 

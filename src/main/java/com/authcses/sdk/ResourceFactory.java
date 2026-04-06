@@ -1,6 +1,16 @@
 package com.authcses.sdk;
 
+import com.authcses.sdk.model.CheckResult;
+import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.PermissionSet;
 import com.authcses.sdk.transport.SdkTransport;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /**
  * Pre-bound factory for a specific resource type.
@@ -26,7 +36,7 @@ public class ResourceFactory {
     private volatile String resourceType;
     private volatile SdkTransport transport;
     private volatile String defaultSubjectType;
-    private volatile java.util.concurrent.Executor asyncExecutor = Runnable::run;
+    private volatile Executor asyncExecutor = Runnable::run;
 
     /** For reflective instantiation by {@link AuthCsesClient#create(Class)}. */
     protected ResourceFactory() {}
@@ -39,7 +49,7 @@ public class ResourceFactory {
     }
 
     ResourceFactory(String resourceType, SdkTransport transport, String defaultSubjectType,
-                    java.util.concurrent.Executor asyncExecutor) {
+                    Executor asyncExecutor) {
         this.resourceType = resourceType;
         this.transport = transport;
         this.defaultSubjectType = defaultSubjectType;
@@ -54,7 +64,7 @@ public class ResourceFactory {
     }
 
     void init(String resourceType, SdkTransport transport, String defaultSubjectType,
-              java.util.concurrent.Executor asyncExecutor) {
+              Executor asyncExecutor) {
         this.resourceType = resourceType;
         this.transport = transport;
         this.defaultSubjectType = defaultSubjectType;
@@ -97,52 +107,52 @@ public class ResourceFactory {
     }
 
     /** Check with explicit consistency level. */
-    public boolean check(String id, String permission, String userId, com.authcses.sdk.model.Consistency consistency) {
+    public boolean check(String id, String permission, String userId, Consistency consistency) {
         return resource(id).check(permission).withConsistency(consistency).by(userId).hasPermission();
     }
 
     /** Check with caveat context (e.g., IP range, time). */
-    public boolean check(String id, String permission, String userId, java.util.Map<String, Object> caveatContext) {
+    public boolean check(String id, String permission, String userId, Map<String, Object> caveatContext) {
         return resource(id).check(permission).withContext(caveatContext).by(userId).hasPermission();
     }
 
     /** Check returning full result (includes zedToken, conditional status). */
-    public com.authcses.sdk.model.CheckResult checkResult(String id, String permission, String userId) {
+    public CheckResult checkResult(String id, String permission, String userId) {
         return resource(id).check(permission).by(userId);
     }
 
     /** Async check. */
-    public java.util.concurrent.CompletableFuture<Boolean> checkAsync(String id, String permission, String userId) {
+    public CompletableFuture<Boolean> checkAsync(String id, String permission, String userId) {
         return resource(id).check(permission).byAsync(userId)
-                .thenApply(com.authcses.sdk.model.CheckResult::hasPermission);
+                .thenApply(CheckResult::hasPermission);
     }
 
     // ---- CheckAll ----
 
     /** Check multiple permissions at once. Returns map of permission→boolean. */
-    public java.util.Map<String, Boolean> checkAll(String id, String userId, String... permissions) {
+    public Map<String, Boolean> checkAll(String id, String userId, String... permissions) {
         return resource(id).checkAll(permissions).by(userId).toMap();
     }
 
     /** Check multiple permissions, returning rich PermissionSet. */
-    public com.authcses.sdk.model.PermissionSet checkAllResult(String id, String userId, String... permissions) {
+    public PermissionSet checkAllResult(String id, String userId, String... permissions) {
         return resource(id).checkAll(permissions).by(userId);
     }
 
     /** Check multiple permissions (Collection overload). */
-    public java.util.Map<String, Boolean> checkAll(String id, String userId, java.util.Collection<String> permissions) {
+    public Map<String, Boolean> checkAll(String id, String userId, Collection<String> permissions) {
         return resource(id).checkAll(permissions.toArray(String[]::new)).by(userId).toMap();
     }
 
     // ---- Check Bulk (1 permission × N users) ----
 
     /** Check one permission against multiple users. Returns who is allowed. */
-    public java.util.List<String> filterAllowed(String id, String permission, String... userIds) {
+    public List<String> filterAllowed(String id, String permission, String... userIds) {
         return resource(id).check(permission).byAll(userIds).allowed();
     }
 
     /** Check one permission against multiple users (Collection overload). */
-    public java.util.List<String> filterAllowed(String id, String permission, java.util.Collection<String> userIds) {
+    public List<String> filterAllowed(String id, String permission, Collection<String> userIds) {
         return resource(id).check(permission).byAll(userIds).allowed();
     }
 
@@ -154,7 +164,7 @@ public class ResourceFactory {
     }
 
     /** Grant relation to user(s) — Collection overload. */
-    public void grant(String id, String relation, java.util.Collection<String> userIds) {
+    public void grant(String id, String relation, Collection<String> userIds) {
         resource(id).grant(relation).to(userIds);
     }
 
@@ -164,7 +174,7 @@ public class ResourceFactory {
     }
 
     /** Grant relation to subject refs — Collection overload. */
-    public void grantToSubjects(String id, String relation, java.util.Collection<String> subjectRefs) {
+    public void grantToSubjects(String id, String relation, Collection<String> subjectRefs) {
         resource(id).grant(relation).toSubjects(subjectRefs);
     }
 
@@ -176,7 +186,7 @@ public class ResourceFactory {
     }
 
     /** Revoke relation from user(s) — Collection overload. */
-    public void revoke(String id, String relation, java.util.Collection<String> userIds) {
+    public void revoke(String id, String relation, Collection<String> userIds) {
         resource(id).revoke(relation).from(userIds);
     }
 
@@ -186,7 +196,7 @@ public class ResourceFactory {
     }
 
     /** Revoke relation from subject refs — Collection overload. */
-    public void revokeFromSubjects(String id, String relation, java.util.Collection<String> subjectRefs) {
+    public void revokeFromSubjects(String id, String relation, Collection<String> subjectRefs) {
         resource(id).revoke(relation).fromSubjects(subjectRefs);
     }
 
@@ -198,7 +208,7 @@ public class ResourceFactory {
     }
 
     /** Remove all relations for user(s) — Collection overload. */
-    public void revokeAll(String id, java.util.Collection<String> userIds) {
+    public void revokeAll(String id, Collection<String> userIds) {
         resource(id).revokeAll().from(userIds);
     }
 
@@ -210,17 +220,17 @@ public class ResourceFactory {
     // ---- Subject queries (who has permission/relation on this resource?) ----
 
     /** Find all subjects with a permission on this resource. */
-    public java.util.List<String> subjects(String id, String permission) {
+    public List<String> subjects(String id, String permission) {
         return resource(id).who().withPermission(permission).fetch();
     }
 
     /** Find subjects with limit. */
-    public java.util.List<String> subjects(String id, String permission, int limit) {
+    public List<String> subjects(String id, String permission, int limit) {
         return resource(id).who().withPermission(permission).limit(limit).fetch();
     }
 
     /** Find all subjects as Set. */
-    public java.util.Set<String> subjectSet(String id, String permission) {
+    public Set<String> subjectSet(String id, String permission) {
         return resource(id).who().withPermission(permission).fetchSet();
     }
 
@@ -237,17 +247,17 @@ public class ResourceFactory {
     // ---- Relation queries (who holds a relation on this resource?) ----
 
     /** Find all users with a specific relation. */
-    public java.util.List<String> relatedUsers(String id, String relation) {
+    public List<String> relatedUsers(String id, String relation) {
         return resource(id).who().withRelation(relation).fetch();
     }
 
     /** Find all users with a specific relation, as Set. */
-    public java.util.Set<String> relatedUserSet(String id, String relation) {
+    public Set<String> relatedUserSet(String id, String relation) {
         return resource(id).who().withRelation(relation).fetchSet();
     }
 
     /** Get all relations grouped by relation name → subject IDs. */
-    public java.util.Map<String, java.util.List<String>> allRelations(String id) {
+    public Map<String, List<String>> allRelations(String id) {
         return resource(id).relations().groupByRelation();
     }
 
@@ -269,17 +279,17 @@ public class ResourceFactory {
     // ---- Resource lookup (what resources can a user access?) ----
 
     /** Find all resources of this type that a user has a permission on. */
-    public java.util.List<String> resources(String permission, String userId) {
+    public List<String> resources(String permission, String userId) {
         return lookup().withPermission(permission).by(userId).fetch();
     }
 
     /** Find resources with limit. */
-    public java.util.List<String> resources(String permission, String userId, int limit) {
+    public List<String> resources(String permission, String userId, int limit) {
         return lookup().withPermission(permission).by(userId).limit(limit).fetch();
     }
 
     /** Find all resources as Set. */
-    public java.util.Set<String> resourceSet(String permission, String userId) {
+    public Set<String> resourceSet(String permission, String userId) {
         return lookup().withPermission(permission).by(userId).fetchSet();
     }
 

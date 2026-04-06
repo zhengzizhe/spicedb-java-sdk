@@ -3,6 +3,11 @@ package com.authcses.sdk.transport;
 import com.authcses.sdk.event.DefaultTypedEventBus;
 import com.authcses.sdk.event.SdkTypedEvent;
 import com.authcses.sdk.event.TypedEventBus;
+import com.authcses.sdk.exception.AuthCsesAuthException;
+import com.authcses.sdk.exception.AuthCsesInvalidArgumentException;
+import com.authcses.sdk.exception.AuthCsesPreconditionException;
+import com.authcses.sdk.exception.AuthCsesResourceExhaustedException;
+import com.authcses.sdk.exception.AuthCsesUnimplementedException;
 import com.authcses.sdk.exception.CircuitBreakerOpenException;
 import com.authcses.sdk.model.*;
 import com.authcses.sdk.model.enums.Permissionship;
@@ -20,6 +25,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
 
 /**
@@ -29,17 +36,27 @@ import java.util.function.Supplier;
 public class ResilientTransport extends ForwardingTransport {
 
     private static final System.Logger LOG = System.getLogger(ResilientTransport.class.getName());
+    private static final int MAX_INSTANCES = 1000;
 
     private final SdkTransport delegate;
     private final PolicyRegistry policyRegistry;
     private final TypedEventBus eventBus;
     private final ConcurrentHashMap<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Retry> retries = new ConcurrentHashMap<>();
+    private final CircuitBreaker defaultBreaker;
+    private final Retry defaultRetry;
+
+    // Retry budget: sliding 1-second window, max 20% retry rate
+    private final LongAdder retryCount = new LongAdder();
+    private final LongAdder requestCount = new LongAdder();
+    private final AtomicLong lastResetTime = new AtomicLong(System.nanoTime());
 
     public ResilientTransport(SdkTransport delegate, PolicyRegistry policyRegistry, TypedEventBus eventBus) {
         this.delegate = delegate;
         this.policyRegistry = policyRegistry;
         this.eventBus = eventBus != null ? eventBus : new DefaultTypedEventBus();
+        this.defaultBreaker = createBreaker("__default__");
+        this.defaultRetry = createRetry("__default__");
     }
 
     @Override
@@ -137,12 +154,16 @@ public class ResilientTransport extends ForwardingTransport {
     // ---- Internal ----
 
     private <T> T executeWithResilience(String resourceType, Supplier<T> call) {
+        requestCount.increment();
+
         CircuitBreaker breaker = resolveBreaker(resourceType);
         Retry retry = resolveRetry(resourceType);
 
         try {
-            Supplier<T> withCircuitBreaker = CircuitBreaker.decorateSupplier(breaker, call);
-            Supplier<T> decorated = Retry.decorateSupplier(retry, withCircuitBreaker);
+            // Order: CB wraps Retry wraps call.
+            // Retry failures are internal to CB — one request = one CB record.
+            Supplier<T> withRetry = Retry.decorateSupplier(retry, call);
+            Supplier<T> decorated = CircuitBreaker.decorateSupplier(breaker, withRetry);
             return decorated.get();
         } catch (CallNotPermittedException e) {
             throw new CircuitBreakerOpenException("Circuit breaker is OPEN for " + resourceType, e);
@@ -150,10 +171,16 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private CircuitBreaker resolveBreaker(String resourceType) {
+        if (breakers.size() >= MAX_INSTANCES && !breakers.containsKey(resourceType)) {
+            return defaultBreaker;
+        }
         return breakers.computeIfAbsent(resourceType, this::createBreaker);
     }
 
     private Retry resolveRetry(String resourceType) {
+        if (retries.size() >= MAX_INSTANCES && !retries.containsKey(resourceType)) {
+            return defaultRetry;
+        }
         return retries.computeIfAbsent(resourceType, this::createRetry);
     }
 
@@ -172,6 +199,12 @@ public class ResilientTransport extends ForwardingTransport {
                 .minimumNumberOfCalls(policy.getMinimumNumberOfCalls())
                 .waitDurationInOpenState(policy.getWaitInOpenState())
                 .permittedNumberOfCallsInHalfOpenState(policy.getPermittedCallsInHalfOpen())
+                .ignoreExceptions(
+                        AuthCsesInvalidArgumentException.class,
+                        AuthCsesAuthException.class,
+                        AuthCsesResourceExhaustedException.class,
+                        AuthCsesUnimplementedException.class,
+                        AuthCsesPreconditionException.class)
                 .build();
 
         CircuitBreaker breaker = CircuitBreaker.of("authcses-" + resourceType, config);
@@ -201,6 +234,24 @@ public class ResilientTransport extends ForwardingTransport {
         return breaker;
     }
 
+    /**
+     * Sliding 1-second window retry budget. Returns true if retries are within budget (< 20% of requests).
+     */
+    private boolean checkRetryBudget() {
+        long now = System.nanoTime();
+        long last = lastResetTime.get();
+        if (now - last > 1_000_000_000L && lastResetTime.compareAndSet(last, now)) {
+            // Only one thread resets per window
+            retryCount.reset();
+            requestCount.reset();
+        }
+        long retries = retryCount.sum();
+        long requests = requestCount.sum();
+        // Allow retries freely when sample size is small (< 25 requests);
+        // enforce 20% budget only under sustained load
+        return requests < 25 || (double) retries / requests < 0.2;
+    }
+
     private Retry createRetry(String resourceType) {
         var policy = policyRegistry.resolve(resourceType).getRetry();
         if (policy == null || policy.getMaxAttempts() <= 0) {
@@ -212,7 +263,18 @@ public class ResilientTransport extends ForwardingTransport {
                 .maxAttempts(policy.getMaxAttempts())
                 .intervalFunction(io.github.resilience4j.core.IntervalFunction.ofExponentialRandomBackoff(
                         policy.getBaseDelay().toMillis(), policy.getMultiplier(), policy.getJitterFactor()))
-                .retryOnException(t -> t instanceof Exception e && policy.shouldRetry(e))
+                .retryOnException(t -> {
+                    if (!(t instanceof Exception e) || !policy.shouldRetry(e)) {
+                        return false;
+                    }
+                    if (!checkRetryBudget()) {
+                        LOG.log(System.Logger.Level.WARNING,
+                                "Retry budget exhausted for [{0}], skipping retry", resourceType);
+                        return false;
+                    }
+                    retryCount.increment();
+                    return true;
+                })
                 .build();
 
         Retry retry = Retry.of("authcses-" + resourceType, config);

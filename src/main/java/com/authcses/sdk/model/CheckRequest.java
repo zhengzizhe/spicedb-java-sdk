@@ -43,6 +43,10 @@ public record CheckRequest(
             consistency, null);
     }
 
+    public CheckRequest withConsistency(Consistency c) {
+        return c == consistency ? this : new CheckRequest(resource, permission, subject, c, caveatContext);
+    }
+
     public CheckKey toKey() {
         return new CheckKey(resource, permission, subject);
     }

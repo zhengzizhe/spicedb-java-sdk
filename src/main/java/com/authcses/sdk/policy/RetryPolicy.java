@@ -60,6 +60,11 @@ public class RetryPolicy {
         return new Builder()
                 .doNotRetryOn(com.authcses.sdk.exception.CircuitBreakerOpenException.class)
                 .doNotRetryOn(com.authcses.sdk.exception.AuthCsesAuthException.class)
+                .doNotRetryOn(com.authcses.sdk.exception.AuthCsesResourceExhaustedException.class)
+                .doNotRetryOn(com.authcses.sdk.exception.AuthCsesInvalidArgumentException.class)
+                .doNotRetryOn(com.authcses.sdk.exception.AuthCsesUnimplementedException.class)
+                .doNotRetryOn(com.authcses.sdk.exception.AuthCsesPreconditionException.class)
+                .doNotRetryOn(io.github.resilience4j.circuitbreaker.CallNotPermittedException.class)
                 .build();
     }
 
