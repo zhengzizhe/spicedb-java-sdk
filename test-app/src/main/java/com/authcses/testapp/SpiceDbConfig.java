@@ -4,6 +4,7 @@ import com.authcses.sdk.AuthCsesClient;
 import com.authcses.sdk.policy.CachePolicy;
 import com.authcses.sdk.policy.CircuitBreakerPolicy;
 import com.authcses.sdk.policy.PolicyRegistry;
+import com.authcses.sdk.policy.ReadConsistency;
 import com.authcses.sdk.policy.ResourcePolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -41,6 +42,7 @@ public class SpiceDbConfig {
                 .defaultPolicy(ResourcePolicy.builder()
                         .circuitBreaker(CircuitBreakerPolicy.disabled())
                         .cache(CachePolicy.ofTtl(Duration.ofSeconds(30)))
+                        .readConsistency(ReadConsistency.minimizeLatency())
                         .build())
                 .build();
     }
