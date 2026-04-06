@@ -7,5 +7,5 @@ spicedb:
   preshared-key: "${SPICEDB_PRESHARED_KEY:somerandomkeyhere}"
   cache-enabled: true
   cache-max-size: 10000
-  watch-invalidation: true
+  watch-invalidation: ${SPICEDB_WATCH:false}
   virtual-threads: true
