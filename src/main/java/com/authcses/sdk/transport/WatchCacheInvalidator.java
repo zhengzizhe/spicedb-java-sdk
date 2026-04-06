@@ -213,12 +213,14 @@ public class WatchCacheInvalidator implements AutoCloseable {
                 }
 
                 metrics.recordWatchReconnect();
-                // First failure: WARNING; subsequent: DEBUG (prevent log spam)
-                var level = consecutiveFailures == 1
-                        ? System.Logger.Level.WARNING : System.Logger.Level.DEBUG;
-                LOG.log(level,
-                        "Watch stream disconnected ({0}/{1}), reconnecting in {2}ms: {3}",
-                        consecutiveFailures, 20, backoffMs, e.getMessage());
+                // Log at WARNING on 1st attempt, then at power-of-2 intervals (2,4,8,16) to avoid spam
+                boolean shouldLog = consecutiveFailures == 1
+                        || (consecutiveFailures & (consecutiveFailures - 1)) == 0; // power of 2
+                if (shouldLog) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Watch stream disconnected ({0}/{1}), reconnecting in {2}ms: {3}",
+                            consecutiveFailures, 20, backoffMs, e.getMessage());
+                }
                 try {
                     long jitter = ThreadLocalRandom.current().nextLong(backoffMs / 4 + 1);
                     Thread.sleep(backoffMs + jitter);
