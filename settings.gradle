@@ -1,3 +1,2 @@
 rootProject.name = "authx-sdk"
 include "test-app"
-include "benchmark"

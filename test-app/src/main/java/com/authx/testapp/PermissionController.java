@@ -80,6 +80,7 @@ public class PermissionController {
                                             @RequestParam String user) {
         var rel = Folder.Rel.valueOf(relation.toUpperCase());
         folder.on(id).grant(rel).toUser(user);
+
         return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
     }
 

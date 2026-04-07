@@ -172,61 +172,6 @@ public class AuthxClient implements AutoCloseable {
         return new CrossResourceBatchBuilder(transport, config.defaultSubjectType());
     }
 
-    // ---- Convenience methods (type as first param) ----
-    // For full variants (consistency, caveat, Collection overloads), use on(type).xxx()
-
-    // -- Check --
-
-    /** Check a single permission. Returns true if allowed. Default: minimize_latency. */
-    public boolean check(String type, String id, String permission, String userId) {
-        return on(type).check(id, permission, userId);
-    }
-
-    /** Check with explicit consistency. */
-    public boolean check(String type, String id, String permission, String userId,
-                         Consistency consistency) {
-        return on(type).check(id, permission, userId, consistency);
-    }
-
-    /** Check returning full result. */
-    public CheckResult checkResult(String type, String id, String permission, String userId) {
-        return on(type).checkResult(id, permission, userId);
-    }
-
-    /** Check multiple permissions at once. Returns map of permission→boolean. */
-    public Map<String, Boolean> checkAll(String type, String id, String userId, String... permissions) {
-        return on(type).checkAll(id, userId, permissions);
-    }
-
-    // -- Grant --
-
-    /** Grant relation to user(s). */
-    public void grant(String type, String id, String relation, String... userIds) {
-        on(type).grant(id, relation, userIds);
-    }
-
-    /** Grant relation to subject refs (e.g., "department:eng#member", "user:*"). */
-    public void grantToSubjects(String type, String id, String relation, String... subjectRefs) {
-        on(type).grantToSubjects(id, relation, subjectRefs);
-    }
-
-    // -- Revoke --
-
-    /** Revoke relation from user(s). */
-    public void revoke(String type, String id, String relation, String... userIds) {
-        on(type).revoke(id, relation, userIds);
-    }
-
-    /** Revoke relation from subject refs. */
-    public void revokeFromSubjects(String type, String id, String relation, String... subjectRefs) {
-        on(type).revokeFromSubjects(id, relation, subjectRefs);
-    }
-
-    /** Remove all relations for user(s) on this resource. */
-    public void revokeAll(String type, String id, String... userIds) {
-        on(type).revokeAll(id, userIds);
-    }
-
     // ---- Watch (real-time relationship change events) ----
 
     /**

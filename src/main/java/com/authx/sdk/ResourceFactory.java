@@ -1,34 +1,34 @@
 package com.authx.sdk;
 
-import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
-import com.authx.sdk.model.Permission;
-import com.authx.sdk.model.PermissionSet;
-import com.authx.sdk.model.Relation;
 import com.authx.sdk.transport.SdkTransport;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
- * Pre-bound factory for a specific resource type.
- * Subclass with {@link PermissionResource} annotation for typed usage.
+ * Factory for a specific resource type. Two usage patterns:
  *
+ * <p><b>Primary (typed chain via codegen):</b>
  * <pre>
- * // Option 1: bind()
- * ResourceFactory doc = client.bind("document");
+ * DocumentResource doc = new DocumentResource(client);
+ * doc.on("doc-1").grant(Document.Rel.EDITOR).toUser("bob");
+ * doc.on("doc-1").check(Document.Perm.VIEW).by("alice");
+ * </pre>
  *
- * // Option 2: annotated subclass
- * @PermissionResource("document")
- * public class DocPermission extends ResourceFactory {}
- * DocPermission doc = client.create(DocPermission.class);
+ * <p><b>String fallback (dynamic cases):</b>
+ * <pre>
+ * ResourceFactory doc = client.on("document");
+ * doc.check("doc-1", "view", "alice");
+ * doc.grant("doc-1", "editor", "bob");
+ * </pre>
  *
- * // Use
- * doc.resource("doc-123").check("view").by("alice");
+ * <p>For advanced operations (batch, expand, who, relations), use {@link #resource(String)}:
+ * <pre>
+ * doc.resource("doc-1").batch().grant("editor").to("bob").revoke("owner").from("old").execute();
+ * doc.resource("doc-1").who().withPermission("view").fetch();
+ * doc.resource("doc-1").expand("view");
  * </pre>
  *
  * Thread-safe — safe to store as a field and share across requests.
@@ -40,10 +40,8 @@ public class ResourceFactory {
     private volatile String defaultSubjectType;
     private volatile Executor asyncExecutor = Runnable::run;
 
-    /** For reflective instantiation by {@link AuthxClient#create(Class)}. */
     protected ResourceFactory() {}
 
-    /** For direct instantiation by {@link AuthxClient#bind(String)}. */
     ResourceFactory(String resourceType, SdkTransport transport, String defaultSubjectType) {
         this.resourceType = resourceType;
         this.transport = transport;
@@ -58,7 +56,6 @@ public class ResourceFactory {
         this.asyncExecutor = asyncExecutor;
     }
 
-    /** Called by {@link AuthxClient#create(Class)} after reflective construction. */
     void init(String resourceType, SdkTransport transport, String defaultSubjectType) {
         this.resourceType = resourceType;
         this.transport = transport;
@@ -73,115 +70,28 @@ public class ResourceFactory {
         this.asyncExecutor = asyncExecutor;
     }
 
-    /**
-     * Get a handle to a specific resource of this type.
-     *
-     * <pre>
-     * doc.resource("doc-123").check("view").by("alice");
-     * doc.resource("doc-123").grant("editor").to("bob");
-     * doc.resource("doc-123").batch()
-     *     .revoke("owner").from("old")
-     *     .grant("owner").to("new")
-     *     .execute();
-     * </pre>
-     */
+    // ---- Entry points ----
+
+    /** Get a handle for advanced operations: batch, expand, who, relations. */
     public ResourceHandle resource(String id) {
         return new ResourceHandle(resourceType, id, transport, defaultSubjectType, asyncExecutor);
     }
 
-    /**
-     * Lookup: find all resources of this type that a user has a permission on.
-     */
+    /** Reverse lookup: find all resources of this type a user can access. */
     public LookupQuery lookup() {
         return new LookupQuery(resourceType, transport, defaultSubjectType);
     }
 
-    // ================================================================
-    //  Convenience methods — simple scenarios, no chaining needed.
-    //  For complex scenarios (caveat, expiresAt, batch), use resource(id).xxx()
-    //
-    //  Each method has a String overload and an enum overload:
-    //    check(id, "view", userId)                 — string
-    //    check(id, Document.Permission.VIEW, userId) — enum (codegen)
-    // ================================================================
+    // ---- String-based operations (escape hatch for dynamic cases) ----
 
-    // ---- Check ----
-
-    /** Check a single permission (enum). Returns true if allowed. */
-    public boolean check(String id, Permission.Named permission, String userId) {
-        return check(id, permission.permissionName(), userId);
-    }
-
-    /** Check with explicit consistency (enum). */
-    public boolean check(String id, Permission.Named permission, String userId, Consistency consistency) {
-        return check(id, permission.permissionName(), userId, consistency);
-    }
-
-    /** Check a single permission. Returns true if allowed. */
+    /** Check permission. */
     public boolean check(String id, String permission, String userId) {
         return resource(id).check(permission).by(userId).hasPermission();
     }
 
-    /** Check with explicit consistency level. */
+    /** Check with explicit consistency. */
     public boolean check(String id, String permission, String userId, Consistency consistency) {
         return resource(id).check(permission).withConsistency(consistency).by(userId).hasPermission();
-    }
-
-    /** Check with caveat context (e.g., IP range, time). */
-    public boolean check(String id, String permission, String userId, Map<String, Object> caveatContext) {
-        return resource(id).check(permission).withContext(caveatContext).by(userId).hasPermission();
-    }
-
-    /** Check returning full result (includes zedToken, conditional status). */
-    public CheckResult checkResult(String id, String permission, String userId) {
-        return resource(id).check(permission).by(userId);
-    }
-
-    /** Async check. */
-    public CompletableFuture<Boolean> checkAsync(String id, String permission, String userId) {
-        return resource(id).check(permission).byAsync(userId)
-                .thenApply(CheckResult::hasPermission);
-    }
-
-    // ---- CheckAll ----
-
-    /** Check multiple permissions at once. Returns map of permission→boolean. */
-    public Map<String, Boolean> checkAll(String id, String userId, String... permissions) {
-        return resource(id).checkAll(permissions).by(userId).toMap();
-    }
-
-    /** Check multiple permissions, returning rich PermissionSet. */
-    public PermissionSet checkAllResult(String id, String userId, String... permissions) {
-        return resource(id).checkAll(permissions).by(userId);
-    }
-
-    /** Check multiple permissions (Collection overload). */
-    public Map<String, Boolean> checkAll(String id, String userId, Collection<String> permissions) {
-        return resource(id).checkAll(permissions.toArray(String[]::new)).by(userId).toMap();
-    }
-
-    // ---- Check Bulk (1 permission × N users) ----
-
-    /** Check one permission against multiple users. Returns who is allowed. */
-    public List<String> filterAllowed(String id, String permission, String... userIds) {
-        return resource(id).check(permission).byAll(userIds).allowed();
-    }
-
-    /** Check one permission against multiple users (Collection overload). */
-    public List<String> filterAllowed(String id, String permission, Collection<String> userIds) {
-        return resource(id).check(permission).byAll(userIds).allowed();
-    }
-
-    // ---- Grant ----
-
-    /** Grant relation to user(s) (enum). */
-    public void grant(String id, Relation.Named relation, String... userIds) {
-        grant(id, relation.relationName(), userIds);
-    }
-
-    /** Grant relation to subject refs (enum). */
-    public void grantToSubjects(String id, Relation.Named relation, String... subjectRefs) {
-        grantToSubjects(id, relation.relationName(), subjectRefs);
     }
 
     /** Grant relation to user(s). */
@@ -189,31 +99,9 @@ public class ResourceFactory {
         resource(id).grant(relation).to(userIds);
     }
 
-    /** Grant relation to user(s) — Collection overload. */
-    public void grant(String id, String relation, Collection<String> userIds) {
-        resource(id).grant(relation).to(userIds);
-    }
-
-    /** Grant relation to subject refs (e.g., "department:eng#member", "group:admins#member", "user:*"). */
+    /** Grant relation to subject refs (e.g., "department:eng#all_members", "user:*"). */
     public void grantToSubjects(String id, String relation, String... subjectRefs) {
         resource(id).grant(relation).toSubjects(subjectRefs);
-    }
-
-    /** Grant relation to subject refs — Collection overload. */
-    public void grantToSubjects(String id, String relation, Collection<String> subjectRefs) {
-        resource(id).grant(relation).toSubjects(subjectRefs);
-    }
-
-    // ---- Revoke ----
-
-    /** Revoke relation from user(s) (enum). */
-    public void revoke(String id, Relation.Named relation, String... userIds) {
-        revoke(id, relation.relationName(), userIds);
-    }
-
-    /** Revoke relation from subject refs (enum). */
-    public void revokeFromSubjects(String id, Relation.Named relation, String... subjectRefs) {
-        revokeFromSubjects(id, relation.relationName(), subjectRefs);
     }
 
     /** Revoke relation from user(s). */
@@ -221,122 +109,14 @@ public class ResourceFactory {
         resource(id).revoke(relation).from(userIds);
     }
 
-    /** Revoke relation from user(s) — Collection overload. */
-    public void revoke(String id, String relation, Collection<String> userIds) {
-        resource(id).revoke(relation).from(userIds);
-    }
-
-    /** Revoke relation from subject refs (e.g., "department:eng#member", "user:*"). */
+    /** Revoke relation from subject refs. */
     public void revokeFromSubjects(String id, String relation, String... subjectRefs) {
         resource(id).revoke(relation).fromSubjects(subjectRefs);
     }
 
-    /** Revoke relation from subject refs — Collection overload. */
-    public void revokeFromSubjects(String id, String relation, Collection<String> subjectRefs) {
-        resource(id).revoke(relation).fromSubjects(subjectRefs);
-    }
-
-    // ---- RevokeAll ----
-
-    /** Remove all relations for user(s) on this resource. */
-    public void revokeAll(String id, String... userIds) {
-        resource(id).revokeAll().from(userIds);
-    }
-
-    /** Remove all relations for user(s) — Collection overload. */
-    public void revokeAll(String id, Collection<String> userIds) {
-        resource(id).revokeAll().from(userIds);
-    }
-
-    /** Remove specific relations for user(s). */
-    public void revokeAll(String id, String[] relations, String... userIds) {
-        resource(id).revokeAll(relations).from(userIds);
-    }
-
-    // ---- Subject queries (who has permission/relation on this resource?) ----
-
-    /** Find all subjects with a permission on this resource. */
-    public List<String> subjects(String id, String permission) {
-        return resource(id).who().withPermission(permission).fetch();
-    }
-
-    /** Find subjects with limit. */
-    public List<String> subjects(String id, String permission, int limit) {
-        return resource(id).who().withPermission(permission).limit(limit).fetch();
-    }
-
-    /** Find all subjects as Set. */
-    public Set<String> subjectSet(String id, String permission) {
-        return resource(id).who().withPermission(permission).fetchSet();
-    }
-
-    /** Count subjects with a permission. */
-    public int subjectCount(String id, String permission) {
-        return resource(id).who().withPermission(permission).fetchCount();
-    }
-
-    /** Check if any subject has a permission. */
-    public boolean hasSubjects(String id, String permission) {
-        return resource(id).who().withPermission(permission).fetchExists();
-    }
-
-    // ---- Relation queries (who holds a relation on this resource?) ----
-
-    /** Find all users with a specific relation. */
-    public List<String> relatedUsers(String id, String relation) {
-        return resource(id).who().withRelation(relation).fetch();
-    }
-
-    /** Find all users with a specific relation, as Set. */
-    public Set<String> relatedUserSet(String id, String relation) {
-        return resource(id).who().withRelation(relation).fetchSet();
-    }
-
-    /** Get all relations grouped by relation name → subject IDs. */
+    /** Get all relations grouped by relation name. */
     public Map<String, List<String>> allRelations(String id) {
         return resource(id).relations().groupByRelation();
-    }
-
-    /** Count total relationships on this resource. */
-    public int relationCount(String id) {
-        return resource(id).relations().fetchCount();
-    }
-
-    /** Count relationships for a specific relation. */
-    public int relationCount(String id, String relation) {
-        return resource(id).relations(relation).fetchCount();
-    }
-
-    /** Check if any relationship exists on this resource. */
-    public boolean hasRelations(String id) {
-        return resource(id).relations().fetchExists();
-    }
-
-    // ---- Resource lookup (what resources can a user access?) ----
-
-    /** Find all resources of this type that a user has a permission on. */
-    public List<String> resources(String permission, String userId) {
-        return lookup().withPermission(permission).by(userId).fetch();
-    }
-
-    /** Find resources with limit. */
-    public List<String> resources(String permission, String userId, int limit) {
-        return lookup().withPermission(permission).by(userId).limit(limit).fetch();
-    }
-
-    /** Find all resources as Set. */
-    public Set<String> resourceSet(String permission, String userId) {
-        return lookup().withPermission(permission).by(userId).fetchSet();
-    }
-
-    /** Count resources a user can access. */
-    public int resourceCount(String permission, String userId) {
-        return lookup().withPermission(permission).by(userId).fetchCount();
-    }
-
-    /** Check if a user has access to any resource of this type. */
-    public boolean hasResources(String permission, String userId) {
-        return lookup().withPermission(permission).by(userId).fetchExists();
     }
 
     public String resourceType() {
