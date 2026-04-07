@@ -1,72 +1,102 @@
 package com.authcses.testapp;
 
 import com.authcses.sdk.AuthCsesClient;
+import com.authcses.sdk.ResourceFactory;
+import com.authcses.testapp.schema.ResourceTypes;
 import com.authcses.testapp.schema.constants.Document;
+import com.authcses.testapp.schema.constants.Folder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
- * REST API for testing permissions — uses codegen enums.
- *
- * curl localhost:8081/check?type=document&id=doc-1&permission=view&user=alice
- * curl -X POST localhost:8081/grant -d '{"type":"document","id":"doc-1","relation":"viewer","user":"alice"}'
+ * REST API — all methods use codegen enums, zero hardcoded strings.
  */
 @RestController
 public class PermissionController {
 
     private final AuthCsesClient client;
+    private final ResourceFactory doc;
+    private final ResourceFactory folder;
 
     public PermissionController(AuthCsesClient client) {
         this.client = client;
+        this.doc = client.on(ResourceTypes.DOCUMENT);
+        this.folder = client.on(ResourceTypes.FOLDER);
     }
 
-    @GetMapping("/check")
-    public Map<String, Object> check(@RequestParam String type,
-                                      @RequestParam String id,
-                                      @RequestParam String permission,
-                                      @RequestParam String user) {
-        // Resolve enum from string (API still accepts string for flexibility)
-        boolean allowed = client.on(type).check(id, permission, user);
-        return Map.of("allowed", allowed, "type", type, "id", id,
-                "permission", permission, "user", user);
-    }
-
-    @PostMapping("/grant")
-    public Map<String, String> grant(@RequestBody Map<String, String> body) {
-        client.on(body.get("type")).grant(body.get("id"), body.get("relation"), body.get("user"));
-        return Map.of("status", "granted");
-    }
-
-    @PostMapping("/revoke")
-    public Map<String, String> revoke(@RequestBody Map<String, String> body) {
-        client.on(body.get("type")).revoke(body.get("id"), body.get("relation"), body.get("user"));
-        return Map.of("status", "revoked");
-    }
-
-    /**
-     * Type-safe endpoint — uses codegen enums.
-     * Demonstrates compile-time safety: Document.Perm.VIEW, Document.Rel.EDITOR etc.
-     */
-    @GetMapping("/doc/permissions")
-    public Map<String, Boolean> docPermissions(@RequestParam String id, @RequestParam String user) {
-        var doc = client.on("document");
-        return Map.of(
-                "view",   doc.check(id, Document.Perm.VIEW, user),
-                "edit",   doc.check(id, Document.Perm.EDIT, user),
-                "delete", doc.check(id, Document.Perm.DELETE, user),
-                "share",  doc.check(id, Document.Perm.SHARE, user));
-    }
+    // ---- Document ----
 
     @PostMapping("/doc/grant")
     public Map<String, String> docGrant(@RequestParam String id,
                                          @RequestParam String relation,
                                          @RequestParam String user) {
-        var doc = client.on("document");
-        var rel = Document.Rel.valueOf(relation.toUpperCase());  // string → enum
+        var rel = Document.Rel.valueOf(relation.toUpperCase());
         doc.grant(id, rel, user);
         return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
     }
+
+    @PostMapping("/doc/revoke")
+    public Map<String, String> docRevoke(@RequestParam String id,
+                                          @RequestParam String relation,
+                                          @RequestParam String user) {
+        var rel = Document.Rel.valueOf(relation.toUpperCase());
+        doc.revoke(id, rel, user);
+        return Map.of("status", "revoked", "relation", rel.relationName(), "user", user);
+    }
+
+    @GetMapping("/doc/check")
+    public Map<String, Object> docCheck(@RequestParam String id,
+                                         @RequestParam String permission,
+                                         @RequestParam String user) {
+        var perm = Document.Perm.valueOf(permission.toUpperCase());
+        boolean allowed = doc.check(id, perm, user);
+        return Map.of("allowed", allowed, "permission", perm.permissionName(), "user", user);
+    }
+
+    @GetMapping("/doc/permissions")
+    public Map<String, Boolean> docPermissions(@RequestParam String id, @RequestParam String user) {
+        return Map.of(
+                "view",   doc.check(id, Document.Perm.VIEW, user),
+                "edit",   doc.check(id, Document.Perm.EDIT, user),
+                "comment", doc.check(id, Document.Perm.COMMENT, user),
+                "delete", doc.check(id, Document.Perm.DELETE, user),
+                "share",  doc.check(id, Document.Perm.SHARE, user),
+                "manage", doc.check(id, Document.Perm.MANAGE, user));
+    }
+
+    @GetMapping("/doc/viewers")
+    public List<String> docViewers(@RequestParam String id) {
+        return doc.subjects(id, Document.Perm.VIEW.permissionName());
+    }
+
+    @GetMapping("/doc/relations")
+    public Map<String, List<String>> docRelations(@RequestParam String id) {
+        return doc.allRelations(id);
+    }
+
+    // ---- Folder ----
+
+    @PostMapping("/folder/grant")
+    public Map<String, String> folderGrant(@RequestParam String id,
+                                            @RequestParam String relation,
+                                            @RequestParam String user) {
+        var rel = Folder.Rel.valueOf(relation.toUpperCase());
+        folder.grant(id, rel, user);
+        return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
+    }
+
+    @GetMapping("/folder/check")
+    public Map<String, Object> folderCheck(@RequestParam String id,
+                                            @RequestParam String permission,
+                                            @RequestParam String user) {
+        var perm = Folder.Perm.valueOf(permission.toUpperCase());
+        boolean allowed = folder.check(id, perm, user);
+        return Map.of("allowed", allowed, "permission", perm.permissionName(), "user", user);
+    }
+
+    // ---- Health ----
 
     @GetMapping("/health")
     public Map<String, Object> health() {
