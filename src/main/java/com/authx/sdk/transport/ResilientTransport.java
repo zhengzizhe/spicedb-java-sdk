@@ -171,16 +171,22 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private CircuitBreaker resolveBreaker(String resourceType) {
-        if (breakers.size() >= MAX_INSTANCES && !breakers.containsKey(resourceType)) {
-            return defaultBreaker;
+        var existing = breakers.get(resourceType);
+        if (existing != null) return existing;
+        if (breakers.size() >= MAX_INSTANCES) {
+            // Evict an arbitrary entry to make room (approximates LRU)
+            var it = breakers.entrySet().iterator();
+            if (it.hasNext()) {
+                var evicted = it.next();
+                it.remove();
+                evicted.getValue().reset();
+                retries.remove(evicted.getKey()); // keep breaker+retry maps in sync
+            }
         }
         return breakers.computeIfAbsent(resourceType, this::createBreaker);
     }
 
     private Retry resolveRetry(String resourceType) {
-        if (retries.size() >= MAX_INSTANCES && !retries.containsKey(resourceType)) {
-            return defaultRetry;
-        }
         return retries.computeIfAbsent(resourceType, this::createRetry);
     }
 

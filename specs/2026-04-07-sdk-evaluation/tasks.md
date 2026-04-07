@@ -12,13 +12,13 @@
 
 ## Phase 1: P1 — Post-Release Urgent
 
-- [ ] T006 [SR:arch-1] Split Builder.build() into sub-methods — `src/.../AuthxClient.java`
-- [ ] T007 [SR:cache-2] Clarify TieredCache.stats() (correct but confusing — add comments) — `src/.../cache/TieredCache.java`
-- [ ] T008 [SR:cache-1] Remove post-invalidation in CachedTransport — `src/.../transport/CachedTransport.java`
-- [ ] T009 [SR:api-1] ResourceFactory grant/revoke return result objects — `src/.../ResourceFactory.java`
-- [ ] T010 [SR:cache-4] WatchCacheInvalidator listener queue drop metric — `src/.../transport/WatchCacheInvalidator.java`
-- [ ] T011 [SR:obs-2] TelemetryReporter buffer-full drop counter — `src/.../telemetry/TelemetryReporter.java`
-- [ ] T012 [P] [SR:doc-1] Add English README — `README_en.md`
+- [X] T006 [SR:arch-1] Split Builder.build() into sub-methods — `src/.../AuthxClient.java`
+- [X] T007 [SR:cache-2] Clarify TieredCache.stats() (correct but confusing — add comments) — `src/.../cache/TieredCache.java`
+- [X] T008 [SR:cache-1] Remove post-invalidation in CachedTransport — `src/.../transport/CachedTransport.java`
+- [X] T009 [SR:api-1] ResourceFactory grant/revoke return result objects — `src/.../ResourceFactory.java`
+- [X] T010 [SR:cache-4] WatchCacheInvalidator listener queue drop metric — `src/.../transport/WatchCacheInvalidator.java`
+- [X] T011 [SR:obs-2] TelemetryReporter buffer-full drop counter — `src/.../telemetry/TelemetryReporter.java`
+- [X] T012 [P] [SR:doc-1] Add English README — `README_en.md`
 
 ## Phase 2: P2 — Post-Release Optimization
 
