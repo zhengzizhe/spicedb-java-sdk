@@ -48,5 +48,5 @@ test {
 // Run: ./gradlew :test-app:codegen
 tasks.register("codegen", JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = "com.authcses.testapp.CodegenRunner"
+    mainClass = "com.authx.testapp.CodegenRunner"
 }

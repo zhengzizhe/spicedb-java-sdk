@@ -43,14 +43,24 @@ public class SchemaLoader {
             Map<String, SchemaCache.DefinitionCache> definitions = new HashMap<>();
             for (var def : response.getDefinitionsList()) {
                 Set<String> relations = new HashSet<>();
+                Map<String, List<SchemaCache.SubjectType>> relSubjectTypes = new HashMap<>();
                 for (var rel : def.getRelationsList()) {
                     relations.add(rel.getName());
+                    List<SchemaCache.SubjectType> subjectTypes = new ArrayList<>();
+                    for (var st : rel.getSubjectTypesList()) {
+                        subjectTypes.add(new SchemaCache.SubjectType(
+                                st.getSubjectDefinitionName(),
+                                st.getOptionalRelationName(),
+                                st.getIsPublicWildcard()));
+                    }
+                    relSubjectTypes.put(rel.getName(), subjectTypes);
                 }
                 Set<String> permissions = new HashSet<>();
                 for (var perm : def.getPermissionsList()) {
                     permissions.add(perm.getName());
                 }
-                definitions.put(def.getName(), new SchemaCache.DefinitionCache(relations, permissions));
+                definitions.put(def.getName(),
+                        new SchemaCache.DefinitionCache(relations, permissions, relSubjectTypes));
             }
             schemaCache.updateFromMap(definitions);
             LOG.log(System.Logger.Level.INFO, "Schema loaded: {0} definitions", definitions.size());

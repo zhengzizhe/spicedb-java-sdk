@@ -20,7 +20,25 @@ public class SchemaCache {
     private final java.util.concurrent.atomic.AtomicLong lastRefreshMs = new java.util.concurrent.atomic.AtomicLong(0);
     private static final long REFRESH_COOLDOWN_MS = 30_000; // 30 seconds
 
-    public record DefinitionCache(Set<String> relations, Set<String> permissions) {}
+    /** Subject type allowed on a relation. */
+    public record SubjectType(String type, String optionalRelation, boolean isWildcard) {
+        /** e.g., "user", "department#all_members", "user:*" */
+        public String toRefPrefix() {
+            if (isWildcard) return type + ":*";
+            if (optionalRelation != null && !optionalRelation.isEmpty()) return type + "#" + optionalRelation;
+            return type;
+        }
+    }
+
+    public record DefinitionCache(
+            Set<String> relations,
+            Set<String> permissions,
+            Map<String, List<SubjectType>> relationSubjectTypes
+    ) {
+        public DefinitionCache(Set<String> relations, Set<String> permissions) {
+            this(relations, permissions, Map.of());
+        }
+    }
 
     /**
      * Set the callback used to refresh schema on validation miss.
@@ -139,6 +157,18 @@ public class SchemaCache {
     public Set<String> getPermissions(String resourceType) {
         var def = cache.get().get(resourceType);
         return def != null ? def.permissions : Set.of();
+    }
+
+    public List<SubjectType> getSubjectTypes(String resourceType, String relation) {
+        var def = cache.get().get(resourceType);
+        if (def == null) return List.of();
+        var types = def.relationSubjectTypes().get(relation);
+        return types != null ? types : List.of();
+    }
+
+    public Map<String, List<SubjectType>> getAllSubjectTypes(String resourceType) {
+        var def = cache.get().get(resourceType);
+        return def != null ? def.relationSubjectTypes() : Map.of();
     }
 
     public boolean hasResourceType(String resourceType) {

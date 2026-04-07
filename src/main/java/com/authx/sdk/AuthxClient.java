@@ -251,6 +251,11 @@ public class AuthxClient implements AutoCloseable {
 
     // ---- Observability ----
 
+    /** Package-private: used by TypedResourceFactory to access the transport chain. */
+    SdkTransport transport() { return transport; }
+    String defaultSubjectType() { return config.defaultSubjectType(); }
+    java.util.concurrent.Executor asyncExecutor() { return infra.asyncExecutor(); }
+
     public SdkMetrics metrics() { return observability.metrics(); }
     public TypedEventBus eventBus() { return observability.eventBus(); }
     public LifecycleManager lifecycle() { return infra.lifecycle(); }

@@ -6,10 +6,6 @@ package com.authx.testapp.schema;
  */
 public final class Subjects {
 
-    public static String group(String id) {
-        return "group:" + id;
-    }
-
     public static String space(String id) {
         return "space:" + id;
     }
@@ -32,6 +28,10 @@ public final class Subjects {
 
     public static String user(String id) {
         return "user:" + id;
+    }
+
+    public static String group(String id) {
+        return "group:" + id;
     }
 
     private Subjects() {}

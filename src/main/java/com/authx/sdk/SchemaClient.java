@@ -2,6 +2,8 @@ package com.authx.sdk;
 
 import com.authx.sdk.cache.SchemaCache;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -44,6 +46,16 @@ public class SchemaClient {
     /** Check if a resource type exists in the schema. */
     public boolean hasResourceType(String resourceType) {
         return schemaCache != null && schemaCache.hasResourceType(resourceType);
+    }
+
+    /** Subject types allowed on a specific relation. */
+    public List<SchemaCache.SubjectType> subjectTypesOf(String resourceType, String relation) {
+        return schemaCache != null ? schemaCache.getSubjectTypes(resourceType, relation) : List.of();
+    }
+
+    /** All subject types by relation for a resource type. */
+    public Map<String, List<SchemaCache.SubjectType>> allSubjectTypes(String resourceType) {
+        return schemaCache != null ? schemaCache.getAllSubjectTypes(resourceType) : Map.of();
     }
 
     /** Check if schema has been loaded. */
