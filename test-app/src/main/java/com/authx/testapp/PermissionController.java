@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * REST API — uses codegen typed resources with chain-style grant/revoke.
+ * REST API — 3-segment chain: on(id).grant(Rel).toUser(...)
  */
 @RestController
 public class PermissionController {
@@ -33,7 +33,7 @@ public class PermissionController {
                                          @RequestParam String relation,
                                          @RequestParam String user) {
         var rel = Document.Rel.valueOf(relation.toUpperCase());
-        doc.grant(id, rel).toUser(user);
+        doc.on(id).grant(rel).toUser(user);
         return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
     }
 
@@ -42,7 +42,7 @@ public class PermissionController {
                                           @RequestParam String relation,
                                           @RequestParam String user) {
         var rel = Document.Rel.valueOf(relation.toUpperCase());
-        doc.revoke(id, rel).fromUser(user);
+        doc.on(id).revoke(rel).fromUser(user);
         return Map.of("status", "revoked", "relation", rel.relationName(), "user", user);
     }
 
@@ -51,24 +51,20 @@ public class PermissionController {
                                          @RequestParam String permission,
                                          @RequestParam String user) {
         var perm = Document.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = doc.check(id, perm, user);
+        boolean allowed = doc.on(id).check(perm).by(user);
         return Map.of("allowed", allowed, "permission", perm.permissionName(), "user", user);
     }
 
     @GetMapping("/doc/permissions")
     public Map<String, Boolean> docPermissions(@RequestParam String id, @RequestParam String user) {
+        var h = doc.on(id);
         return Map.of(
-                "view",   doc.check(id, Document.Perm.VIEW, user),
-                "edit",   doc.check(id, Document.Perm.EDIT, user),
-                "comment", doc.check(id, Document.Perm.COMMENT, user),
-                "delete", doc.check(id, Document.Perm.DELETE, user),
-                "share",  doc.check(id, Document.Perm.SHARE, user),
-                "manage", doc.check(id, Document.Perm.MANAGE, user));
-    }
-
-    @GetMapping("/doc/viewers")
-    public List<String> docViewers(@RequestParam String id) {
-        return doc.subjects(id, Document.Perm.VIEW.permissionName());
+                "view",    h.check(Document.Perm.VIEW).by(user),
+                "edit",    h.check(Document.Perm.EDIT).by(user),
+                "comment", h.check(Document.Perm.COMMENT).by(user),
+                "delete",  h.check(Document.Perm.DELETE).by(user),
+                "share",   h.check(Document.Perm.SHARE).by(user),
+                "manage",  h.check(Document.Perm.MANAGE).by(user));
     }
 
     @GetMapping("/doc/relations")
@@ -83,7 +79,7 @@ public class PermissionController {
                                             @RequestParam String relation,
                                             @RequestParam String user) {
         var rel = Folder.Rel.valueOf(relation.toUpperCase());
-        folder.grant(id, rel).toUser(user);
+        folder.on(id).grant(rel).toUser(user);
         return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
     }
 
@@ -92,7 +88,7 @@ public class PermissionController {
                                             @RequestParam String permission,
                                             @RequestParam String user) {
         var perm = Folder.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = folder.check(id, perm, user);
+        boolean allowed = folder.on(id).check(perm).by(user);
         return Map.of("allowed", allowed, "permission", perm.permissionName(), "user", user);
     }
 

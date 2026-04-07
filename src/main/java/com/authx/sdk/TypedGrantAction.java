@@ -1,31 +1,32 @@
 package com.authx.sdk;
 
-import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.Relation;
 
 /**
- * Base typed grant action. Codegen subclasses add to*() methods per subject type.
+ * Base typed grant action. Supports multiple relations.
+ * Codegen subclasses add toUser(), toFolder(), toUserAll(), etc.
  *
  * <pre>
- * // String escape hatch (always available)
- * doc.grant("doc-1", Document.Rel.EDITOR).to("user:bob");
+ * doc.on("doc-1").grant(Document.Rel.EDITOR, Document.Rel.COMMENTER).toUser("bob");
  * </pre>
  */
 public class TypedGrantAction<R extends Relation.Named> {
 
     protected final ResourceFactory factory;
     protected final String id;
-    protected final R relation;
+    protected final R[] relations;
 
-    public TypedGrantAction(ResourceFactory factory, String id, R relation) {
+    @SafeVarargs
+    public TypedGrantAction(ResourceFactory factory, String id, R... relations) {
         this.factory = factory;
         this.id = id;
-        this.relation = relation;
+        this.relations = relations;
     }
 
     /** String escape hatch — pass raw subject refs. */
-    public GrantResult to(String... subjectRefs) {
-        factory.grantToSubjects(id, relation.relationName(), subjectRefs);
-        return null; // TODO: return actual result
+    public void to(String... subjectRefs) {
+        for (R rel : relations) {
+            factory.grantToSubjects(id, rel.relationName(), subjectRefs);
+        }
     }
 }
