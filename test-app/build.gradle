@@ -44,3 +44,9 @@ tasks.withType(JavaCompile).configureEach {
 test {
     useJUnitPlatform()
 }
+
+// Run: ./gradlew :test-app:codegen
+tasks.register("codegen", JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = "com.authcses.testapp.CodegenRunner"
+}
