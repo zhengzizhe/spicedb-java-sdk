@@ -500,7 +500,7 @@ public class AuthxClient implements AutoCloseable {
             SdkTransport t = new GrpcTransport(grpcChannel, presharedKey, requestTimeout.toMillis());
 
             // Resilience (circuit breaker + retry via Resilience4j)
-            var resilientTransport = new ResilientTransport(t, policies, bus);
+            var resilientTransport = new ResilientTransport(t, policies, bus, sdkMetrics);
             ctx.resilientTransport = resilientTransport;
             t = resilientTransport;
 

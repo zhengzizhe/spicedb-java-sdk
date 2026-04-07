@@ -51,12 +51,20 @@ public class ResilientTransport extends ForwardingTransport {
     private final LongAdder requestCount = new LongAdder();
     private final AtomicLong lastResetTime = new AtomicLong(System.nanoTime());
 
-    public ResilientTransport(SdkTransport delegate, PolicyRegistry policyRegistry, TypedEventBus eventBus) {
+    private final com.authx.sdk.metrics.SdkMetrics sdkMetrics;
+
+    public ResilientTransport(SdkTransport delegate, PolicyRegistry policyRegistry,
+                              TypedEventBus eventBus, com.authx.sdk.metrics.SdkMetrics sdkMetrics) {
         this.delegate = delegate;
         this.policyRegistry = policyRegistry;
         this.eventBus = eventBus != null ? eventBus : new DefaultTypedEventBus();
+        this.sdkMetrics = sdkMetrics;
         this.defaultBreaker = createBreaker("__default__");
         this.defaultRetry = createRetry("__default__");
+    }
+
+    public ResilientTransport(SdkTransport delegate, PolicyRegistry policyRegistry, TypedEventBus eventBus) {
+        this(delegate, policyRegistry, eventBus, null);
     }
 
     @Override
@@ -155,6 +163,8 @@ public class ResilientTransport extends ForwardingTransport {
 
     private <T> T executeWithResilience(String resourceType, Supplier<T> call) {
         requestCount.increment();
+        long startNanos = System.nanoTime();
+        boolean isError = true;
 
         CircuitBreaker breaker = resolveBreaker(resourceType);
         Retry retry = resolveRetry(resourceType);
@@ -164,9 +174,16 @@ public class ResilientTransport extends ForwardingTransport {
             // Retry failures are internal to CB — one request = one CB record.
             Supplier<T> withRetry = Retry.decorateSupplier(retry, call);
             Supplier<T> decorated = CircuitBreaker.decorateSupplier(breaker, withRetry);
-            return decorated.get();
+            T result = decorated.get();
+            isError = false;
+            return result;
         } catch (CallNotPermittedException e) {
             throw new CircuitBreakerOpenException("Circuit breaker is OPEN for " + resourceType, e);
+        } finally {
+            if (sdkMetrics != null) {
+                long micros = (System.nanoTime() - startNanos) / 1_000;
+                sdkMetrics.recordRequest(micros, isError);
+            }
         }
     }
 
