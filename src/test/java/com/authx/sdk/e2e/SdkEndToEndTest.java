@@ -28,7 +28,7 @@ class SdkEndToEndTest {
     static void setup() {
         try {
             spicedb = new GenericContainer<>("authzed/spicedb:v1.33.0")
-                    .withCommand("serve-testing", "--grpc-preshared-key=testkey")
+                    .withCommand("serve-testing")
                     .withExposedPorts(50051)
                     .waitingFor(Wait.forLogMessage(".*grpc server started serving.*", 1));
             spicedb.start();

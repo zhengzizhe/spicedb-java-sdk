@@ -3,20 +3,20 @@
 > Track progress by marking items `[X]` as completed.
 
 ## Phase 0: Setup
-- [ ] T001 [SR:req-2] Add Lettuce compileOnly dependency — `build.gradle`
+- [X] T001 [SR:req-2] Add Lettuce compileOnly dependency — `build.gradle`
 
 ## Phase 1: Core Cache Components
-- [ ] T002 [P] [SR:req-5] TieredCache implements IndexedCache — `src/.../cache/TieredCache.java`
-- [ ] T003 [P] [SR:req-3,req-4] Create RedisCacheAdapter — `src/.../cache/RedisCacheAdapter.java`
+- [X] T002 [P] [SR:req-5] TieredCache implements IndexedCache — `src/.../cache/TieredCache.java`
+- [X] T003 [P] [SR:req-3,req-4] Create RedisCacheAdapter — `src/.../cache/RedisCacheAdapter.java`
 
 ## Phase 2: Integration
-- [ ] T004 [SR:req-1,req-10] Remove SdkComponents.l2Cache — `src/.../spi/SdkComponents.java`
-- [ ] T005 [SR:req-7,req-8] Update AuthxClient Builder — Redis config + wiring — `src/.../AuthxClient.java`
+- [X] T004 [SR:req-1,req-10] Remove SdkComponents.l2Cache — `src/.../spi/SdkComponents.java`
+- [X] T005 [SR:req-7,req-8] Update AuthxClient Builder — Redis config + wiring — `src/.../AuthxClient.java`
 
 ## Phase 3: Verification
-- [ ] T006 [SR:req-6,req-9] Watch invalidation path + multi-instance tests — `src/test/.../transport/WatchInvalidationPathTest.java`
-- [ ] T007 [SR:req-10] Update cache-consistency-guide.md — `docs/cache-consistency-guide.md`
-- [ ] T008 Final verification — run full test suite, grep for dead references
+- [X] T006 [SR:req-6,req-9] Watch invalidation path + multi-instance tests — `src/test/.../transport/WatchInvalidationPathTest.java`
+- [X] T007 [SR:req-10] Update cache-consistency-guide.md — `docs/cache-consistency-guide.md`
+- [X] T008 Final verification — run full test suite, grep for dead references
 
 ## Dependencies
 

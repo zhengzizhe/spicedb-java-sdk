@@ -4,6 +4,7 @@ import com.authx.sdk.builtin.ValidationInterceptor;
 import com.authx.sdk.cache.Cache;
 import com.authx.sdk.cache.CaffeineCache;
 import com.authx.sdk.cache.SchemaCache;
+import com.authx.sdk.cache.RedisCacheAdapter;
 import com.authx.sdk.cache.TieredCache;
 import com.authx.sdk.event.DefaultTypedEventBus;
 import com.authx.sdk.event.SdkTypedEvent;
@@ -278,6 +279,8 @@ public class AuthxClient implements AutoCloseable {
         private boolean cacheEnabled = false;
         private long cacheMaxSize = 100_000;
         private boolean watchInvalidation = false;
+        private Object redisClient;  // io.lettuce.core.RedisClient (Object to avoid compile-time dep)
+        private Duration redisTtl = Duration.ofSeconds(30);
 
         // Features
         private boolean coalescingEnabled = true;
@@ -335,6 +338,10 @@ public class AuthxClient implements AutoCloseable {
             public CacheConfig enabled(boolean e) { Builder.this.cacheEnabled = e; return this; }
             public CacheConfig maxSize(long s) { Builder.this.cacheMaxSize = s; return this; }
             public CacheConfig watchInvalidation(boolean e) { Builder.this.watchInvalidation = e; return this; }
+            /** Enable Redis L2 cache. Pass an io.lettuce.core.RedisClient instance. */
+            public CacheConfig redis(Object client) { Builder.this.redisClient = client; return this; }
+            /** TTL for Redis L2 cache entries. Default: 30 seconds. */
+            public CacheConfig redisTtl(Duration ttl) { Builder.this.redisTtl = ttl; return this; }
         }
 
         public class FeatureConfig {
@@ -526,9 +533,20 @@ public class AuthxClient implements AutoCloseable {
                         }
                     };
                     var l1 = new CaffeineCache<>(cacheMaxSize, expiry, CheckKey::resourceIndex);
-                    effectiveCache = spi.l2Cache() != null
-                            ? new TieredCache<>(l1, spi.l2Cache())
-                            : l1;
+                    if (redisClient != null) {
+                        try {
+                            var redisAdapter = buildRedisCache();
+                            effectiveCache = new TieredCache<>(l1, redisAdapter);
+                        } catch (NoClassDefFoundError ex) {
+                            System.getLogger(AuthxClient.class.getName()).log(
+                                    System.Logger.Level.WARNING,
+                                    "Redis L2 cache requested but Lettuce not on classpath. Add dependency: " +
+                                    "io.lettuce:lettuce-core:6.3.2.RELEASE. Falling back to L1 only.");
+                            effectiveCache = l1;
+                        }
+                    } else {
+                        effectiveCache = l1;
+                    }
                 } catch (NoClassDefFoundError e) {
                     System.getLogger(AuthxClient.class.getName()).log(
                             System.Logger.Level.WARNING,
@@ -579,6 +597,14 @@ public class AuthxClient implements AutoCloseable {
                 ctx.scheduler.scheduleAtFixedRate(
                         () -> sdkMetrics.updateCacheSize(cache.size()), 5, 5, TimeUnit.SECONDS);
             }
+        }
+
+        @SuppressWarnings("unchecked")
+        private RedisCacheAdapter buildRedisCache() {
+            var client = (io.lettuce.core.RedisClient) redisClient;
+            var connection = client.connect();
+            var commands = connection.sync();
+            return new RedisCacheAdapter(commands, redisTtl.toSeconds());
         }
 
         private ManagedChannel buildChannel() {
