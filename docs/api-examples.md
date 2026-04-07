@@ -254,7 +254,7 @@ doc.revokeAll("design-doc", new String[]{"viewer", "editor"}, "frank");
 doc.resource("design-doc").batch()
         .revoke("owner").from("alice")
         .grant("owner").to("bob")
-        .grant("editor").to("alice")  // 降级为 editor
+        .grant("editor").to("alice")// 降级为 editor
         .execute();
 ```
 

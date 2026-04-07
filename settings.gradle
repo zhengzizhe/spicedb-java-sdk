@@ -1,3 +1,3 @@
-rootProject.name = "authcses-sdk"
+rootProject.name = "authx-sdk"
 include "test-app"
 include "benchmark"

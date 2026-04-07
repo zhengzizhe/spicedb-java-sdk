@@ -9,7 +9,7 @@ otel:
     otlp:
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
   service:
-    name: ${OTEL_SERVICE_NAME:authcses-test-app}
+    name: ${OTEL_SERVICE_NAME:authx-test-app}
   traces:
     sampler: ${OTEL_TRACES_SAMPLER:always_on}
 
