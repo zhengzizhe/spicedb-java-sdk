@@ -50,21 +50,18 @@ public interface SdkInterceptor {
     }
 
     /**
-     * Called before any operation that does not have a dedicated chain
-     * (lookup, read, delete, expand). Override to apply cross-cutting concerns
-     * such as rate limiting and bulkhead.
+     * Generic chain for all operations that don't have a dedicated request type
+     * (lookup, read, delete, expand, bulk check). Override for full control:
+     * wrap errors, measure timing, enforce rate limits.
      *
-     * <p>Default implementation is a no-op.
-     */
-    default void beforeOperation(OperationContext ctx) {}
-
-    /**
-     * Called after any operation that does not have a dedicated chain.
-     * Always called if {@link #beforeOperation} was called, even on failure.
+     * <p>Default implementation passes through to the next interceptor in the chain.
      *
-     * <p>Default implementation is a no-op.
+     * <p>Replaces the previous beforeOperation/afterOperation hooks with a unified
+     * chain pattern, consistent with interceptCheck and interceptWrite.
      */
-    default void afterOperation(OperationContext ctx) {}
+    default <T> T interceptOperation(OperationChain<T> chain) {
+        return chain.proceed();
+    }
 
     // ---- Chain interfaces ----
 
@@ -104,6 +101,26 @@ public interface SdkInterceptor {
 
         /** Read a typed attribute from the context. */
         <T> T attr(AttributeKey<T> key);
+    }
+
+    /**
+     * Generic chain for operations without a dedicated request type.
+     * Interceptors can wrap the call, measure timing, enforce rate limits, etc.
+     *
+     * @param <T> the return type of the operation
+     */
+    interface OperationChain<T> {
+        /** Advance to the next interceptor, or execute the transport if at the end. */
+        T proceed();
+
+        /** Shared context for the operation. */
+        OperationContext context();
+
+        /** Read a typed attribute from the context. */
+        <V> V attr(AttributeKey<V> key);
+
+        /** Set a typed attribute on the context. */
+        <V> void attr(AttributeKey<V> key, V value);
     }
 
     /**

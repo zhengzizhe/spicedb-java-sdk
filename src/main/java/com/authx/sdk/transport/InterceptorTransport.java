@@ -11,13 +11,12 @@ import java.util.function.Supplier;
 /**
  * Runs registered interceptors for each operation on the delegate transport.
  *
- * <p>For {@code check()} and {@code writeRelationships()}, uses OkHttp-style chains
- * ({@link RealCheckChain} / {@link RealWriteChain}) so interceptors can modify requests,
- * short-circuit, or wrap errors.
- *
- * <p>Other operations (lookup, read, expand, delete) are wrapped with
- * {@link SdkInterceptor#beforeOperation}/{@link SdkInterceptor#afterOperation}
- * so that cross-cutting concerns like rate limiting and bulkhead still apply.
+ * <p>All operations use OkHttp-style chains:
+ * <ul>
+ *   <li>{@code check()} — {@link RealCheckChain} (interceptors can modify CheckRequest)
+ *   <li>{@code writeRelationships()} — {@link RealWriteChain} (interceptors can modify WriteRequest)
+ *   <li>All other operations — {@link RealOperationChain} (generic chain for cross-cutting concerns)
+ * </ul>
  */
 public class InterceptorTransport extends ForwardingTransport {
 
@@ -57,7 +56,7 @@ public class InterceptorTransport extends ForwardingTransport {
         return chain.proceed(writeRequest);
     }
 
-    // ---- Hook-wrapped operations ----
+    // ---- Generic chain-based operations ----
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
@@ -66,7 +65,7 @@ public class InterceptorTransport extends ForwardingTransport {
         String resType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
         String resId = updates.isEmpty() ? "" : updates.getFirst().resource().id();
         var ctx = new OperationContext(SdkAction.DELETE, resType, resId, "", "", "");
-        return wrapOperation(ctx, () -> delegate.deleteRelationships(updates));
+        return chainOperation(ctx, () -> delegate.deleteRelationships(updates));
     }
 
     @Override
@@ -76,7 +75,7 @@ public class InterceptorTransport extends ForwardingTransport {
 
         var ctx = new OperationContext(SdkAction.DELETE, resource.type(), resource.id(),
                 "", subject.type(), subject.id());
-        return wrapOperation(ctx, () -> delegate.deleteByFilter(resource, subject, optionalRelation));
+        return chainOperation(ctx, () -> delegate.deleteByFilter(resource, subject, optionalRelation));
     }
 
     @Override
@@ -86,7 +85,7 @@ public class InterceptorTransport extends ForwardingTransport {
 
         var ctx = new OperationContext(SdkAction.READ, resource.type(), resource.id(),
                 relation != null ? relation.name() : "", "", "");
-        return wrapOperation(ctx, () -> delegate.readRelationships(resource, relation, consistency));
+        return chainOperation(ctx, () -> delegate.readRelationships(resource, relation, consistency));
     }
 
     @Override
@@ -96,7 +95,7 @@ public class InterceptorTransport extends ForwardingTransport {
         var ctx = new OperationContext(SdkAction.LOOKUP_SUBJECTS,
                 request.resource().type(), request.resource().id(),
                 request.permission().name(), request.subjectType(), "");
-        return wrapOperation(ctx, () -> delegate.lookupSubjects(request));
+        return chainOperation(ctx, () -> delegate.lookupSubjects(request));
     }
 
     @Override
@@ -107,7 +106,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 request.resourceType(), "",
                 request.permission().name(),
                 request.subject().type(), request.subject().id());
-        return wrapOperation(ctx, () -> delegate.lookupResources(request));
+        return chainOperation(ctx, () -> delegate.lookupResources(request));
     }
 
     @Override
@@ -117,7 +116,7 @@ public class InterceptorTransport extends ForwardingTransport {
 
         var ctx = new OperationContext(SdkAction.EXPAND, resource.type(), resource.id(),
                 permission.name(), "", "");
-        return wrapOperation(ctx, () -> delegate.expand(resource, permission, consistency));
+        return chainOperation(ctx, () -> delegate.expand(resource, permission, consistency));
     }
 
     @Override
@@ -128,7 +127,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 request.resource().type(), request.resource().id(),
                 request.permission().name(),
                 request.subject().type(), request.subject().id());
-        return wrapOperation(ctx, () -> delegate.checkBulk(request, subjects));
+        return chainOperation(ctx, () -> delegate.checkBulk(request, subjects));
     }
 
     @Override
@@ -137,7 +136,7 @@ public class InterceptorTransport extends ForwardingTransport {
 
         String resType = items.isEmpty() ? "" : items.getFirst().resource().type();
         var ctx = new OperationContext(SdkAction.CHECK_BULK, resType, "", "", "", "");
-        return wrapOperation(ctx, () -> delegate.checkBulkMulti(items, consistency));
+        return chainOperation(ctx, () -> delegate.checkBulkMulti(items, consistency));
     }
 
     @Override
@@ -148,23 +147,11 @@ public class InterceptorTransport extends ForwardingTransport {
     // ---- Internal helpers ----
 
     /**
-     * Wraps an operation with beforeOperation/afterOperation hooks from all interceptors.
-     * Ensures afterOperation is always called if beforeOperation succeeded, even on failure.
+     * Creates and executes a generic operation chain through all interceptors.
      */
-    private <T> T wrapOperation(OperationContext ctx, Supplier<T> operation) {
-        int acquired = 0;
-        try {
-            for (var interceptor : interceptors) {
-                interceptor.beforeOperation(ctx);
-                acquired++;
-            }
-            return operation.get();
-        } finally {
-            // Release in reverse order, only for interceptors that completed beforeOperation
-            for (int i = acquired - 1; i >= 0; i--) {
-                interceptors.get(i).afterOperation(ctx);
-            }
-        }
+    private <T> T chainOperation(OperationContext ctx, Supplier<T> terminalOperation) {
+        var chain = new RealOperationChain<>(interceptors, 0, terminalOperation, ctx);
+        return chain.proceed();
     }
 
     private OperationContext buildCheckContext(CheckRequest request) {

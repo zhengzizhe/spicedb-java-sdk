@@ -54,13 +54,14 @@ public class Resilience4jInterceptor implements SdkInterceptor {
     }
 
     @Override
-    public void beforeOperation(OperationContext ctx) {
+    public <T> T interceptOperation(OperationChain<T> chain) {
+        var ctx = chain.context();
         acquirePermissions(ctx);
-    }
-
-    @Override
-    public void afterOperation(OperationContext ctx) {
-        releasePermissions(ctx);
+        try {
+            return chain.proceed();
+        } finally {
+            releasePermissions(ctx);
+        }
     }
 
     private void acquirePermissions(OperationContext ctx) {
