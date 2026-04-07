@@ -14,37 +14,37 @@ class PolicyRegistryTest {
         var policy = registry.resolve("anything");
 
         assertNotNull(policy);
-        assertEquals(ReadConsistency.session(), policy.getReadConsistency());
-        assertFalse(policy.getCache().isEnabled()); // default cache is off
-        assertEquals(3, policy.getRetry().getMaxAttempts());
-        assertTrue(policy.getCircuitBreaker().isEnabled());
-        assertEquals(Duration.ofSeconds(5), policy.getTimeout());
+        assertEquals(ReadConsistency.session(), policy.readConsistency());
+        assertFalse(policy.cache().enabled()); // default cache is off
+        assertEquals(3, policy.retry().maxAttempts());
+        assertTrue(policy.circuitBreaker().enabled());
+        assertEquals(Duration.ofSeconds(5), policy.timeout());
     }
 
     @Test
     void perResourceType_overridesDefaults() {
         var registry = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
-                        .cache(CachePolicy.ofTtl(Duration.ofSeconds(5)))
+                        .cache(CachePolicy.of(Duration.ofSeconds(5)))
                         .readConsistency(ReadConsistency.session())
                         .timeout(Duration.ofSeconds(10))
                         .build())
                 .forResourceType("document", ResourcePolicy.builder()
-                        .cache(CachePolicy.ofTtl(Duration.ofSeconds(3)))
+                        .cache(CachePolicy.of(Duration.ofSeconds(3)))
                         .readConsistency(ReadConsistency.strong())
                         .build())
                 .build();
 
         // document: overrides cache + consistency, inherits timeout
         var docPolicy = registry.resolve("document");
-        assertEquals(Duration.ofSeconds(3), docPolicy.getCache().getTtl());
-        assertEquals(ReadConsistency.strong(), docPolicy.getReadConsistency());
-        assertEquals(Duration.ofSeconds(10), docPolicy.getTimeout()); // inherited
+        assertEquals(Duration.ofSeconds(3), docPolicy.cache().ttl());
+        assertEquals(ReadConsistency.strong(), docPolicy.readConsistency());
+        assertEquals(Duration.ofSeconds(10), docPolicy.timeout()); // inherited
 
         // folder: no override, uses defaults
         var folderPolicy = registry.resolve("folder");
-        assertEquals(Duration.ofSeconds(5), folderPolicy.getCache().getTtl());
-        assertEquals(ReadConsistency.session(), folderPolicy.getReadConsistency());
+        assertEquals(Duration.ofSeconds(5), folderPolicy.cache().ttl());
+        assertEquals(ReadConsistency.session(), folderPolicy.readConsistency());
     }
 
     @Test
@@ -81,7 +81,7 @@ class PolicyRegistryTest {
     void cacheDisabled_perResourceType() {
         var registry = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
-                        .cache(CachePolicy.ofTtl(Duration.ofSeconds(5)))
+                        .cache(CachePolicy.of(Duration.ofSeconds(5)))
                         .build())
                 .forResourceType("group", ResourcePolicy.builder()
                         .cache(CachePolicy.disabled())
@@ -103,8 +103,8 @@ class PolicyRegistryTest {
                         .build())
                 .build();
 
-        assertEquals(3, registry.resolve("document").getRetry().getMaxAttempts());
-        assertEquals(0, registry.resolve("group").getRetry().getMaxAttempts());
+        assertEquals(3, registry.resolve("document").retry().maxAttempts());
+        assertEquals(0, registry.resolve("group").retry().maxAttempts());
     }
 
     @Test
@@ -148,7 +148,7 @@ class PolicyRegistryTest {
                         .timeout(Duration.ofSeconds(3))
                         .build())
                 .forResourceType("folder", ResourcePolicy.builder()
-                        .cache(CachePolicy.ofTtl(Duration.ofSeconds(30)))
+                        .cache(CachePolicy.of(Duration.ofSeconds(30)))
                         .readConsistency(ReadConsistency.boundedStaleness(Duration.ofSeconds(10)))
                         .build())
                 .forResourceType("group", ResourcePolicy.builder()
@@ -160,7 +160,7 @@ class PolicyRegistryTest {
 
         // document.view: cache 10s, session consistency, 3s timeout
         assertEquals(Duration.ofSeconds(10), registry.resolveCacheTtl("document", "view"));
-        assertEquals(Duration.ofSeconds(3), registry.resolve("document").getTimeout());
+        assertEquals(Duration.ofSeconds(3), registry.resolve("document").timeout());
 
         // folder: cache 30s, bounded staleness 10s
         assertEquals(Duration.ofSeconds(30), registry.resolveCacheTtl("folder", "view"));
@@ -169,7 +169,7 @@ class PolicyRegistryTest {
         // group: no cache, strong consistency, no retry
         assertFalse(registry.isCacheEnabled("group"));
         assertEquals(ReadConsistency.strong(), registry.resolveReadConsistency("group"));
-        assertEquals(0, registry.resolve("group").getRetry().getMaxAttempts());
+        assertEquals(0, registry.resolve("group").retry().maxAttempts());
 
         // unknown type: inherits all defaults
         assertTrue(registry.isCacheEnabled("some-new-type"));

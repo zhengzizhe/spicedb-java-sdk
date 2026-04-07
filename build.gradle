@@ -50,6 +50,9 @@ dependencies {
     // HdrHistogram — lock-free latency percentile tracking
     implementation("org.hdrhistogram:HdrHistogram:2.2.2")
 
+    // Null-safety annotations (transitive to consumers)
+    implementation("org.jspecify:jspecify:1.0.0")
+
     // Optional
     compileOnly("com.github.ben-manes.caffeine:caffeine:3.1.8")
     compileOnly("io.micrometer:micrometer-core:1.13.0")

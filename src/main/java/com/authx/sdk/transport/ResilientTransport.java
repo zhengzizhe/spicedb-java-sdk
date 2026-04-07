@@ -76,8 +76,8 @@ public class ResilientTransport extends ForwardingTransport {
     public CheckResult check(CheckRequest request) {
         String resourceType = request.resource().type();
         var policy = policyRegistry.resolve(resourceType);
-        Set<String> failOpenPerms = policy.getCircuitBreaker() != null
-                ? policy.getCircuitBreaker().getFailOpenPermissions() : Set.of();
+        Set<String> failOpenPerms = policy.circuitBreaker() != null
+                ? policy.circuitBreaker().failOpenPermissions() : Set.of();
 
         try {
             return executeWithResilience(resourceType,
@@ -208,20 +208,20 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private CircuitBreaker createBreaker(String resourceType) {
-        var policy = policyRegistry.resolve(resourceType).getCircuitBreaker();
+        var policy = policyRegistry.resolve(resourceType).circuitBreaker();
         if (policy == null) policy = CircuitBreakerPolicy.defaults();
 
         CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                .failureRateThreshold((float) policy.getFailureRateThreshold())
-                .slowCallRateThreshold((float) policy.getSlowCallRateThreshold())
-                .slowCallDurationThreshold(policy.getSlowCallDuration())
-                .slidingWindowType(policy.getSlidingWindowType() == CircuitBreakerPolicy.SlidingWindowType.TIME_BASED
+                .failureRateThreshold((float) policy.failureRateThreshold())
+                .slowCallRateThreshold((float) policy.slowCallRateThreshold())
+                .slowCallDurationThreshold(policy.slowCallDuration())
+                .slidingWindowType(policy.slidingWindowType() == CircuitBreakerPolicy.SlidingWindowType.TIME_BASED
                         ? CircuitBreakerConfig.SlidingWindowType.TIME_BASED
                         : CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
-                .slidingWindowSize(policy.getSlidingWindowSize())
-                .minimumNumberOfCalls(policy.getMinimumNumberOfCalls())
-                .waitDurationInOpenState(policy.getWaitInOpenState())
-                .permittedNumberOfCallsInHalfOpenState(policy.getPermittedCallsInHalfOpen())
+                .slidingWindowSize(policy.slidingWindowSize())
+                .minimumNumberOfCalls(policy.minimumNumberOfCalls())
+                .waitDurationInOpenState(policy.waitInOpenState())
+                .permittedNumberOfCallsInHalfOpenState(policy.permittedCallsInHalfOpen())
                 .ignoreExceptions(
                         AuthxInvalidArgumentException.class,
                         AuthxAuthException.class,
@@ -232,7 +232,7 @@ public class ResilientTransport extends ForwardingTransport {
 
         CircuitBreaker breaker = CircuitBreaker.of("authx-" + resourceType, config);
 
-        if (!policy.isEnabled()) {
+        if (!policy.enabled()) {
             breaker.transitionToDisabledState();
         }
 
@@ -276,16 +276,16 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private Retry createRetry(String resourceType) {
-        var policy = policyRegistry.resolve(resourceType).getRetry();
-        if (policy == null || policy.getMaxAttempts() <= 0) {
+        var policy = policyRegistry.resolve(resourceType).retry();
+        if (policy == null || policy.maxAttempts() <= 0) {
             return Retry.of("authx-" + resourceType + "-noop",
                     RetryConfig.custom().maxAttempts(1).build());
         }
 
         RetryConfig config = RetryConfig.custom()
-                .maxAttempts(policy.getMaxAttempts())
+                .maxAttempts(policy.maxAttempts())
                 .intervalFunction(io.github.resilience4j.core.IntervalFunction.ofExponentialRandomBackoff(
-                        policy.getBaseDelay().toMillis(), policy.getMultiplier(), policy.getJitterFactor()))
+                        policy.baseDelay().toMillis(), policy.multiplier(), policy.jitterFactor()))
                 .retryOnException(t -> {
                     if (!(t instanceof Exception e) || !policy.shouldRetry(e)) {
                         return false;
@@ -304,7 +304,7 @@ public class ResilientTransport extends ForwardingTransport {
 
         retry.getEventPublisher().onRetry(event ->
                 LOG.log(System.Logger.Level.WARNING, "Retry {0}/{1} for [{2}]: {3}",
-                        event.getNumberOfRetryAttempts(), policy.getMaxAttempts(),
+                        event.getNumberOfRetryAttempts(), policy.maxAttempts(),
                         resourceType, event.getLastThrowable().getMessage()));
 
         return retry;

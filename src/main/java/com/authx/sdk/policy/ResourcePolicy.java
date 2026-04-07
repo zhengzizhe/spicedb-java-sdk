@@ -32,11 +32,11 @@ public class ResourcePolicy {
         this.timeout = builder.timeout;
     }
 
-    public CachePolicy getCache() { return cache; }
-    public ReadConsistency getReadConsistency() { return readConsistency; }
-    public RetryPolicy getRetry() { return retry; }
-    public CircuitBreakerPolicy getCircuitBreaker() { return circuitBreaker; }
-    public Duration getTimeout() { return timeout; }
+    public CachePolicy cache() { return cache; }
+    public ReadConsistency readConsistency() { return readConsistency; }
+    public RetryPolicy retry() { return retry; }
+    public CircuitBreakerPolicy circuitBreaker() { return circuitBreaker; }
+    public Duration timeout() { return timeout; }
 
     /**
      * Merge this policy with a parent (fallback). Non-null fields in this policy win.

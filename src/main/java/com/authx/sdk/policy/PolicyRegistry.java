@@ -17,7 +17,7 @@ import java.util.Map;
  * <pre>
  * PolicyRegistry.builder()
  *     .defaultPolicy(ResourcePolicy.builder()
- *         .cache(CachePolicy.ofTtl(Duration.ofSeconds(5)))
+ *         .cache(CachePolicy.of(Duration.ofSeconds(5)))
  *         .readConsistency(ReadConsistency.session())
  *         .build())
  *     .forResourceType("document", ResourcePolicy.builder()
@@ -29,7 +29,7 @@ import java.util.Map;
  *         .readConsistency(ReadConsistency.strong())
  *         .build())
  *     .forResourceType("folder", ResourcePolicy.builder()
- *         .cache(CachePolicy.ofTtl(Duration.ofSeconds(30)))
+ *         .cache(CachePolicy.of(Duration.ofSeconds(30)))
  *         .build())
  *     .forResourceType("group", ResourcePolicy.builder()
  *         .cache(CachePolicy.disabled())
@@ -73,8 +73,8 @@ public class PolicyRegistry {
      */
     public Duration resolveCacheTtl(String resourceType, String permission) {
         ResourcePolicy effective = resolve(resourceType);
-        CachePolicy cache = effective.getCache();
-        if (cache == null || !cache.isEnabled()) return Duration.ZERO;
+        CachePolicy cache = effective.cache();
+        if (cache == null || !cache.enabled()) return Duration.ZERO;
         return cache.resolveTtl(permission);
     }
 
@@ -83,17 +83,17 @@ public class PolicyRegistry {
      */
     public boolean isCacheEnabled(String resourceType) {
         ResourcePolicy effective = resolve(resourceType);
-        return effective.getCache() != null && effective.getCache().isEnabled();
+        return effective.cache() != null && effective.cache().enabled();
     }
 
     /**
      * Resolve read consistency for a resource type.
      */
     public ReadConsistency resolveReadConsistency(String resourceType) {
-        return resolve(resourceType).getReadConsistency();
+        return resolve(resourceType).readConsistency();
     }
 
-    public ResourcePolicy getDefaultPolicy() { return defaultPolicy; }
+    public ResourcePolicy defaultPolicy() { return defaultPolicy; }
 
     public static PolicyRegistry withDefaults() {
         return new Builder().build();

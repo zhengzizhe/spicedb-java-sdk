@@ -27,11 +27,11 @@ public class RetryPolicy {
         this.nonRetryableExceptions = Set.copyOf(builder.nonRetryableExceptions);
     }
 
-    public int getMaxAttempts() { return maxAttempts; }
-    public Duration getBaseDelay() { return baseDelay; }
-    public Duration getMaxDelay() { return maxDelay; }
-    public double getMultiplier() { return multiplier; }
-    public double getJitterFactor() { return jitterFactor; }
+    public int maxAttempts() { return maxAttempts; }
+    public Duration baseDelay() { return baseDelay; }
+    public Duration maxDelay() { return maxDelay; }
+    public double multiplier() { return multiplier; }
+    public double jitterFactor() { return jitterFactor; }
 
     public boolean shouldRetry(Exception e) {
         if (nonRetryableExceptions.stream().anyMatch(cls -> cls.isInstance(e))) return false;

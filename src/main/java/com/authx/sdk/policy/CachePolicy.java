@@ -30,7 +30,7 @@ public class CachePolicy {
         this.permissionTtls = Map.copyOf(builder.permissionTtls);
     }
 
-    public boolean isEnabled() { return enabled; }
+    public boolean enabled() { return enabled; }
 
     /**
      * Resolve effective TTL for a specific permission.
@@ -40,14 +40,14 @@ public class CachePolicy {
         return permissionTtls.getOrDefault(permission, ttl);
     }
 
-    public Duration getTtl() { return ttl; }
-    public Duration getMaxIdleTime() { return maxIdleTime; }
+    public Duration ttl() { return ttl; }
+    public Duration maxIdleTime() { return maxIdleTime; }
 
     public static CachePolicy disabled() {
         return new Builder().enabled(false).build();
     }
 
-    public static CachePolicy ofTtl(Duration ttl) {
+    public static CachePolicy of(Duration ttl) {
         return new Builder().ttl(ttl).build();
     }
 

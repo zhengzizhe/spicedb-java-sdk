@@ -37,17 +37,17 @@ public class CircuitBreakerPolicy {
         this.onStateChange = builder.onStateChange;
     }
 
-    public boolean isEnabled() { return enabled; }
-    public double getFailureRateThreshold() { return failureRateThreshold; }
-    public double getSlowCallRateThreshold() { return slowCallRateThreshold; }
-    public Duration getSlowCallDuration() { return slowCallDuration; }
-    public SlidingWindowType getSlidingWindowType() { return slidingWindowType; }
-    public int getSlidingWindowSize() { return slidingWindowSize; }
-    public int getMinimumNumberOfCalls() { return minimumNumberOfCalls; }
-    public Duration getWaitInOpenState() { return waitInOpenState; }
-    public int getPermittedCallsInHalfOpen() { return permittedCallsInHalfOpen; }
-    public Set<String> getFailOpenPermissions() { return failOpenPermissions; }
-    public BiConsumer<String, String> getOnStateChange() { return onStateChange; }
+    public boolean enabled() { return enabled; }
+    public double failureRateThreshold() { return failureRateThreshold; }
+    public double slowCallRateThreshold() { return slowCallRateThreshold; }
+    public Duration slowCallDuration() { return slowCallDuration; }
+    public SlidingWindowType slidingWindowType() { return slidingWindowType; }
+    public int slidingWindowSize() { return slidingWindowSize; }
+    public int minimumNumberOfCalls() { return minimumNumberOfCalls; }
+    public Duration waitInOpenState() { return waitInOpenState; }
+    public int permittedCallsInHalfOpen() { return permittedCallsInHalfOpen; }
+    public Set<String> failOpenPermissions() { return failOpenPermissions; }
+    public BiConsumer<String, String> onStateChange() { return onStateChange; }
 
     public static CircuitBreakerPolicy disabled() {
         return new Builder().enabled(false).build();

@@ -41,7 +41,7 @@ public class SpiceDbConfig {
         return PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .circuitBreaker(CircuitBreakerPolicy.disabled())
-                        .cache(CachePolicy.ofTtl(Duration.ofSeconds(30)))
+                        .cache(CachePolicy.of(Duration.ofSeconds(30)))
                         .readConsistency(ReadConsistency.minimizeLatency())
                         .build())
                 .build();

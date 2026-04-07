@@ -52,7 +52,7 @@ class MultiInstanceStressTest {
 
         var policies = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
-                        .cache(CachePolicy.ofTtl(Duration.ofSeconds(5)))
+                        .cache(CachePolicy.of(Duration.ofSeconds(5)))
                         .readConsistency(ReadConsistency.minimizeLatency())
                         .retry(RetryPolicy.defaults())
                         .build())
