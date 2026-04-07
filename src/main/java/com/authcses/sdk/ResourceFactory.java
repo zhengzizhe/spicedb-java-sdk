@@ -2,7 +2,9 @@ package com.authcses.sdk;
 
 import com.authcses.sdk.model.CheckResult;
 import com.authcses.sdk.model.Consistency;
+import com.authcses.sdk.model.Permission;
 import com.authcses.sdk.model.PermissionSet;
+import com.authcses.sdk.model.Relation;
 import com.authcses.sdk.transport.SdkTransport;
 
 import java.util.Collection;
@@ -97,9 +99,23 @@ public class ResourceFactory {
     // ================================================================
     //  Convenience methods — simple scenarios, no chaining needed.
     //  For complex scenarios (caveat, expiresAt, batch), use resource(id).xxx()
+    //
+    //  Each method has a String overload and an enum overload:
+    //    check(id, "view", userId)                 — string
+    //    check(id, Document.Permission.VIEW, userId) — enum (codegen)
     // ================================================================
 
     // ---- Check ----
+
+    /** Check a single permission (enum). Returns true if allowed. */
+    public boolean check(String id, Permission.Named permission, String userId) {
+        return check(id, permission.permissionName(), userId);
+    }
+
+    /** Check with explicit consistency (enum). */
+    public boolean check(String id, Permission.Named permission, String userId, Consistency consistency) {
+        return check(id, permission.permissionName(), userId, consistency);
+    }
 
     /** Check a single permission. Returns true if allowed. */
     public boolean check(String id, String permission, String userId) {
@@ -158,6 +174,16 @@ public class ResourceFactory {
 
     // ---- Grant ----
 
+    /** Grant relation to user(s) (enum). */
+    public void grant(String id, Relation.Named relation, String... userIds) {
+        grant(id, relation.relationName(), userIds);
+    }
+
+    /** Grant relation to subject refs (enum). */
+    public void grantToSubjects(String id, Relation.Named relation, String... subjectRefs) {
+        grantToSubjects(id, relation.relationName(), subjectRefs);
+    }
+
     /** Grant relation to user(s). */
     public void grant(String id, String relation, String... userIds) {
         resource(id).grant(relation).to(userIds);
@@ -179,6 +205,16 @@ public class ResourceFactory {
     }
 
     // ---- Revoke ----
+
+    /** Revoke relation from user(s) (enum). */
+    public void revoke(String id, Relation.Named relation, String... userIds) {
+        revoke(id, relation.relationName(), userIds);
+    }
+
+    /** Revoke relation from subject refs (enum). */
+    public void revokeFromSubjects(String id, Relation.Named relation, String... subjectRefs) {
+        revokeFromSubjects(id, relation.relationName(), subjectRefs);
+    }
 
     /** Revoke relation from user(s). */
     public void revoke(String id, String relation, String... userIds) {
