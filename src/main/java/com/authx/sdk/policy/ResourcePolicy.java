@@ -1,5 +1,7 @@
 package com.authx.sdk.policy;
 
+import org.jspecify.annotations.Nullable;
+
 import java.time.Duration;
 
 /**
@@ -18,11 +20,11 @@ import java.time.Duration;
  */
 public class ResourcePolicy {
 
-    private final CachePolicy cache;
-    private final ReadConsistency readConsistency;
-    private final RetryPolicy retry;
-    private final CircuitBreakerPolicy circuitBreaker;
-    private final Duration timeout;
+    private final @Nullable CachePolicy cache;
+    private final @Nullable ReadConsistency readConsistency;
+    private final @Nullable RetryPolicy retry;
+    private final @Nullable CircuitBreakerPolicy circuitBreaker;
+    private final @Nullable Duration timeout;
 
     private ResourcePolicy(Builder builder) {
         this.cache = builder.cache;
@@ -32,11 +34,11 @@ public class ResourcePolicy {
         this.timeout = builder.timeout;
     }
 
-    public CachePolicy cache() { return cache; }
-    public ReadConsistency readConsistency() { return readConsistency; }
-    public RetryPolicy retry() { return retry; }
-    public CircuitBreakerPolicy circuitBreaker() { return circuitBreaker; }
-    public Duration timeout() { return timeout; }
+    public @Nullable CachePolicy cache() { return cache; }
+    public @Nullable ReadConsistency readConsistency() { return readConsistency; }
+    public @Nullable RetryPolicy retry() { return retry; }
+    public @Nullable CircuitBreakerPolicy circuitBreaker() { return circuitBreaker; }
+    public @Nullable Duration timeout() { return timeout; }
 
     /**
      * Merge this policy with a parent (fallback). Non-null fields in this policy win.

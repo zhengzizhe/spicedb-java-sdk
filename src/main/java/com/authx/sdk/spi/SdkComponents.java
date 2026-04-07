@@ -1,5 +1,7 @@
 package com.authx.sdk.spi;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Registry for pluggable SDK components.
  *
@@ -13,7 +15,7 @@ package com.authx.sdk.spi;
 public record SdkComponents(
         TelemetrySink telemetrySink,
         SdkClock clock,
-        DistributedTokenStore tokenStore
+        @Nullable DistributedTokenStore tokenStore
 ) {
     public static SdkComponents defaults() {
         return new SdkComponents(TelemetrySink.NOOP, SdkClock.SYSTEM, null);

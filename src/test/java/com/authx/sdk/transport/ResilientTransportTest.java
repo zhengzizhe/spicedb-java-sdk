@@ -34,7 +34,7 @@ class ResilientTransportTest {
                         SubjectRef.of("user", "alice", null))));
         var transport = new ResilientTransport(delegate, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
 
-        var result = transport.check(CheckRequest.from("document", "doc-1", "viewer", "user", "alice", Consistency.minimizeLatency()));
+        var result = transport.check(CheckRequest.of("document", "doc-1", "viewer", "user", "alice", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
     }
 
@@ -52,7 +52,7 @@ class ResilientTransportTest {
         SdkTransport delegate = failingDelegate(callCount, 2, OK);
         var transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
-        var result = transport.check(CheckRequest.from("document", "doc-1", "view", "user", "alice", Consistency.minimizeLatency()));
+        var result = transport.check(CheckRequest.of("document", "doc-1", "view", "user", "alice", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
         assertThat(callCount.get()).isEqualTo(3); // 2 failures + 1 success
     }
@@ -77,13 +77,13 @@ class ResilientTransportTest {
 
         // Exhaust the sliding window
         for (int i = 0; i < 4; i++) {
-            try { transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
+            try { transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
         // Next call should be rejected by circuit breaker
         assertThatThrownBy(() ->
-                transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
+                transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);
     }
 
@@ -108,17 +108,17 @@ class ResilientTransportTest {
 
         // Open the circuit
         for (int i = 0; i < 4; i++) {
-            try { transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
+            try { transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
         // fail-open for "view"
-        var result = transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency()));
+        var result = transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
 
         // "edit" is NOT in fail-open set
         assertThatThrownBy(() ->
-                transport.check(CheckRequest.from("doc", "1", "edit", "user", "a", Consistency.minimizeLatency())))
+                transport.check(CheckRequest.of("doc", "1", "edit", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);
     }
 
@@ -142,18 +142,18 @@ class ResilientTransportTest {
 
         // Fail "document" breaker
         for (int i = 0; i < 4; i++) {
-            try { transport.check(CheckRequest.from("document", "1", "view", "user", "a", Consistency.minimizeLatency())); }
+            try { transport.check(CheckRequest.of("document", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
         // "document" circuit is open
         assertThatThrownBy(() ->
-                transport.check(CheckRequest.from("document", "1", "view", "user", "a", Consistency.minimizeLatency())))
+                transport.check(CheckRequest.of("document", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);
 
         // "folder" circuit is still closed — should call delegate (and fail, but not with CircuitBreakerOpenException)
         assertThatThrownBy(() ->
-                transport.check(CheckRequest.from("folder", "1", "view", "user", "a", Consistency.minimizeLatency())))
+                transport.check(CheckRequest.of("folder", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(AuthxConnectionException.class);
     }
 
@@ -173,7 +173,7 @@ class ResilientTransportTest {
         // Even after many failures, no CircuitBreakerOpenException
         for (int i = 0; i < 100; i++) {
             assertThatThrownBy(() ->
-                    transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
+                    transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
                     .isInstanceOf(AuthxConnectionException.class);
         }
         assertThat(callCount.get()).isEqualTo(100);
@@ -202,20 +202,20 @@ class ResilientTransportTest {
 
         // 6 logical calls to fill the sliding window — each exhausts retries internally
         for (int i = 0; i < 6; i++) {
-            try { transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
+            try { transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency())); }
             catch (Exception ignored) {}
         }
 
         // Circuit should now be open (100% failure rate > 50% threshold)
         assertThatThrownBy(() ->
-                transport.check(CheckRequest.from("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
+                transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency())))
                 .isInstanceOf(CircuitBreakerOpenException.class);
     }
 
     @Test
     void close_cleansUpInstances() {
         var transport = new ResilientTransport(new InMemoryTransport(), PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
-        transport.check(CheckRequest.from("document", "1", "viewer", "user", "a", Consistency.minimizeLatency()));
+        transport.check(CheckRequest.of("document", "1", "viewer", "user", "a", Consistency.minimizeLatency()));
         transport.close(); // should not throw
     }
 

@@ -36,12 +36,12 @@ class CachedTransportTest {
                 SubjectRef.of("user", "alice", null))));
 
         // First check — miss, goes to delegate
-        var r1 = cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
+        var r1 = cached.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         assertTrue(r1.hasPermission());
         assertEquals(1, cache.size());
 
         // Second check — cache hit
-        var r2 = cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
+        var r2 = cached.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         assertTrue(r2.hasPermission());
     }
 
@@ -54,7 +54,7 @@ class CachedTransportTest {
                 SubjectRef.of("user", "alice", null))));
 
         // Full consistency — should NOT cache
-        cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.full()));
+        cached.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.full()));
         assertEquals(0, cache.size());
     }
 
@@ -66,7 +66,7 @@ class CachedTransportTest {
                 ResourceRef.of("document", "d1"),
                 Relation.of("editor"),
                 SubjectRef.of("user", "alice", null))));
-        cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
+        cached.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         assertEquals(1, cache.size());
 
         // Write (grant another user) → should invalidate d1's cache
@@ -85,7 +85,7 @@ class CachedTransportTest {
                 ResourceRef.of("document", "d1"),
                 Relation.of("editor"),
                 SubjectRef.of("user", "alice", null))));
-        cached.check(CheckRequest.from("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
+        cached.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         cached.deleteRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.DELETE,

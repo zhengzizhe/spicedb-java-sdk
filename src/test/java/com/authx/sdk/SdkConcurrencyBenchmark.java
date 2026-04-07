@@ -113,7 +113,7 @@ public class SdkConcurrencyBenchmark {
                     String userId = "user-" + rng.nextInt(userCount);
 
                     long opStart = System.nanoTime();
-                    transport.check(CheckRequest.from("document", docId, "editor", "user", userId, Consistency.minimizeLatency()));
+                    transport.check(CheckRequest.of("document", docId, "editor", "user", userId, Consistency.minimizeLatency()));
                     long opNanos = System.nanoTime() - opStart;
 
                     totalNanos.addAndGet(opNanos);
@@ -170,7 +170,7 @@ public class SdkConcurrencyBenchmark {
                 }
                 for (int i = 0; i < opsPerThread; i++) {
                     long opStart = System.nanoTime();
-                    transport.check(CheckRequest.from("document", "doc-0", "editor", "user", "user-0", Consistency.minimizeLatency()));
+                    transport.check(CheckRequest.of("document", "doc-0", "editor", "user", "user-0", Consistency.minimizeLatency()));
                     long opNanos = System.nanoTime() - opStart;
 
                     totalNanos.addAndGet(opNanos);
@@ -221,7 +221,7 @@ public class SdkConcurrencyBenchmark {
     static void warmCache(SdkTransport transport, int docCount, int userCount) {
         for (int d = 0; d < docCount; d++) {
             for (int u = 0; u < userCount; u++) {
-                transport.check(CheckRequest.from("document", "doc-" + d, "editor", "user", "user-" + u, Consistency.minimizeLatency()));
+                transport.check(CheckRequest.of("document", "doc-" + d, "editor", "user", "user-" + u, Consistency.minimizeLatency()));
             }
         }
     }

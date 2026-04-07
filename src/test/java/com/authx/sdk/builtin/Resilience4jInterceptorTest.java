@@ -34,7 +34,7 @@ class Resilience4jInterceptorTest {
                 SubjectRef.of("user", "alice", null))));
 
         var transport = new InterceptorTransport(inner, List.of(interceptor));
-        var request = CheckRequest.from("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        var request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         // First call succeeds
         transport.check(request);
@@ -62,7 +62,7 @@ class Resilience4jInterceptorTest {
         };
 
         var transport = new InterceptorTransport(blockingTransport, List.of(interceptor));
-        var request = CheckRequest.from("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        var request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         // First call acquires bulkhead and succeeds (also releases in finally)
         transport.check(request);
@@ -84,7 +84,7 @@ class Resilience4jInterceptorTest {
                 SubjectRef.of("user", "alice", null))));
 
         var transport = new InterceptorTransport(inner, List.of(interceptor));
-        var request = CheckRequest.from("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        var request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         for (int i = 0; i < 1000; i++) {
             transport.check(request);

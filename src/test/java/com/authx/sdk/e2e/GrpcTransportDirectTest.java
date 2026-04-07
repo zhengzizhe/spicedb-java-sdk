@@ -64,7 +64,7 @@ class GrpcTransportDirectTest {
 
         // Check
         CheckResult cr = transport.check(
-                CheckRequest.from("document", "grpc-test-1", "editor",
+                CheckRequest.of("document", "grpc-test-1", "editor",
                         "user", "grpc-alice", Consistency.full()));
         assertTrue(cr.hasPermission(), "grpc-alice should have editor after write");
     }
@@ -99,7 +99,7 @@ class GrpcTransportDirectTest {
                         SubjectRef.of("user", "grpc-alice", null))));
 
         CheckResult cr = transport.check(
-                CheckRequest.from("document", "grpc-test-1", "editor",
+                CheckRequest.of("document", "grpc-test-1", "editor",
                         "user", "grpc-alice", Consistency.full()));
         assertFalse(cr.hasPermission(), "grpc-alice should no longer have editor");
     }

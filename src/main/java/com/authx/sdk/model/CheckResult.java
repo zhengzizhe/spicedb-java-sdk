@@ -1,6 +1,7 @@
 package com.authx.sdk.model;
 
 import com.authx.sdk.model.enums.Permissionship;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -10,7 +11,7 @@ import java.util.Optional;
  */
 public record CheckResult(
         Permissionship permissionship,
-        String zedToken,
+        @Nullable String zedToken,
         Optional<Instant> expiresAt
 ) {
     public static CheckResult allowed(String zedToken) {

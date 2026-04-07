@@ -21,7 +21,7 @@ class RequestObjectTest {
     }
 
     @Test void checkRequest_from_bridgesStrings() {
-        var req = CheckRequest.from("document", "d1", "view", "user", "alice", Consistency.minimizeLatency());
+        var req = CheckRequest.of("document", "d1", "view", "user", "alice", Consistency.minimizeLatency());
         assertThat(req.resource()).isEqualTo(ResourceRef.of("document", "d1"));
         assertThat(req.permission()).isEqualTo(Permission.of("view"));
         assertThat(req.subject()).isEqualTo(SubjectRef.of("user", "alice", null));
@@ -29,14 +29,14 @@ class RequestObjectTest {
     }
 
     @Test void checkRequest_from_withRelation() {
-        var req = CheckRequest.from("document", "d1", "view", "group", "admins", "member", Consistency.full());
+        var req = CheckRequest.of("document", "d1", "view", "group", "admins", "member", Consistency.full());
         assertThat(req.subject().type()).isEqualTo("group");
         assertThat(req.subject().id()).isEqualTo("admins");
         assertThat(req.subject().relation()).isEqualTo("member");
     }
 
     @Test void checkRequest_toKey() {
-        var req = CheckRequest.from("document", "d1", "view", "user", "alice", Consistency.full());
+        var req = CheckRequest.of("document", "d1", "view", "user", "alice", Consistency.full());
         var key = req.toKey();
         assertThat(key.resource()).isEqualTo(ResourceRef.of("document", "d1"));
         assertThat(key.permission()).isEqualTo(Permission.of("view"));

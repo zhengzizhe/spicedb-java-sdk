@@ -1,5 +1,7 @@
 package com.authx.sdk.model;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Map;
 import java.util.Objects;
 
@@ -9,7 +11,7 @@ public record CheckRequest(
     Permission permission,
     SubjectRef subject,
     Consistency consistency,
-    Map<String, Object> caveatContext
+    @Nullable Map<String, Object> caveatContext
 ) {
     public CheckRequest {
         Objects.requireNonNull(resource, "resource");
@@ -23,7 +25,7 @@ public record CheckRequest(
     }
 
     /** Bridge from legacy String params (used internally by AuthxClient). */
-    public static CheckRequest from(String resourceType, String resourceId, String permission,
+    public static CheckRequest of(String resourceType, String resourceId, String permission,
                                      String subjectType, String subjectId, Consistency consistency) {
         return new CheckRequest(
             ResourceRef.of(resourceType, resourceId),
@@ -33,7 +35,7 @@ public record CheckRequest(
     }
 
     /** Bridge with subject relation support. */
-    public static CheckRequest from(String resourceType, String resourceId, String permission,
+    public static CheckRequest of(String resourceType, String resourceId, String permission,
                                      String subjectType, String subjectId, String subjectRelation,
                                      Consistency consistency) {
         return new CheckRequest(

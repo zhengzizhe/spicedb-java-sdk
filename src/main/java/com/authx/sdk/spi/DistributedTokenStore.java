@@ -1,5 +1,7 @@
 package com.authx.sdk.spi;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * SPI for sharing ZedTokens across SDK instances (e.g., via Redis).
  *
@@ -36,5 +38,5 @@ public interface DistributedTokenStore {
     /**
      * Retrieve a token. Returns null on miss or error.
      */
-    String get(String key);
+    @Nullable String get(String key);
 }

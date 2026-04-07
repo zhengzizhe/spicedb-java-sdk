@@ -59,7 +59,7 @@ class InterceptorChainTest {
         };
 
         var transport = new InterceptorTransport(inner, List.of(first, second));
-        var result = transport.check(CheckRequest.from(
+        var result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertTrue(result.hasPermission());
@@ -88,7 +88,7 @@ class InterceptorChainTest {
         };
 
         var transport = new InterceptorTransport(inner, List.of(shortCircuit, unreachable));
-        var result = transport.check(CheckRequest.from(
+        var result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertFalse(result.hasPermission());
@@ -123,7 +123,7 @@ class InterceptorChainTest {
         var transport = new InterceptorTransport(inner, List.of(permissionRewriter));
 
         // Bob is NOT an editor, but the interceptor rewrites to "viewer" check
-        var result = transport.check(CheckRequest.from(
+        var result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "bob", Consistency.minimizeLatency()));
         assertTrue(result.hasPermission());
     }
@@ -154,7 +154,7 @@ class InterceptorChainTest {
         };
 
         var transport = new InterceptorTransport(failing, List.of(errorHandler));
-        var result = transport.check(CheckRequest.from(
+        var result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertFalse(result.hasPermission());
@@ -166,7 +166,7 @@ class InterceptorChainTest {
     @Test
     void emptyInterceptorListGoesDirectlyToTransport() {
         var transport = new InterceptorTransport(inner, List.of());
-        var result = transport.check(CheckRequest.from(
+        var result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertTrue(result.hasPermission());
@@ -223,7 +223,7 @@ class InterceptorChainTest {
         };
 
         var transport = new InterceptorTransport(inner, List.of(setter, reader));
-        transport.check(CheckRequest.from(
+        transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertEquals("trace-abc-123", capturedTraceId[0]);
@@ -246,7 +246,7 @@ class InterceptorChainTest {
         };
 
         var transport = new InterceptorTransport(inner, List.of(timer));
-        transport.check(CheckRequest.from(
+        transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertTrue(capturedDuration[0] > 0, "Duration should be positive");
@@ -274,7 +274,7 @@ class InterceptorChainTest {
         var transport = new InterceptorTransport(failing, List.of(passthrough));
 
         var ex = assertThrows(RuntimeException.class, () ->
-                transport.check(CheckRequest.from(
+                transport.check(CheckRequest.of(
                         "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency())));
         assertEquals("connection refused", ex.getMessage());
     }
@@ -292,7 +292,7 @@ class InterceptorChainTest {
         };
 
         var transport = new InterceptorTransport(inner, List.of(writeOnly));
-        var result = transport.check(CheckRequest.from(
+        var result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertTrue(result.hasPermission());

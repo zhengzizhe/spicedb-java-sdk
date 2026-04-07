@@ -6,6 +6,8 @@ import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.WriteRequest;
 import com.authx.sdk.model.enums.SdkAction;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -138,8 +140,8 @@ public interface SdkInterceptor {
 
         // Set after execution
         private long durationMs;
-        private String result;
-        private Throwable error;
+        private @Nullable String result;
+        private @Nullable Throwable error;
 
         public OperationContext(SdkAction action, String resourceType, String resourceId,
                                 String permission, String subjectType, String subjectId) {

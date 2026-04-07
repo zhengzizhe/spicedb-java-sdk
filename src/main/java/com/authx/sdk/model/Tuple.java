@@ -1,5 +1,7 @@
 package com.authx.sdk.model;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A relationship tuple: resource#relation@subject.
  * Example: document:doc-123#editor@user:alice
@@ -7,7 +9,7 @@ package com.authx.sdk.model;
 public record Tuple(
         String resourceType, String resourceId,
         String relation,
-        String subjectType, String subjectId, String subjectRelation
+        String subjectType, String subjectId, @Nullable String subjectRelation
 ) {
     public String subject() {
         if (subjectRelation != null) return subjectType + ":" + subjectId + "#" + subjectRelation;

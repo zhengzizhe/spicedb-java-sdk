@@ -1,9 +1,11 @@
 package com.authx.sdk.model;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Objects;
 
 /** Immutable reference to a subject. Replaces (String subjectType, String subjectId, String subjectRelation) and the existing Ref class. */
-public record SubjectRef(String type, String id, String relation) {
+public record SubjectRef(String type, String id, @Nullable String relation) {
     public SubjectRef {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(id, "id");

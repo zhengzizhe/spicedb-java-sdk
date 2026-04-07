@@ -1,5 +1,7 @@
 package com.authx.sdk.policy;
 
+import org.jspecify.annotations.Nullable;
+
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -20,7 +22,7 @@ public class CachePolicy {
 
     private final boolean enabled;
     private final Duration ttl;
-    private final Duration maxIdleTime;
+    private final @Nullable Duration maxIdleTime;
     private final Map<String, Duration> permissionTtls;
 
     private CachePolicy(Builder builder) {
@@ -41,7 +43,7 @@ public class CachePolicy {
     }
 
     public Duration ttl() { return ttl; }
-    public Duration maxIdleTime() { return maxIdleTime; }
+    public @Nullable Duration maxIdleTime() { return maxIdleTime; }
 
     public static CachePolicy disabled() {
         return new Builder().enabled(false).build();
