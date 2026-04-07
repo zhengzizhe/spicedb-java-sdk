@@ -52,7 +52,6 @@ dependencies {
 
     // Optional
     compileOnly("com.github.ben-manes.caffeine:caffeine:3.1.8")
-    compileOnly("io.lettuce:lettuce-core:6.3.2.RELEASE")
     compileOnly("io.micrometer:micrometer-core:1.13.0")
 
     // Testing
@@ -60,7 +59,6 @@ dependencies {
     testImplementation("org.assertj:assertj-core:3.25.3")
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
-    testImplementation("io.lettuce:lettuce-core:6.3.2.RELEASE")
     testImplementation("io.grpc:grpc-inprocess:1.72.0")
     testImplementation("org.testcontainers:testcontainers:1.21.1")
     testImplementation("org.testcontainers:junit-jupiter:1.21.1")

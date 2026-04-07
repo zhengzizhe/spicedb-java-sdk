@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Multi-instance stress test: 3 SDK clients sharing the same SpiceDB cluster + Redis.
+ * Multi-instance stress test: 3 SDK clients sharing the same SpiceDB cluster.
  *
  * Tests:
  * 1. Concurrent write correctness
@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * 3. Cache hit rate under load
  * 4. Throughput and latency
  *
- * Requires: SpiceDB on 50061/50062, Redis on 6379.
+ * Requires: SpiceDB on 50061/50062.
  * Run: ./gradlew :test --tests "com.authx.sdk.stress.MultiInstanceStressTest"
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -38,9 +38,6 @@ class MultiInstanceStressTest {
     static AuthxClient instance2;
     static AuthxClient instance3;
 
-    // Redis client shared across instances
-    static Object redisClient;
-
     @BeforeAll
     static void setup() {
         // Check SpiceDB reachable
@@ -53,15 +50,6 @@ class MultiInstanceStressTest {
             assumeTrue(false, "SpiceDB not reachable on " + SPICEDB_1 + ": " + e.getMessage());
         }
 
-        // Check Redis reachable
-        try {
-            var rc = io.lettuce.core.RedisClient.create("redis://localhost:6379");
-            rc.connect().sync().ping();
-            redisClient = rc;
-        } catch (Exception e) {
-            assumeTrue(false, "Redis not reachable: " + e.getMessage());
-        }
-
         var policies = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .cache(CachePolicy.ofTtl(Duration.ofSeconds(5)))
@@ -70,20 +58,18 @@ class MultiInstanceStressTest {
                         .build())
                 .build();
 
-        // Instance 1: connects to SpiceDB-1, L1+L2+Watch
+        // Instance 1: connects to SpiceDB-1, L1+Watch
         instance1 = AuthxClient.builder()
                 .connection(c -> c.target(SPICEDB_1).presharedKey(PRESHARED_KEY))
-                .cache(c -> c.enabled(true).maxSize(50_000).watchInvalidation(true)
-                        .redis(redisClient).redisTtl(Duration.ofSeconds(10)))
+                .cache(c -> c.enabled(true).maxSize(50_000).watchInvalidation(true))
                 .features(f -> f.coalescing(true).virtualThreads(true))
                 .extend(e -> e.policies(policies))
                 .build();
 
-        // Instance 2: connects to SpiceDB-2, L1+L2+Watch
+        // Instance 2: connects to SpiceDB-2, L1+Watch
         instance2 = AuthxClient.builder()
                 .connection(c -> c.target(SPICEDB_2).presharedKey(PRESHARED_KEY))
-                .cache(c -> c.enabled(true).maxSize(50_000).watchInvalidation(true)
-                        .redis(redisClient).redisTtl(Duration.ofSeconds(10)))
+                .cache(c -> c.enabled(true).maxSize(50_000).watchInvalidation(true))
                 .features(f -> f.coalescing(true).virtualThreads(true))
                 .extend(e -> e.policies(policies))
                 .build();
@@ -105,7 +91,6 @@ class MultiInstanceStressTest {
         if (instance1 != null) instance1.close();
         if (instance2 != null) instance2.close();
         if (instance3 != null) instance3.close();
-        if (redisClient instanceof io.lettuce.core.RedisClient rc) rc.shutdown();
     }
 
     // ============================================================
