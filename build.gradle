@@ -3,7 +3,7 @@ plugins {
     id "maven-publish"
 }
 
-group = "com.authcses"
+group = "com.authx"
 version = rootProject.findProperty("sdkVersion") ?: "1.0.0-SNAPSHOT"
 
 java {
@@ -56,6 +56,7 @@ dependencies {
     testImplementation("org.assertj:assertj-core:3.25.3")
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+    testImplementation("io.grpc:grpc-inprocess:1.72.0")
 }
 
 tasks.withType(Javadoc).configureEach {
@@ -67,7 +68,7 @@ publishing {
     publications {
         maven(MavenPublication) {
             from components.java
-            artifactId = "authcses-sdk"
+            artifactId = "authx-sdk"
         }
     }
 }

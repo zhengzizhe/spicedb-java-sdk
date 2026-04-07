@@ -448,6 +448,10 @@ public class AuthxClient implements AutoCloseable {
                                     ? new TieredCache<>(l1, spi.l2Cache())
                                     : l1;
                         } catch (NoClassDefFoundError e) {
+                            System.getLogger(AuthxClient.class.getName()).log(
+                                    System.Logger.Level.WARNING,
+                                    "Cache enabled but Caffeine not on classpath. Add dependency: " +
+                                    "com.github.ben-manes.caffeine:caffeine:3.1.8. Falling back to no-op cache.");
                             effectiveCache = Cache.noop();
                         }
 
