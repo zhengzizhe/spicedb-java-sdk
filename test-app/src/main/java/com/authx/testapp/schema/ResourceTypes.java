@@ -7,13 +7,13 @@ package com.authx.testapp.schema;
  */
 public final class ResourceTypes {
 
+    public static final String USER = "user";
+    public static final String GROUP = "group";
+    public static final String SPACE = "space";
     public static final String ORGANIZATION = "organization";
     public static final String DOCUMENT = "document";
     public static final String DEPARTMENT = "department";
     public static final String FOLDER = "folder";
-    public static final String USER = "user";
-    public static final String GROUP = "group";
-    public static final String SPACE = "space";
 
     private ResourceTypes() {}
 }

@@ -3,30 +3,26 @@ package com.authx.sdk;
 import com.authx.sdk.model.Relation;
 
 /**
- * Base typed grant action. Supports multiple relations.
+ * Typed grant action. Iterates over ids × relations × subjects.
  * Codegen subclasses add toUser(), toFolder(), toUserAll(), etc.
- *
- * <pre>
- * doc.on("doc-1").grant(Document.Rel.EDITOR, Document.Rel.COMMENTER).toUser("bob");
- * </pre>
  */
 public class TypedGrantAction<R extends Relation.Named> {
 
     protected final ResourceFactory factory;
-    protected final String id;
+    protected final String[] ids;
     protected final R[] relations;
 
     @SafeVarargs
-    public TypedGrantAction(ResourceFactory factory, String id, R... relations) {
+    public TypedGrantAction(ResourceFactory factory, String[] ids, R... relations) {
         this.factory = factory;
-        this.id = id;
+        this.ids = ids;
         this.relations = relations;
     }
 
-    /** String escape hatch — pass raw subject refs. */
+    /** String escape hatch. */
     public void to(String... subjectRefs) {
-        for (R rel : relations) {
-            factory.grantToSubjects(id, rel.relationName(), subjectRefs);
-        }
+        for (String id : ids)
+            for (R rel : relations)
+                factory.grantToSubjects(id, rel.relationName(), subjectRefs);
     }
 }

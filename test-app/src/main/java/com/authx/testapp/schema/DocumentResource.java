@@ -13,10 +13,10 @@ import com.authx.testapp.schema.constants.Document;
  *
  * <pre>
  * DocumentResource doc = new DocumentResource(client);
- * doc.on("doc-1").grant(Document.Rel.EDITOR).toUser("bob");
- * doc.on("doc-1").grant(Document.Rel.EDITOR, Document.Rel.COMMENTER).toUser("bob");
- * doc.on("doc-1").check(Document.Perm.VIEW).by("alice");
- * doc.on("doc-1").revoke(Document.Rel.EDITOR).fromUser("bob");
+ * doc.select("doc-1").grant(Document.Rel.EDITOR).toUser("bob");
+ * doc.select("doc-1").grant(Document.Rel.EDITOR, Document.Rel.COMMENTER).toUser("bob");
+ * doc.select("doc-1").check(Document.Perm.VIEW).by("alice");
+ * doc.select("doc-1").revoke(Document.Rel.EDITOR).fromUser("bob");
  * </pre>
  */
 public class DocumentResource extends TypedResourceFactory<Document.Rel, Document.Perm> {
@@ -26,107 +26,131 @@ public class DocumentResource extends TypedResourceFactory<Document.Rel, Documen
     }
 
     @Override
-    public DocumentHandle select(String id) {
-        return new DocumentHandle(this, id);
+    public DocumentHandle select(String... ids) {
+        return new DocumentHandle(this, ids);
     }
 
     public static class DocumentHandle extends TypedHandle<Document.Rel, Document.Perm> {
 
-        public DocumentHandle(ResourceFactory factory, String id) {
-            super(factory, id);
+        public DocumentHandle(ResourceFactory factory, String[] ids) {
+            super(factory, ids);
         }
 
         @Override @SuppressWarnings("unchecked")
         public DocumentGrantAction grant(Document.Rel... relations) {
-            return new DocumentGrantAction(factory, id, relations);
+            return new DocumentGrantAction(factory, ids, relations);
         }
 
         @Override @SuppressWarnings("unchecked")
         public DocumentRevokeAction revoke(Document.Rel... relations) {
-            return new DocumentRevokeAction(factory, id, relations);
+            return new DocumentRevokeAction(factory, ids, relations);
         }
     }
 
     public static class DocumentGrantAction extends TypedGrantAction<Document.Rel> {
 
-        public DocumentGrantAction(ResourceFactory factory, String id, Document.Rel... relations) {
-            super(factory, id, relations);
+        public DocumentGrantAction(ResourceFactory factory, String[] ids, Document.Rel... relations) {
+            super(factory, ids, relations);
         }
 
-        public void toUser(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "user:" + ids[i];
-            for (var rel : relations) factory.grantToSubjects(id, rel.relationName(), refs);
+        public void toUser(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "user:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
-        public void toGroupMember(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "group:" + ids[i] + "#member";
-            for (var rel : relations) factory.grantToSubjects(id, rel.relationName(), refs);
+        public void toGroupMember(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "group:" + subjectIds[i] + "#member";
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
-        public void toDepartmentAllMembers(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "department:" + ids[i] + "#all_members";
-            for (var rel : relations) factory.grantToSubjects(id, rel.relationName(), refs);
+        public void toDepartmentAllMembers(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i] + "#all_members";
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
         public void toUserAll() {
-            for (var rel : relations) factory.grantToSubjects(id, rel.relationName(), "user:*");
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.grantToSubjects(id, rel.relationName(), "user:*");
         }
 
-        public void toFolder(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "folder:" + ids[i];
-            for (var rel : relations) factory.grantToSubjects(id, rel.relationName(), refs);
+        public void toFolder(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "folder:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
-        public void toSpace(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "space:" + ids[i];
-            for (var rel : relations) factory.grantToSubjects(id, rel.relationName(), refs);
+        public void toSpace(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "space:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
     }
 
     public static class DocumentRevokeAction extends TypedRevokeAction<Document.Rel> {
 
-        public DocumentRevokeAction(ResourceFactory factory, String id, Document.Rel... relations) {
-            super(factory, id, relations);
+        public DocumentRevokeAction(ResourceFactory factory, String[] ids, Document.Rel... relations) {
+            super(factory, ids, relations);
         }
 
-        public void fromUser(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "user:" + ids[i];
-            for (var rel : relations) factory.revokeFromSubjects(id, rel.relationName(), refs);
+        public void fromUser(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "user:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
-        public void fromGroupMember(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "group:" + ids[i] + "#member";
-            for (var rel : relations) factory.revokeFromSubjects(id, rel.relationName(), refs);
+        public void fromGroupMember(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "group:" + subjectIds[i] + "#member";
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
-        public void fromDepartmentAllMembers(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "department:" + ids[i] + "#all_members";
-            for (var rel : relations) factory.revokeFromSubjects(id, rel.relationName(), refs);
+        public void fromDepartmentAllMembers(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i] + "#all_members";
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
         public void fromUserAll() {
-            for (var rel : relations) factory.revokeFromSubjects(id, rel.relationName(), "user:*");
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.revokeFromSubjects(id, rel.relationName(), "user:*");
         }
 
-        public void fromFolder(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "folder:" + ids[i];
-            for (var rel : relations) factory.revokeFromSubjects(id, rel.relationName(), refs);
+        public void fromFolder(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "folder:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
-        public void fromSpace(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "space:" + ids[i];
-            for (var rel : relations) factory.revokeFromSubjects(id, rel.relationName(), refs);
+        public void fromSpace(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "space:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
     }

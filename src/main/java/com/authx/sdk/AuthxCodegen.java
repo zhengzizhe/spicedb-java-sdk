@@ -150,9 +150,9 @@ public final class AuthxCodegen {
 
     /**
      * Generate a typed resource factory class with 3-segment chain:
-     *   doc.on("id").grant(Rel...).toUser("bob")
-     *   doc.on("id").check(Perm).by("alice")
-     *   doc.on("id").revoke(Rel...).fromUser("bob")
+     *   doc.select("id").grant(Rel...).toUser("bob")
+     *   doc.select("id").check(Perm).by("alice")
+     *   doc.select("id").revoke(Rel...).fromUser("bob")
      */
     static String generateTypedResource(String typeName, Set<String> relations, Set<String> permissions,
                                          Map<String, List<SchemaCache.SubjectType>> subjectTypes,
@@ -184,10 +184,10 @@ public final class AuthxCodegen {
         sb.append(" *\n");
         sb.append(" * <pre>\n");
         sb.append(" * ").append(className).append(" doc = new ").append(className).append("(client);\n");
-        sb.append(" * doc.on(\"doc-1\").grant(").append(E).append(".Rel.EDITOR).toUser(\"bob\");\n");
-        sb.append(" * doc.on(\"doc-1\").grant(").append(E).append(".Rel.EDITOR, ").append(E).append(".Rel.COMMENTER).toUser(\"bob\");\n");
-        sb.append(" * doc.on(\"doc-1\").check(").append(E).append(".Perm.VIEW).by(\"alice\");\n");
-        sb.append(" * doc.on(\"doc-1\").revoke(").append(E).append(".Rel.EDITOR).fromUser(\"bob\");\n");
+        sb.append(" * doc.select(\"doc-1\").grant(").append(E).append(".Rel.EDITOR).toUser(\"bob\");\n");
+        sb.append(" * doc.select(\"doc-1\").grant(").append(E).append(".Rel.EDITOR, ").append(E).append(".Rel.COMMENTER).toUser(\"bob\");\n");
+        sb.append(" * doc.select(\"doc-1\").check(").append(E).append(".Perm.VIEW).by(\"alice\");\n");
+        sb.append(" * doc.select(\"doc-1\").revoke(").append(E).append(".Rel.EDITOR).fromUser(\"bob\");\n");
         sb.append(" * </pre>\n");
         sb.append(" */\n");
         sb.append("public class ").append(className)
@@ -198,35 +198,35 @@ public final class AuthxCodegen {
         sb.append("        init(\"").append(typeName).append("\", client);\n");
         sb.append("    }\n\n");
 
-        // Override on() → typed handle
+        // Override select() → typed handle
         sb.append("    @Override\n");
-        sb.append("    public ").append(E).append("Handle on(String id) {\n");
-        sb.append("        return new ").append(E).append("Handle(this, id);\n");
+        sb.append("    public ").append(E).append("Handle select(String... ids) {\n");
+        sb.append("        return new ").append(E).append("Handle(this, ids);\n");
         sb.append("    }\n\n");
 
-        // ---- Handle: on("id") → .grant() / .check() / .revoke() ----
+        // ---- Handle: select("id") → .grant() / .check() / .revoke() ----
         sb.append("    public static class ").append(E)
                 .append("Handle extends TypedHandle<").append(E).append(".Rel, ").append(E).append(".Perm> {\n\n");
-        sb.append("        public ").append(E).append("Handle(ResourceFactory factory, String id) {\n");
-        sb.append("            super(factory, id);\n");
+        sb.append("        public ").append(E).append("Handle(ResourceFactory factory, String[] ids) {\n");
+        sb.append("            super(factory, ids);\n");
         sb.append("        }\n\n");
         // grant returns typed action
         sb.append("        @Override @SuppressWarnings(\"unchecked\")\n");
         sb.append("        public ").append(E).append("GrantAction grant(").append(E).append(".Rel... relations) {\n");
-        sb.append("            return new ").append(E).append("GrantAction(factory, id, relations);\n");
+        sb.append("            return new ").append(E).append("GrantAction(factory, ids, relations);\n");
         sb.append("        }\n\n");
         // revoke returns typed action
         sb.append("        @Override @SuppressWarnings(\"unchecked\")\n");
         sb.append("        public ").append(E).append("RevokeAction revoke(").append(E).append(".Rel... relations) {\n");
-        sb.append("            return new ").append(E).append("RevokeAction(factory, id, relations);\n");
+        sb.append("            return new ").append(E).append("RevokeAction(factory, ids, relations);\n");
         sb.append("        }\n");
         sb.append("    }\n\n");
 
         // ---- GrantAction with to* methods ----
         sb.append("    public static class ").append(E)
                 .append("GrantAction extends TypedGrantAction<").append(E).append(".Rel> {\n\n");
-        sb.append("        public ").append(E).append("GrantAction(ResourceFactory factory, String id, ").append(E).append(".Rel... relations) {\n");
-        sb.append("            super(factory, id, relations);\n");
+        sb.append("        public ").append(E).append("GrantAction(ResourceFactory factory, String[] ids, ").append(E).append(".Rel... relations) {\n");
+        sb.append("            super(factory, ids, relations);\n");
         sb.append("        }\n\n");
 
         for (String key : allSubjectKeys) {
@@ -238,8 +238,8 @@ public final class AuthxCodegen {
         // ---- RevokeAction with from* methods ----
         sb.append("    public static class ").append(E)
                 .append("RevokeAction extends TypedRevokeAction<").append(E).append(".Rel> {\n\n");
-        sb.append("        public ").append(E).append("RevokeAction(ResourceFactory factory, String id, ").append(E).append(".Rel... relations) {\n");
-        sb.append("            super(factory, id, relations);\n");
+        sb.append("        public ").append(E).append("RevokeAction(ResourceFactory factory, String[] ids, ").append(E).append(".Rel... relations) {\n");
+        sb.append("            super(factory, ids, relations);\n");
         sb.append("        }\n\n");
 
         for (String key : allSubjectKeys) {
@@ -260,17 +260,21 @@ public final class AuthxCodegen {
 
         if (parts.wildcard) {
             sb.append("        public void ").append(methodName).append("() {\n");
-            sb.append("            for (var rel : relations) factory.").append(factoryMethod)
+            sb.append("            for (var id : ids)\n");
+            sb.append("                for (var rel : relations)\n");
+            sb.append("                    factory.").append(factoryMethod)
                     .append("(id, rel.relationName(), \"").append(parts.type).append(":*\");\n");
             sb.append("        }\n\n");
         } else {
             String refExpr = parts.relation.isEmpty()
-                    ? "\"" + parts.type + ":\" + ids[i]"
-                    : "\"" + parts.type + ":\" + ids[i] + \"#" + parts.relation + "\"";
-            sb.append("        public void ").append(methodName).append("(String... ids) {\n");
-            sb.append("            String[] refs = new String[ids.length];\n");
-            sb.append("            for (int i = 0; i < ids.length; i++) refs[i] = ").append(refExpr).append(";\n");
-            sb.append("            for (var rel : relations) factory.").append(factoryMethod)
+                    ? "\"" + parts.type + ":\" + subjectIds[i]"
+                    : "\"" + parts.type + ":\" + subjectIds[i] + \"#" + parts.relation + "\"";
+            sb.append("        public void ").append(methodName).append("(String... subjectIds) {\n");
+            sb.append("            String[] refs = new String[subjectIds.length];\n");
+            sb.append("            for (int i = 0; i < subjectIds.length; i++) refs[i] = ").append(refExpr).append(";\n");
+            sb.append("            for (var id : ids)\n");
+            sb.append("                for (var rel : relations)\n");
+            sb.append("                    factory.").append(factoryMethod)
                     .append("(id, rel.relationName(), refs);\n");
             sb.append("        }\n\n");
         }

@@ -13,10 +13,10 @@ import com.authx.testapp.schema.constants.Department;
  *
  * <pre>
  * DepartmentResource doc = new DepartmentResource(client);
- * doc.on("doc-1").grant(Department.Rel.EDITOR).toUser("bob");
- * doc.on("doc-1").grant(Department.Rel.EDITOR, Department.Rel.COMMENTER).toUser("bob");
- * doc.on("doc-1").check(Department.Perm.VIEW).by("alice");
- * doc.on("doc-1").revoke(Department.Rel.EDITOR).fromUser("bob");
+ * doc.select("doc-1").grant(Department.Rel.EDITOR).toUser("bob");
+ * doc.select("doc-1").grant(Department.Rel.EDITOR, Department.Rel.COMMENTER).toUser("bob");
+ * doc.select("doc-1").check(Department.Perm.VIEW).by("alice");
+ * doc.select("doc-1").revoke(Department.Rel.EDITOR).fromUser("bob");
  * </pre>
  */
 public class DepartmentResource extends TypedResourceFactory<Department.Rel, Department.Perm> {
@@ -26,63 +26,71 @@ public class DepartmentResource extends TypedResourceFactory<Department.Rel, Dep
     }
 
     @Override
-    public DepartmentHandle select(String id) {
-        return new DepartmentHandle(this, id);
+    public DepartmentHandle select(String... ids) {
+        return new DepartmentHandle(this, ids);
     }
 
     public static class DepartmentHandle extends TypedHandle<Department.Rel, Department.Perm> {
 
-        public DepartmentHandle(ResourceFactory factory, String id) {
-            super(factory, id);
+        public DepartmentHandle(ResourceFactory factory, String[] ids) {
+            super(factory, ids);
         }
 
         @Override @SuppressWarnings("unchecked")
         public DepartmentGrantAction grant(Department.Rel... relations) {
-            return new DepartmentGrantAction(factory, id, relations);
+            return new DepartmentGrantAction(factory, ids, relations);
         }
 
         @Override @SuppressWarnings("unchecked")
         public DepartmentRevokeAction revoke(Department.Rel... relations) {
-            return new DepartmentRevokeAction(factory, id, relations);
+            return new DepartmentRevokeAction(factory, ids, relations);
         }
     }
 
     public static class DepartmentGrantAction extends TypedGrantAction<Department.Rel> {
 
-        public DepartmentGrantAction(ResourceFactory factory, String id, Department.Rel... relations) {
-            super(factory, id, relations);
+        public DepartmentGrantAction(ResourceFactory factory, String[] ids, Department.Rel... relations) {
+            super(factory, ids, relations);
         }
 
-        public void toDepartment(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "department:" + ids[i];
-            for (var rel : relations) factory.grantToSubjects(id, rel.relationName(), refs);
+        public void toDepartment(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
-        public void toUser(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "user:" + ids[i];
-            for (var rel : relations) factory.grantToSubjects(id, rel.relationName(), refs);
+        public void toUser(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "user:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
     }
 
     public static class DepartmentRevokeAction extends TypedRevokeAction<Department.Rel> {
 
-        public DepartmentRevokeAction(ResourceFactory factory, String id, Department.Rel... relations) {
-            super(factory, id, relations);
+        public DepartmentRevokeAction(ResourceFactory factory, String[] ids, Department.Rel... relations) {
+            super(factory, ids, relations);
         }
 
-        public void fromDepartment(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "department:" + ids[i];
-            for (var rel : relations) factory.revokeFromSubjects(id, rel.relationName(), refs);
+        public void fromDepartment(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
-        public void fromUser(String... ids) {
-            String[] refs = new String[ids.length];
-            for (int i = 0; i < ids.length; i++) refs[i] = "user:" + ids[i];
-            for (var rel : relations) factory.revokeFromSubjects(id, rel.relationName(), refs);
+        public void fromUser(String... subjectIds) {
+            String[] refs = new String[subjectIds.length];
+            for (int i = 0; i < subjectIds.length; i++) refs[i] = "user:" + subjectIds[i];
+            for (var id : ids)
+                for (var rel : relations)
+                    factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
     }
