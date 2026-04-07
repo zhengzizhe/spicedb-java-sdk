@@ -1,8 +1,8 @@
 package com.authx.testapp;
 
 import com.authx.sdk.AuthxClient;
-import com.authx.sdk.ResourceFactory;
-import com.authx.testapp.schema.ResourceTypes;
+import com.authx.testapp.schema.DocumentResource;
+import com.authx.testapp.schema.FolderResource;
 import com.authx.testapp.schema.constants.Document;
 import com.authx.testapp.schema.constants.Folder;
 import org.springframework.web.bind.annotation.*;
@@ -11,19 +11,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * REST API — all methods use codegen enums, zero hardcoded strings.
+ * REST API — uses codegen typed resources with chain-style grant/revoke.
  */
 @RestController
 public class PermissionController {
 
     private final AuthxClient client;
-    private final ResourceFactory doc;
-    private final ResourceFactory folder;
+    private final DocumentResource doc;
+    private final FolderResource folder;
 
     public PermissionController(AuthxClient client) {
         this.client = client;
-        this.doc = client.on(ResourceTypes.DOCUMENT);
-        this.folder = client.on(ResourceTypes.FOLDER);
+        this.doc = new DocumentResource(client);
+        this.folder = new FolderResource(client);
     }
 
     // ---- Document ----
@@ -33,7 +33,7 @@ public class PermissionController {
                                          @RequestParam String relation,
                                          @RequestParam String user) {
         var rel = Document.Rel.valueOf(relation.toUpperCase());
-        doc.grant(id, rel, user);
+        doc.grant(id, rel).toUser(user);
         return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
     }
 
@@ -42,7 +42,7 @@ public class PermissionController {
                                           @RequestParam String relation,
                                           @RequestParam String user) {
         var rel = Document.Rel.valueOf(relation.toUpperCase());
-        doc.revoke(id, rel, user);
+        doc.revoke(id, rel).fromUser(user);
         return Map.of("status", "revoked", "relation", rel.relationName(), "user", user);
     }
 
@@ -83,7 +83,7 @@ public class PermissionController {
                                             @RequestParam String relation,
                                             @RequestParam String user) {
         var rel = Folder.Rel.valueOf(relation.toUpperCase());
-        folder.grant(id, rel, user);
+        folder.grant(id, rel).toUser(user);
         return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
     }
 
