@@ -5,6 +5,7 @@ import com.authx.sdk.model.*;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Request coalescing: concurrent identical check() calls share one gRPC round-trip.
@@ -47,8 +48,12 @@ public class CoalescingTransport extends ForwardingTransport {
             // Another thread is already executing this exact request — wait for its result
             if (metrics != null) metrics.recordCoalesced();
             try {
-                return existing.join();
+                return existing.orTimeout(30, TimeUnit.SECONDS).join();
             } catch (java.util.concurrent.CompletionException ce) {
+                if (ce.getCause() instanceof java.util.concurrent.TimeoutException) {
+                    throw new com.authx.sdk.exception.AuthxTimeoutException(
+                            "Coalesced check request timed out after 30s");
+                }
                 if (ce.getCause() instanceof RuntimeException re) throw re;
                 throw ce;
             }

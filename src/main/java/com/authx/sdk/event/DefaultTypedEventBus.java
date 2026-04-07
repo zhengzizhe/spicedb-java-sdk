@@ -3,10 +3,14 @@ package com.authx.sdk.event;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 
 /**
  * Default implementation of TypedEventBus.
  * Thread-safe: ConcurrentHashMap for per-type listeners, CopyOnWriteArrayList for listener lists.
+ *
+ * <p>Supports optional async publishing via an {@link Executor}. By default, events are
+ * published synchronously on the caller's thread. Pass an executor to enable async dispatch.
  */
 public class DefaultTypedEventBus implements TypedEventBus {
 
@@ -14,6 +18,16 @@ public class DefaultTypedEventBus implements TypedEventBus {
 
     private final ConcurrentHashMap<Class<?>, List<TypedEventListener<?>>> listeners = new ConcurrentHashMap<>();
     private final List<TypedEventListener<SdkTypedEvent>> globalListeners = new CopyOnWriteArrayList<>();
+    private final Executor publishExecutor;
+
+    public DefaultTypedEventBus() {
+        this.publishExecutor = Runnable::run; // synchronous by default
+    }
+
+    /** Create with an async executor for non-blocking event dispatch. */
+    public DefaultTypedEventBus(Executor publishExecutor) {
+        this.publishExecutor = publishExecutor != null ? publishExecutor : Runnable::run;
+    }
 
     @Override
     public <E extends SdkTypedEvent> Registration subscribe(Class<E> eventType, TypedEventListener<E> listener) {
@@ -31,28 +45,30 @@ public class DefaultTypedEventBus implements TypedEventBus {
     @Override
     @SuppressWarnings("unchecked")
     public void publish(SdkTypedEvent event) {
-        // Notify type-specific listeners
-        var list = listeners.get(event.getClass());
-        if (list != null) {
-            for (var listener : list) {
+        publishExecutor.execute(() -> {
+            // Notify type-specific listeners
+            var list = listeners.get(event.getClass());
+            if (list != null) {
+                for (var listener : list) {
+                    try {
+                        ((TypedEventListener<SdkTypedEvent>) listener).onEvent(event);
+                    } catch (Exception e) {
+                        LOG.log(System.Logger.Level.WARNING,
+                                "Event listener error for {0}: {1}",
+                                event.getClass().getSimpleName(), e.getMessage());
+                    }
+                }
+            }
+            // Notify global listeners
+            for (var listener : globalListeners) {
                 try {
-                    ((TypedEventListener<SdkTypedEvent>) listener).onEvent(event);
+                    listener.onEvent(event);
                 } catch (Exception e) {
                     LOG.log(System.Logger.Level.WARNING,
-                            "Event listener error for {0}: {1}",
+                            "Global event listener error for {0}: {1}",
                             event.getClass().getSimpleName(), e.getMessage());
                 }
             }
-        }
-        // Notify global listeners
-        for (var listener : globalListeners) {
-            try {
-                listener.onEvent(event);
-            } catch (Exception e) {
-                LOG.log(System.Logger.Level.WARNING,
-                        "Global event listener error for {0}: {1}",
-                        event.getClass().getSimpleName(), e.getMessage());
-            }
-        }
+        });
     }
 }

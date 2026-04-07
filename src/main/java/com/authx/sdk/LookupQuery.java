@@ -37,6 +37,12 @@ public class LookupQuery {
         return this;
     }
 
+    public LookupQuery by(SubjectRef subject) {
+        this.subjectId = subject.id();
+        this.subjectType = subject.type();
+        return this;
+    }
+
     public LookupQuery withConsistency(Consistency consistency) {
         this.consistency = consistency;
         return this;

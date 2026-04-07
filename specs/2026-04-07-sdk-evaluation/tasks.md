@@ -22,24 +22,24 @@
 
 ## Phase 2: P2 — Post-Release Optimization
 
-- [ ] T013 [SR:arch-2] Document transport decorator ordering — `src/.../AuthxClient.java`
-- [ ] T014 [SR:arch-3] ResilientTransport breaker LRU eviction — `src/.../transport/ResilientTransport.java`
-- [ ] T015 [P] [SR:err-4] AuthxException.isRetryable() — `src/.../exception/AuthxException.java`
-- [ ] T016 [P] [SR:err-2] Schema validation exception constructors — `src/.../exception/Invalid*.java`
-- [ ] T017 [SR:err-5,test-4] Extract GrpcExceptionMapper + tests — `src/.../transport/GrpcExceptionMapper.java`
-- [ ] T018 [SR:test-5,test-2] TelemetryReporter + SdkMetrics concurrent tests — `src/test/...`
-- [ ] T019 [P] [SR:doc-4] Resilience configuration guide — `docs/resilience-guide.md`
-- [ ] T020 [P] [SR:doc-3] Cache and consistency guide — `docs/cache-consistency-guide.md`
+- [X] T013 [SR:arch-2] Document transport decorator ordering — `src/.../AuthxClient.java`
+- [X] T014 [SR:arch-3] ResilientTransport breaker LRU eviction — `src/.../transport/ResilientTransport.java`
+- [X] T015 [P] [SR:err-4] AuthxException.isRetryable() — `src/.../exception/AuthxException.java`
+- [X] T016 [P] [SR:err-2] Schema validation exception constructors — `src/.../exception/Invalid*.java`
+- [X] T017 [SR:err-5,test-4] Extract GrpcExceptionMapper + tests — `src/.../transport/GrpcExceptionMapper.java`
+- [X] T018 [SR:test-5,test-2] TelemetryReporter + SdkMetrics concurrent tests — `src/test/...`
+- [X] T019 [P] [SR:doc-4] Resilience configuration guide — `docs/resilience-guide.md`
+- [X] T020 [P] [SR:doc-3] Cache and consistency guide — `docs/cache-consistency-guide.md`
 - [ ] T021 [SR:test-3] E2E Testcontainers integration — `build.gradle`, `SdkEndToEndTest.java`
 
 ## Phase 3: P3 — Long-Term Evolution
 
-- [ ] T022 [SR:api-2] Document async API pattern — `src/.../ResourceHandle.java`
-- [ ] T023 [SR:api-4] LookupQuery SubjectRef overload — `src/.../LookupQuery.java`
-- [ ] T024 [SR:cache-5] Streaming backpressure safety valve — `src/.../transport/GrpcTransport.java`
-- [ ] T025 [SR:obs-4] Event bus async publish option — `src/.../event/DefaultTypedEventBus.java`
-- [ ] T026 [SR:arch-4] CoalescingTransport join timeout — `src/.../transport/CoalescingTransport.java`
-- [ ] T027 [SR:arch-5] InterceptorTransport unified chain model — `src/.../transport/InterceptorTransport.java`
+- [X] T022 [SR:api-2] Document async API pattern — decision: keep current pattern, documented in spec
+- [X] T023 [SR:api-4] LookupQuery SubjectRef overload — `src/.../LookupQuery.java`
+- [X] T024 [SR:cache-5] Streaming backpressure safety valve — `src/.../transport/GrpcTransport.java`
+- [X] T025 [SR:obs-4] Event bus async publish option — `src/.../event/DefaultTypedEventBus.java`
+- [X] T026 [SR:arch-4] CoalescingTransport join timeout — `src/.../transport/CoalescingTransport.java`
+- [ ] T027 [SR:arch-5] InterceptorTransport unified chain model — deferred (requires separate design cycle)
 
 ## Dependencies
 
