@@ -4,6 +4,8 @@ import com.authx.sdk.AuthxClient;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.GrantResult;
 import org.junit.jupiter.api.*;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.util.List;
 import java.util.Set;
@@ -12,45 +14,47 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * End-to-end test: SDK → Platform /sdk/connect → SpiceDB gRPC.
- * Requires: platform running on localhost:8090, SpiceDB on localhost:50051,
- * and a valid API Key with access to the "dev" namespace.
- *
- * Skipped automatically if platform is not reachable.
+ * End-to-end test: SDK → SpiceDB gRPC via Testcontainers.
+ * SpiceDB is started automatically in serve-testing mode (in-memory, no persistence).
+ * If Docker is unavailable, tests are skipped gracefully.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SdkEndToEndTest {
 
-    // Set via env or hardcode for local testing
-    private static final String PLATFORM_ENDPOINT = "http://localhost:8090";
-    private static final String API_KEY = "ak_30ac4b596f8bd12c5bf4202faccd36bc";
-    private static final String NAMESPACE = "dev";
-
+    static GenericContainer<?> spicedb;
     private static AuthxClient client;
 
     @BeforeAll
     static void setup() {
-        // Skip if SpiceDB is not reachable
         try {
-            client = AuthxClient.builder()
-                    .connection(c -> c.target("localhost:50051").presharedKey("dev-token"))
-                    .build();
+            spicedb = new GenericContainer<>("authzed/spicedb:v1.33.0")
+                    .withCommand("serve-testing", "--grpc-preshared-key=testkey")
+                    .withExposedPorts(50051)
+                    .waitingFor(Wait.forLogMessage(".*grpc server started serving.*", 1));
+            spicedb.start();
         } catch (Exception e) {
-            assumeTrue(false, "SpiceDB not reachable: " + e.getMessage());
+            assumeTrue(false, "Docker/Testcontainers unavailable: " + e.getMessage());
         }
+
+        String target = spicedb.getHost() + ":" + spicedb.getMappedPort(50051);
+
+        // Write schema to the empty serve-testing instance
+        SpiceDbTestSchema.writeSchema(target, "testkey");
+
+        client = AuthxClient.builder()
+                .connection(c -> c.target(target).presharedKey("testkey"))
+                .build();
     }
 
     @AfterAll
     static void teardown() {
-        if (client != null) {
-            client.close();
-        }
+        if (client != null) client.close();
+        if (spicedb != null && spicedb.isRunning()) spicedb.stop();
     }
 
     @Test
     @Order(1)
     void connect_succeeds() {
-        // If we got here, builder.build() called /sdk/connect and got SpiceDB credentials
         assertNotNull(client);
     }
 

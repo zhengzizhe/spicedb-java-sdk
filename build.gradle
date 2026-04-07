@@ -19,6 +19,13 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
     useJUnitPlatform()
+    // Pass Docker environment variables to test JVM for Testcontainers
+    environment "DOCKER_HOST", System.getenv("DOCKER_HOST") ?: "unix:///var/run/docker.sock"
+    environment "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", System.getenv("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE") ?: "/var/run/docker.sock"
+    // Force Docker API version for docker-java compatibility with Docker Desktop 29+
+    // Docker Desktop 29.3.1 requires minimum API version 1.40; docker-java defaults to 1.25
+    environment "DOCKER_API_VERSION", "1.43"
+    jvmArgs "-Ddocker.api.version=1.43"
 }
 
 repositories {
@@ -57,6 +64,9 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
     testImplementation("io.grpc:grpc-inprocess:1.72.0")
+    testImplementation("org.testcontainers:testcontainers:1.21.1")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.1")
+    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.12")
 }
 
 tasks.withType(Javadoc).configureEach {

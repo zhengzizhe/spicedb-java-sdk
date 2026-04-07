@@ -4,6 +4,8 @@ import com.authx.sdk.model.*;
 import com.authx.sdk.transport.GrpcTransport;
 import com.authx.sdk.transport.SdkTransport;
 import org.junit.jupiter.api.*;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.util.List;
 
@@ -11,30 +13,41 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Direct GrpcTransport test — connects straight to SpiceDB.
+ * Direct GrpcTransport test — connects straight to SpiceDB via Testcontainers.
+ * If Docker is unavailable, tests are skipped gracefully.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class GrpcTransportDirectTest {
 
+    static GenericContainer<?> spicedb;
     private static GrpcTransport transport;
 
     @BeforeAll
     static void setup() {
         try {
-            var channel = io.grpc.ManagedChannelBuilder.forTarget("localhost:50051")
-                    .usePlaintext().build();
-            transport = new GrpcTransport(channel, "dev-token", 5000);
-            // Quick smoke test — if SpiceDB is down, this will throw
-            transport.readRelationships(ResourceRef.of("document", "__probe__"), null, Consistency.full());
+            spicedb = new GenericContainer<>("authzed/spicedb:v1.33.0")
+                    .withCommand("serve-testing", "--grpc-preshared-key=testkey")
+                    .withExposedPorts(50051)
+                    .waitingFor(Wait.forLogMessage(".*grpc server started serving.*", 1));
+            spicedb.start();
         } catch (Exception e) {
-            transport = null;
-            assumeTrue(false, "SpiceDB not reachable: " + e.getMessage());
+            assumeTrue(false, "Docker/Testcontainers unavailable: " + e.getMessage());
         }
+
+        String target = spicedb.getHost() + ":" + spicedb.getMappedPort(50051);
+
+        // Write schema to the empty serve-testing instance
+        SpiceDbTestSchema.writeSchema(target, "testkey");
+
+        var channel = io.grpc.ManagedChannelBuilder.forTarget(target)
+                .usePlaintext().build();
+        transport = new GrpcTransport(channel, "testkey", 5000);
     }
 
     @AfterAll
     static void teardown() {
         if (transport != null) transport.close();
+        if (spicedb != null && spicedb.isRunning()) spicedb.stop();
     }
 
     @Test

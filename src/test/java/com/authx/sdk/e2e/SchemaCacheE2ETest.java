@@ -4,34 +4,50 @@ import com.authx.sdk.AuthxClient;
 import com.authx.sdk.exception.InvalidPermissionException;
 import com.authx.sdk.exception.InvalidResourceException;
 import org.junit.jupiter.api.*;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * E2E test: verifies SchemaCache validates resource types, relations, permissions
- * using schema data from /sdk/connect.
+ * using schema data loaded from SpiceDB via Testcontainers.
+ * If Docker is unavailable, tests are skipped gracefully.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SchemaCacheE2ETest {
 
+    static GenericContainer<?> spicedb;
     private static AuthxClient client;
 
     @BeforeAll
     static void setup() {
         try {
-            client = AuthxClient.builder()
-                    .connection(c -> c.target("localhost:50051").presharedKey("dev-token"))
-                    .features(f -> f.telemetry(false))
-                    .build();
+            spicedb = new GenericContainer<>("authzed/spicedb:v1.33.0")
+                    .withCommand("serve-testing", "--grpc-preshared-key=testkey")
+                    .withExposedPorts(50051)
+                    .waitingFor(Wait.forLogMessage(".*grpc server started serving.*", 1));
+            spicedb.start();
         } catch (Exception e) {
-            assumeTrue(false, "Platform not reachable: " + e.getMessage());
+            assumeTrue(false, "Docker/Testcontainers unavailable: " + e.getMessage());
         }
+
+        String target = spicedb.getHost() + ":" + spicedb.getMappedPort(50051);
+
+        // Write schema to the empty serve-testing instance
+        SpiceDbTestSchema.writeSchema(target, "testkey");
+
+        client = AuthxClient.builder()
+                .connection(c -> c.target(target).presharedKey("testkey"))
+                .features(f -> f.telemetry(false))
+                .build();
     }
 
     @AfterAll
     static void teardown() {
         if (client != null) client.close();
+        if (spicedb != null && spicedb.isRunning()) spicedb.stop();
     }
 
     @Test

@@ -30,7 +30,7 @@
 - [X] T018 [SR:test-5,test-2] TelemetryReporter + SdkMetrics concurrent tests — `src/test/...`
 - [X] T019 [P] [SR:doc-4] Resilience configuration guide — `docs/resilience-guide.md`
 - [X] T020 [P] [SR:doc-3] Cache and consistency guide — `docs/cache-consistency-guide.md`
-- [ ] T021 [SR:test-3] E2E Testcontainers integration — `build.gradle`, `SdkEndToEndTest.java`
+- [X] T021 [SR:test-3] E2E Testcontainers integration — `build.gradle`, `SdkEndToEndTest.java`
 
 ## Phase 3: P3 — Long-Term Evolution
 
@@ -39,7 +39,7 @@
 - [X] T024 [SR:cache-5] Streaming backpressure safety valve — `src/.../transport/GrpcTransport.java`
 - [X] T025 [SR:obs-4] Event bus async publish option — `src/.../event/DefaultTypedEventBus.java`
 - [X] T026 [SR:arch-4] CoalescingTransport join timeout — `src/.../transport/CoalescingTransport.java`
-- [ ] T027 [SR:arch-5] InterceptorTransport unified chain model — deferred (requires separate design cycle)
+- [X] T027 [SR:arch-5] InterceptorTransport unified chain model — `OperationChain<T>` replaces beforeOperation/afterOperation
 
 ## Dependencies
 
