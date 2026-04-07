@@ -1,0 +1,115 @@
+/**
+ * 文档库权限模型 V3 — 支持继承/断开继承
+ *
+ * 核心设计：
+ *   - `folder` relation = 结构关系（这个文档在哪个文件夹里）
+ *   - `inherit_parent` relation = 权限继承开关（设了就继承，删了就断开）
+ *
+ * 创建时默认继承：同时写 folder + inherit_parent
+ * 断开继承：删除 inherit_parent，保留 folder（文档还在文件夹里，但不继承权限）
+ * 恢复继承：重新写 inherit_parent
+ */
+
+// ============================================================
+//  主体
+// ============================================================
+
+definition user {}
+
+definition department {
+    relation member: user
+    relation parent: department
+    permission all_members = member + parent->all_members
+}
+
+definition group {
+    relation member: user | department#all_members
+}
+
+// ============================================================
+//  空间
+// ============================================================
+
+definition space {
+    relation owner: user
+    relation admin: user | group#member
+    relation member: user | group#member | department#all_members
+    relation viewer: user | group#member | department#all_members | user:*
+
+    permission manage = owner + admin
+    permission edit = manage + member
+    permission view = edit + viewer
+}
+
+// ============================================================
+//  文件夹 — 支持断开继承
+// ============================================================
+
+definition folder {
+    /** 结构关系：属于哪个空间 */
+    relation space: space
+
+    /** 结构关系：父文件夹 */
+    relation parent: folder
+
+    /**
+     * 权限继承开关：
+     * - 设了 inherit_parent → 从父文件夹继承权限
+     * - 没设 → 独立权限，不继承
+     * - 创建时默认设上，需要"断开继承"时删除
+     */
+    relation inherit_parent: folder
+
+    /** 权限继承开关：是否从空间继承 */
+    relation inherit_space: space
+
+    relation owner: user
+    relation editor: user | group#member | department#all_members
+    relation commenter: user | group#member | department#all_members
+    relation viewer: user | group#member | department#all_members | user:*
+
+    // 继承的权限只通过 inherit_parent / inherit_space 走
+    permission manage = owner + inherit_parent->manage + inherit_space->manage
+    permission edit = manage + editor + inherit_parent->edit + inherit_space->edit
+    permission comment = edit + commenter + inherit_parent->comment
+    permission view = comment + viewer + inherit_parent->view + inherit_space->view
+    permission create_child = edit
+}
+
+// ============================================================
+//  文档 — 支持断开继承
+// ============================================================
+
+definition document {
+    /** 结构关系：属于哪个文件夹（永远存在，用于导航和索引） */
+    relation folder: folder
+
+    /** 结构关系：属于哪个空间 */
+    relation space: space
+
+    /**
+     * 权限继承开关：
+     * - 设了 inherit_folder → 从文件夹继承权限
+     * - 没设 → 独立权限，只看文档自身的 owner/editor/viewer
+     */
+    relation inherit_folder: folder
+
+    /** 权限继承开关：是否从空间继承 */
+    relation inherit_space: space
+
+    relation owner: user
+    relation editor: user | group#member | department#all_members
+    relation commenter: user | group#member | department#all_members
+    relation viewer: user | group#member | department#all_members | user:*
+
+    relation link_viewer: user:*
+    relation link_editor: user:*
+
+    // 继承只通过 inherit_folder / inherit_space 走
+    permission manage = owner + inherit_folder->manage + inherit_space->manage
+    permission edit = manage + editor + link_editor + inherit_folder->edit
+    permission comment = edit + commenter + inherit_folder->comment
+    permission view = comment + viewer + link_viewer + inherit_folder->view
+    permission delete = manage
+    permission share = edit
+}
