@@ -61,12 +61,20 @@ public class FolderResource extends TypedResourceFactory<Folder.Rel, Folder.Perm
                     factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
+        public void toUser(java.util.Collection<String> subjectIds) {
+            toUser(subjectIds.toArray(String[]::new));
+        }
+
         public void toFolder(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "folder:" + subjectIds[i];
             for (var id : ids)
                 for (var rel : relations)
                     factory.grantToSubjects(id, rel.relationName(), refs);
+        }
+
+        public void toFolder(java.util.Collection<String> subjectIds) {
+            toFolder(subjectIds.toArray(String[]::new));
         }
 
         public void toGroupMember(String... subjectIds) {
@@ -77,12 +85,20 @@ public class FolderResource extends TypedResourceFactory<Folder.Rel, Folder.Perm
                     factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
+        public void toGroupMember(java.util.Collection<String> subjectIds) {
+            toGroupMember(subjectIds.toArray(String[]::new));
+        }
+
         public void toDepartmentAllMembers(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i] + "#all_members";
             for (var id : ids)
                 for (var rel : relations)
                     factory.grantToSubjects(id, rel.relationName(), refs);
+        }
+
+        public void toDepartmentAllMembers(java.util.Collection<String> subjectIds) {
+            toDepartmentAllMembers(subjectIds.toArray(String[]::new));
         }
 
         public void toUserAll() {
@@ -97,6 +113,10 @@ public class FolderResource extends TypedResourceFactory<Folder.Rel, Folder.Perm
             for (var id : ids)
                 for (var rel : relations)
                     factory.grantToSubjects(id, rel.relationName(), refs);
+        }
+
+        public void toSpace(java.util.Collection<String> subjectIds) {
+            toSpace(subjectIds.toArray(String[]::new));
         }
 
     }
@@ -115,12 +135,20 @@ public class FolderResource extends TypedResourceFactory<Folder.Rel, Folder.Perm
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
+        public void fromUser(java.util.Collection<String> subjectIds) {
+            fromUser(subjectIds.toArray(String[]::new));
+        }
+
         public void fromFolder(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "folder:" + subjectIds[i];
             for (var id : ids)
                 for (var rel : relations)
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
+        }
+
+        public void fromFolder(java.util.Collection<String> subjectIds) {
+            fromFolder(subjectIds.toArray(String[]::new));
         }
 
         public void fromGroupMember(String... subjectIds) {
@@ -131,12 +159,20 @@ public class FolderResource extends TypedResourceFactory<Folder.Rel, Folder.Perm
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
+        public void fromGroupMember(java.util.Collection<String> subjectIds) {
+            fromGroupMember(subjectIds.toArray(String[]::new));
+        }
+
         public void fromDepartmentAllMembers(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i] + "#all_members";
             for (var id : ids)
                 for (var rel : relations)
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
+        }
+
+        public void fromDepartmentAllMembers(java.util.Collection<String> subjectIds) {
+            fromDepartmentAllMembers(subjectIds.toArray(String[]::new));
         }
 
         public void fromUserAll() {
@@ -151,6 +187,10 @@ public class FolderResource extends TypedResourceFactory<Folder.Rel, Folder.Perm
             for (var id : ids)
                 for (var rel : relations)
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
+        }
+
+        public void fromSpace(java.util.Collection<String> subjectIds) {
+            fromSpace(subjectIds.toArray(String[]::new));
         }
 
     }

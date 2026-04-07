@@ -61,6 +61,10 @@ public class SpaceResource extends TypedResourceFactory<Space.Rel, Space.Perm> {
                     factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
+        public void toUser(java.util.Collection<String> subjectIds) {
+            toUser(subjectIds.toArray(String[]::new));
+        }
+
         public void toGroupMember(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "group:" + subjectIds[i] + "#member";
@@ -69,12 +73,20 @@ public class SpaceResource extends TypedResourceFactory<Space.Rel, Space.Perm> {
                     factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
+        public void toGroupMember(java.util.Collection<String> subjectIds) {
+            toGroupMember(subjectIds.toArray(String[]::new));
+        }
+
         public void toDepartmentAllMembers(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i] + "#all_members";
             for (var id : ids)
                 for (var rel : relations)
                     factory.grantToSubjects(id, rel.relationName(), refs);
+        }
+
+        public void toDepartmentAllMembers(java.util.Collection<String> subjectIds) {
+            toDepartmentAllMembers(subjectIds.toArray(String[]::new));
         }
 
         public void toUserAll() {
@@ -89,6 +101,10 @@ public class SpaceResource extends TypedResourceFactory<Space.Rel, Space.Perm> {
             for (var id : ids)
                 for (var rel : relations)
                     factory.grantToSubjects(id, rel.relationName(), refs);
+        }
+
+        public void toOrganization(java.util.Collection<String> subjectIds) {
+            toOrganization(subjectIds.toArray(String[]::new));
         }
 
     }
@@ -107,6 +123,10 @@ public class SpaceResource extends TypedResourceFactory<Space.Rel, Space.Perm> {
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
+        public void fromUser(java.util.Collection<String> subjectIds) {
+            fromUser(subjectIds.toArray(String[]::new));
+        }
+
         public void fromGroupMember(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "group:" + subjectIds[i] + "#member";
@@ -115,12 +135,20 @@ public class SpaceResource extends TypedResourceFactory<Space.Rel, Space.Perm> {
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
+        public void fromGroupMember(java.util.Collection<String> subjectIds) {
+            fromGroupMember(subjectIds.toArray(String[]::new));
+        }
+
         public void fromDepartmentAllMembers(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i] + "#all_members";
             for (var id : ids)
                 for (var rel : relations)
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
+        }
+
+        public void fromDepartmentAllMembers(java.util.Collection<String> subjectIds) {
+            fromDepartmentAllMembers(subjectIds.toArray(String[]::new));
         }
 
         public void fromUserAll() {
@@ -135,6 +163,10 @@ public class SpaceResource extends TypedResourceFactory<Space.Rel, Space.Perm> {
             for (var id : ids)
                 for (var rel : relations)
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
+        }
+
+        public void fromOrganization(java.util.Collection<String> subjectIds) {
+            fromOrganization(subjectIds.toArray(String[]::new));
         }
 
     }

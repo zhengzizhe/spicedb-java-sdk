@@ -108,6 +108,11 @@ public class TypedResourceFactory<R extends Relation.Named, P extends Permission
                     "Use byAll() for matrix check (" + ids.length + " ids × " + permissions.length + " perms)");
         }
 
+        /** Collection overload. */
+        public Map<String, Map<String, Map<String, Boolean>>> by(Collection<String> userIds) {
+            return by(userIds.toArray(String[]::new));
+        }
+
         /** Multi-user / matrix check. Returns nested map: id → perm → user → allowed. */
         public Map<String, Map<String, Map<String, Boolean>>> by(String... userIds) {
             if (userIds.length == 1 && ids.length == 1 && permissions.length == 1) {

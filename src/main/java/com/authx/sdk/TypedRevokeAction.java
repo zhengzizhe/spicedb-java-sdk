@@ -19,10 +19,15 @@ public class TypedRevokeAction<R extends Relation.Named> {
         this.relations = relations;
     }
 
-    /** String escape hatch. */
+    /** String escape hatch — varargs. */
     public void from(String... subjectRefs) {
         for (String id : ids)
             for (R rel : relations)
                 factory.revokeFromSubjects(id, rel.relationName(), subjectRefs);
+    }
+
+    /** String escape hatch — Collection. */
+    public void from(java.util.Collection<String> subjectRefs) {
+        from(subjectRefs.toArray(String[]::new));
     }
 }

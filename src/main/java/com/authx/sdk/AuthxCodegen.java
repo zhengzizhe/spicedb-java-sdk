@@ -269,6 +269,7 @@ public final class AuthxCodegen {
             String refExpr = parts.relation.isEmpty()
                     ? "\"" + parts.type + ":\" + subjectIds[i]"
                     : "\"" + parts.type + ":\" + subjectIds[i] + \"#" + parts.relation + "\"";
+            // varargs
             sb.append("        public void ").append(methodName).append("(String... subjectIds) {\n");
             sb.append("            String[] refs = new String[subjectIds.length];\n");
             sb.append("            for (int i = 0; i < subjectIds.length; i++) refs[i] = ").append(refExpr).append(";\n");
@@ -276,6 +277,10 @@ public final class AuthxCodegen {
             sb.append("                for (var rel : relations)\n");
             sb.append("                    factory.").append(factoryMethod)
                     .append("(id, rel.relationName(), refs);\n");
+            sb.append("        }\n\n");
+            // Collection overload
+            sb.append("        public void ").append(methodName).append("(java.util.Collection<String> subjectIds) {\n");
+            sb.append("            ").append(methodName).append("(subjectIds.toArray(String[]::new));\n");
             sb.append("        }\n\n");
         }
     }

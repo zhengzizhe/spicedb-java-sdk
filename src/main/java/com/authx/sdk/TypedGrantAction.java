@@ -19,10 +19,15 @@ public class TypedGrantAction<R extends Relation.Named> {
         this.relations = relations;
     }
 
-    /** String escape hatch. */
+    /** String escape hatch — varargs. */
     public void to(String... subjectRefs) {
         for (String id : ids)
             for (R rel : relations)
                 factory.grantToSubjects(id, rel.relationName(), subjectRefs);
+    }
+
+    /** String escape hatch — Collection. */
+    public void to(java.util.Collection<String> subjectRefs) {
+        to(subjectRefs.toArray(String[]::new));
     }
 }

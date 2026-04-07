@@ -61,12 +61,20 @@ public class OrganizationResource extends TypedResourceFactory<Organization.Rel,
                     factory.grantToSubjects(id, rel.relationName(), refs);
         }
 
+        public void toUser(java.util.Collection<String> subjectIds) {
+            toUser(subjectIds.toArray(String[]::new));
+        }
+
         public void toDepartmentAllMembers(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i] + "#all_members";
             for (var id : ids)
                 for (var rel : relations)
                     factory.grantToSubjects(id, rel.relationName(), refs);
+        }
+
+        public void toDepartmentAllMembers(java.util.Collection<String> subjectIds) {
+            toDepartmentAllMembers(subjectIds.toArray(String[]::new));
         }
 
     }
@@ -85,12 +93,20 @@ public class OrganizationResource extends TypedResourceFactory<Organization.Rel,
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
         }
 
+        public void fromUser(java.util.Collection<String> subjectIds) {
+            fromUser(subjectIds.toArray(String[]::new));
+        }
+
         public void fromDepartmentAllMembers(String... subjectIds) {
             String[] refs = new String[subjectIds.length];
             for (int i = 0; i < subjectIds.length; i++) refs[i] = "department:" + subjectIds[i] + "#all_members";
             for (var id : ids)
                 for (var rel : relations)
                     factory.revokeFromSubjects(id, rel.relationName(), refs);
+        }
+
+        public void fromDepartmentAllMembers(java.util.Collection<String> subjectIds) {
+            fromDepartmentAllMembers(subjectIds.toArray(String[]::new));
         }
 
     }

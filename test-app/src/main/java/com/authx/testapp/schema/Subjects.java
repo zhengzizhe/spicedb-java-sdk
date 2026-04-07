@@ -10,28 +10,28 @@ public final class Subjects {
         return "user:" + id;
     }
 
-    public static String group(String id) {
-        return "group:" + id;
-    }
-
-    public static String space(String id) {
-        return "space:" + id;
-    }
-
-    public static String organization(String id) {
-        return "organization:" + id;
-    }
-
-    public static String document(String id) {
-        return "document:" + id;
+    public static String folder(String id) {
+        return "folder:" + id;
     }
 
     public static String department(String id) {
         return "department:" + id;
     }
 
-    public static String folder(String id) {
-        return "folder:" + id;
+    public static String document(String id) {
+        return "document:" + id;
+    }
+
+    public static String organization(String id) {
+        return "organization:" + id;
+    }
+
+    public static String space(String id) {
+        return "space:" + id;
+    }
+
+    public static String group(String id) {
+        return "group:" + id;
     }
 
     private Subjects() {}
