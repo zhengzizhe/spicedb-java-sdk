@@ -22,6 +22,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
 
 /**
@@ -49,11 +50,12 @@ public class WatchCacheInvalidator implements AutoCloseable {
     private final AtomicReference<String> lastToken = new AtomicReference<>(null);
     private final Thread watchThread;
     private final List<Consumer<RelationshipChange>> listeners = new CopyOnWriteArrayList<>();
+    private final LongAdder droppedListenerEvents = new LongAdder();
     private final ExecutorService listenerExecutor = new ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS,
             new ArrayBlockingQueue<>(10_000),
             r -> { Thread t = new Thread(r, "authx-sdk-watch-dispatch"); t.setDaemon(true); return t; },
-            new ThreadPoolExecutor.DiscardOldestPolicy());
+            (r, executor) -> droppedListenerEvents.increment());
 
     /** Register a listener for relationship changes. */
     public void addListener(Consumer<RelationshipChange> listener) {
@@ -270,6 +272,9 @@ public class WatchCacheInvalidator implements AutoCloseable {
             }
         }
     }
+
+    /** Number of listener dispatch events dropped because the dispatch queue was full. */
+    public long droppedListenerEvents() { return droppedListenerEvents.sum(); }
 
     public boolean isRunning() {
         return running.get() && watchThread.isAlive();

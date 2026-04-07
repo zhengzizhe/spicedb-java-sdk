@@ -4,11 +4,11 @@
 
 ## Phase 0: P0 — Release Blockers
 
-- [ ] T001 [P] [SR:ops-1] Create CI pipeline — `.github/workflows/ci.yml`
-- [ ] T002 [P] [SR:ops-2] Create release workflow — `.github/workflows/release.yml`
-- [ ] T003 [SR:test-1] Comprehensive WatchCacheInvalidator tests — `src/test/.../WatchCacheInvalidatorTest.java`
-- [ ] T004 [SR:ops-3] Caffeine runtime detection with warning — `src/.../AuthxClient.java`
-- [ ] T005 [SR:ops-4] Unify artifact ID and group — `build.gradle`
+- [X] T001 [P] [SR:ops-1] Create CI pipeline — `.github/workflows/ci.yml`
+- [X] T002 [P] [SR:ops-2] Create release workflow — `.github/workflows/release.yml`
+- [X] T003 [SR:test-1] Comprehensive WatchCacheInvalidator tests — `src/test/.../WatchCacheInvalidatorTest.java`
+- [X] T004 [SR:ops-3] Caffeine runtime detection with warning — `src/.../AuthxClient.java`
+- [X] T005 [SR:ops-4] Unify artifact ID and group — `build.gradle`
 
 ## Phase 1: P1 — Post-Release Urgent
 

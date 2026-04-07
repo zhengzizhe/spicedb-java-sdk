@@ -43,9 +43,10 @@ public class TieredCache<K, V> implements Cache<K, V> {
     @Override public CacheStats stats() {
         var s1 = l1.stats();
         var s2 = l2.stats();
-        // Hits: L1 hits + L2 hits (L2 is only queried on L1 miss, so L2 hits are tier-level hits)
-        // Misses: L2 misses (entries that missed both levels — the true cache miss count)
-        // Evictions: sum of both levels
+        // L1 hits and L2 hits are disjoint sets: L2 is only queried on L1 miss.
+        // Total hits = (requests that hit L1) + (requests that missed L1 but hit L2).
+        // Total misses = L2 misses only (requests that missed both levels).
+        // Evictions: sum of both levels (independent eviction policies).
         return new CacheStats(s1.hitCount() + s2.hitCount(), s2.missCount(), s1.evictionCount() + s2.evictionCount());
     }
 }

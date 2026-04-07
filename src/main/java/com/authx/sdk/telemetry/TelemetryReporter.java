@@ -24,6 +24,7 @@ public class TelemetryReporter implements AutoCloseable {
     private final ScheduledExecutorService scheduler;
     private final java.util.concurrent.atomic.AtomicBoolean flushScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.LongAdder droppedEvents = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder bufferFullDrops = new java.util.concurrent.atomic.LongAdder();
     private volatile int consecutiveFlushFailures = 0;
 
     public TelemetryReporter(TelemetrySink sink, int bufferCapacity, int batchSize,
@@ -57,7 +58,9 @@ public class TelemetryReporter implements AutoCloseable {
                 "traceId", traceId != null ? traceId : ""
         );
 
-        buffer.offer(event);
+        if (!buffer.offer(event)) {
+            bufferFullDrops.increment();
+        }
 
         if (buffer.size() >= batchSize && flushScheduled.compareAndSet(false, true)) {
             scheduler.execute(() -> {
@@ -94,6 +97,9 @@ public class TelemetryReporter implements AutoCloseable {
 
     /** Total number of events dropped due to sink failures. */
     public long droppedEventCount() { return droppedEvents.sum(); }
+
+    /** Events dropped because the internal buffer was full (separate from sink failures). */
+    public long bufferFullDropCount() { return bufferFullDrops.sum(); }
 
     @Override
     public void close() {

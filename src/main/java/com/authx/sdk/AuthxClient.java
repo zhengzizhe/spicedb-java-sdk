@@ -407,68 +407,8 @@ public class AuthxClient implements AutoCloseable {
 
                 // Phase: TRANSPORT
                 final var ctx = new BuildContext();
-                SdkTransport transport = lm.phase(SdkPhase.TRANSPORT, () -> {
-                    SdkTransport t = new GrpcTransport(grpcChannel, presharedKey, requestTimeout.toMillis());
-
-                    // Resilience (circuit breaker + retry via Resilience4j)
-                    var resilientTransport = new ResilientTransport(t, policies, bus);
-                    ctx.resilientTransport = resilientTransport;
-                    t = resilientTransport;
-
-                    if (telemetryEnabled) {
-                        ctx.telemetryReporter = new TelemetryReporter(spi.telemetrySink(), useVirtualThreads);
-                        t = new InstrumentedTransport(t, ctx.telemetryReporter, sdkMetrics);
-                    }
-
-                    if (cacheEnabled) {
-                        Cache<CheckKey, CheckResult> effectiveCache;
-                        try {
-                            // Policy-aware variable expiry: per-(resourceType, permission) TTL
-                            var expiry = new Expiry<CheckKey, CheckResult>() {
-                                @Override
-                                public long expireAfterCreate(CheckKey key, CheckResult value, long currentTime) {
-                                    long baseNanos = policies.resolveCacheTtl(
-                                            key.resource().type(), key.permission().name()).toNanos();
-                                    // ±10% jitter to prevent cache stampede
-                                    long jitter = java.util.concurrent.ThreadLocalRandom.current()
-                                            .nextLong(-baseNanos / 10, baseNanos / 10 + 1);
-                                    return baseNanos + jitter;
-                                }
-                                @Override
-                                public long expireAfterUpdate(CheckKey key, CheckResult value, long currentTime, long currentDuration) {
-                                    return currentDuration;
-                                }
-                                @Override
-                                public long expireAfterRead(CheckKey key, CheckResult value, long currentTime, long currentDuration) {
-                                    return currentDuration;
-                                }
-                            };
-                            var l1 = new CaffeineCache<>(cacheMaxSize, expiry, CheckKey::resourceIndex);
-                            effectiveCache = spi.l2Cache() != null
-                                    ? new TieredCache<>(l1, spi.l2Cache())
-                                    : l1;
-                        } catch (NoClassDefFoundError e) {
-                            System.getLogger(AuthxClient.class.getName()).log(
-                                    System.Logger.Level.WARNING,
-                                    "Cache enabled but Caffeine not on classpath. Add dependency: " +
-                                    "com.github.ben-manes.caffeine:caffeine:3.1.8. Falling back to no-op cache.");
-                            effectiveCache = Cache.noop();
-                        }
-
-                        ctx.checkCache = effectiveCache;
-                        t = new CachedTransport(t, effectiveCache, sdkMetrics);
-                    }
-
-                    if (ctx.checkCache != null) {
-                        var cacheRef = ctx.checkCache;
-                        sdkMetrics.setCacheStatsSource(cacheRef::stats);
-                    }
-
-                    t = new PolicyAwareConsistencyTransport(t, policies, tokenTracker);
-                    if (coalescingEnabled) t = new CoalescingTransport(t, sdkMetrics);
-                    if (!interceptors.isEmpty()) t = new InterceptorTransport(t, interceptors);
-                    return t;
-                });
+                SdkTransport transport = lm.phase(SdkPhase.TRANSPORT, () ->
+                        buildTransportStack(grpcChannel, policies, spi, bus, sdkMetrics, tokenTracker, ctx));
                 telemetryReporter = ctx.telemetryReporter;
                 if (ctx.resilientTransport != null) {
                     sdkMetrics.setCircuitBreakerStateSupplier(
@@ -476,34 +416,13 @@ public class AuthxClient implements AutoCloseable {
                 }
 
                 // Phase: WATCH
-                lm.phase(SdkPhase.WATCH, () -> {
-                    if (cacheEnabled && watchInvalidation && ctx.checkCache != null) {
-                        ctx.watchInvalidator = new WatchCacheInvalidator(
-                                grpcChannel, presharedKey, ctx.checkCache, sdkMetrics);
-                        ctx.watchInvalidator.start();
-                    }
-                });
+                lm.phase(SdkPhase.WATCH, () ->
+                        buildWatch(grpcChannel, sdkMetrics, ctx));
                 watchInvalidator = ctx.watchInvalidator;
 
-                // Phase: SCHEDULER (schema refresh)
-                lm.phase(SdkPhase.SCHEDULER, () -> {
-                    ThreadFactory tf = useVirtualThreads
-                            ? Thread.ofVirtual().name("authx-sdk-", 0).factory()
-                            : r -> { Thread th = new Thread(r, "authx-sdk-refresh"); th.setDaemon(true); return th; };
-                    ctx.scheduler = Executors.newSingleThreadScheduledExecutor(tf);
-                    // Refresh schema every 5 minutes
-                    ctx.scheduler.scheduleAtFixedRate(
-                            () -> schemaLoader.load(grpcChannel, authMetaFinal, schemaCache),
-                            300, 300, TimeUnit.SECONDS);
-                    // Rotate metrics histogram every 5 seconds (single consumer, no contention)
-                    ctx.scheduler.scheduleAtFixedRate(sdkMetrics::rotateHistogram, 5, 5, TimeUnit.SECONDS);
-                    // Sample cache size periodically (not on hot path)
-                    if (cacheEnabled && ctx.checkCache != null) {
-                        var cache = ctx.checkCache;
-                        ctx.scheduler.scheduleAtFixedRate(
-                                () -> sdkMetrics.updateCacheSize(cache.size()), 5, 5, TimeUnit.SECONDS);
-                    }
-                });
+                // Phase: SCHEDULER
+                lm.phase(SdkPhase.SCHEDULER, () ->
+                        buildScheduler(grpcChannel, authMetaFinal, schemaLoader, schemaCache, sdkMetrics, ctx));
                 scheduler = ctx.scheduler;
 
                 lm.complete();
@@ -557,6 +476,108 @@ public class AuthxClient implements AutoCloseable {
                     catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                 }
                 throw e;
+            }
+        }
+
+        /**
+         * Build the transport decoration stack (innermost → outermost):
+         *   GrpcTransport → ResilientTransport → InstrumentedTransport → CachedTransport
+         *   → PolicyAwareConsistencyTransport → CoalescingTransport → InterceptorTransport
+         *
+         * Order matters: CachedTransport must sit BELOW PolicyAwareConsistencyTransport
+         * so that write-after-read consistency tokens bypass the cache correctly.
+         */
+        private SdkTransport buildTransportStack(ManagedChannel grpcChannel, PolicyRegistry policies,
+                SdkComponents spi, TypedEventBus bus, SdkMetrics sdkMetrics,
+                TokenTracker tokenTracker, BuildContext ctx) {
+            SdkTransport t = new GrpcTransport(grpcChannel, presharedKey, requestTimeout.toMillis());
+
+            // Resilience (circuit breaker + retry via Resilience4j)
+            var resilientTransport = new ResilientTransport(t, policies, bus);
+            ctx.resilientTransport = resilientTransport;
+            t = resilientTransport;
+
+            if (telemetryEnabled) {
+                ctx.telemetryReporter = new TelemetryReporter(spi.telemetrySink(), useVirtualThreads);
+                t = new InstrumentedTransport(t, ctx.telemetryReporter, sdkMetrics);
+            }
+
+            if (cacheEnabled) {
+                Cache<CheckKey, CheckResult> effectiveCache;
+                try {
+                    // Policy-aware variable expiry: per-(resourceType, permission) TTL
+                    var expiry = new Expiry<CheckKey, CheckResult>() {
+                        @Override
+                        public long expireAfterCreate(CheckKey key, CheckResult value, long currentTime) {
+                            long baseNanos = policies.resolveCacheTtl(
+                                    key.resource().type(), key.permission().name()).toNanos();
+                            // ±10% jitter to prevent cache stampede
+                            long jitter = java.util.concurrent.ThreadLocalRandom.current()
+                                    .nextLong(-baseNanos / 10, baseNanos / 10 + 1);
+                            return baseNanos + jitter;
+                        }
+                        @Override
+                        public long expireAfterUpdate(CheckKey key, CheckResult value, long currentTime, long currentDuration) {
+                            return currentDuration;
+                        }
+                        @Override
+                        public long expireAfterRead(CheckKey key, CheckResult value, long currentTime, long currentDuration) {
+                            return currentDuration;
+                        }
+                    };
+                    var l1 = new CaffeineCache<>(cacheMaxSize, expiry, CheckKey::resourceIndex);
+                    effectiveCache = spi.l2Cache() != null
+                            ? new TieredCache<>(l1, spi.l2Cache())
+                            : l1;
+                } catch (NoClassDefFoundError e) {
+                    System.getLogger(AuthxClient.class.getName()).log(
+                            System.Logger.Level.WARNING,
+                            "Cache enabled but Caffeine not on classpath. Add dependency: " +
+                            "com.github.ben-manes.caffeine:caffeine:3.1.8. Falling back to no-op cache.");
+                    effectiveCache = Cache.noop();
+                }
+
+                ctx.checkCache = effectiveCache;
+                t = new CachedTransport(t, effectiveCache, sdkMetrics);
+            }
+
+            if (ctx.checkCache != null) {
+                var cacheRef = ctx.checkCache;
+                sdkMetrics.setCacheStatsSource(cacheRef::stats);
+            }
+
+            t = new PolicyAwareConsistencyTransport(t, policies, tokenTracker);
+            if (coalescingEnabled) t = new CoalescingTransport(t, sdkMetrics);
+            if (!interceptors.isEmpty()) t = new InterceptorTransport(t, interceptors);
+            return t;
+        }
+
+        private void buildWatch(ManagedChannel grpcChannel, SdkMetrics sdkMetrics, BuildContext ctx) {
+            if (cacheEnabled && watchInvalidation && ctx.checkCache != null) {
+                ctx.watchInvalidator = new WatchCacheInvalidator(
+                        grpcChannel, presharedKey, ctx.checkCache, sdkMetrics);
+                ctx.watchInvalidator.start();
+            }
+        }
+
+        private void buildScheduler(ManagedChannel grpcChannel, Metadata authMeta,
+                SchemaLoader schemaLoader, SchemaCache schemaCache, SdkMetrics sdkMetrics,
+                BuildContext ctx) {
+            ThreadFactory tf = useVirtualThreads
+                    ? Thread.ofVirtual().name("authx-sdk-", 0).factory()
+                    : r -> { Thread th = new Thread(r, "authx-sdk-refresh"); th.setDaemon(true); return th; };
+            ctx.scheduler = Executors.newSingleThreadScheduledExecutor(tf);
+            // Refresh schema every 5 minutes
+            ctx.scheduler.scheduleAtFixedRate(
+                    () -> schemaLoader.load(grpcChannel, authMeta, schemaCache),
+                    300, 300, TimeUnit.SECONDS);
+            // Rotate metrics histogram every 5 seconds (single consumer, no contention)
+            ctx.scheduler.scheduleAtFixedRate(sdkMetrics::rotateHistogram, 5, 5, TimeUnit.SECONDS);
+            // Sample cache size periodically (not on hot path)
+            if (cacheEnabled && ctx.checkCache != null) {
+                var cache = ctx.checkCache;
+                ctx.scheduler.scheduleAtFixedRate(
+                        () -> sdkMetrics.updateCacheSize(cache.size()), 5, 5, TimeUnit.SECONDS);
             }
         }
 

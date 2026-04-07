@@ -65,18 +65,14 @@ public class CachedTransport extends ForwardingTransport {
 
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        invalidateAffectedResources(updates);           // pre-invalidation (pessimistic)
-        var result = delegate.writeRelationships(updates);
-        invalidateAffectedResources(updates);           // post-invalidation (confirm)
-        return result;
+        invalidateAffectedResources(updates);           // pessimistic pre-invalidation
+        return delegate.writeRelationships(updates);
     }
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
         invalidateAffectedResources(updates);
-        var result = delegate.deleteRelationships(updates);
-        invalidateAffectedResources(updates);
-        return result;
+        return delegate.deleteRelationships(updates);
     }
 
     @Override
@@ -84,9 +80,7 @@ public class CachedTransport extends ForwardingTransport {
                                         Relation optionalRelation) {
         String indexKey = resource.type() + ":" + resource.id();
         invalidateByResource(indexKey);
-        var result = delegate.deleteByFilter(resource, subject, optionalRelation);
-        invalidateByResource(indexKey);
-        return result;
+        return delegate.deleteByFilter(resource, subject, optionalRelation);
     }
 
     @Override

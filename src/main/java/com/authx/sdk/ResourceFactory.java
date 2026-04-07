@@ -1,6 +1,8 @@
 package com.authx.sdk;
 
 import com.authx.sdk.model.Consistency;
+import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.RevokeResult;
 import com.authx.sdk.transport.SdkTransport;
 
 import java.util.List;
@@ -94,24 +96,24 @@ public class ResourceFactory {
         return resource(id).check(permission).withConsistency(consistency).by(userId).hasPermission();
     }
 
-    /** Grant relation to user(s). */
-    public void grant(String id, String relation, String... userIds) {
-        resource(id).grant(relation).to(userIds);
+    /** Grant relation to user(s). Returns result with zedToken for write-after-read consistency. */
+    public GrantResult grant(String id, String relation, String... userIds) {
+        return resource(id).grant(relation).to(userIds);
     }
 
     /** Grant relation to subject refs (e.g., "department:eng#all_members", "user:*"). */
-    public void grantToSubjects(String id, String relation, String... subjectRefs) {
-        resource(id).grant(relation).toSubjects(subjectRefs);
+    public GrantResult grantToSubjects(String id, String relation, String... subjectRefs) {
+        return resource(id).grant(relation).toSubjects(subjectRefs);
     }
 
-    /** Revoke relation from user(s). */
-    public void revoke(String id, String relation, String... userIds) {
-        resource(id).revoke(relation).from(userIds);
+    /** Revoke relation from user(s). Returns result with zedToken for write-after-read consistency. */
+    public RevokeResult revoke(String id, String relation, String... userIds) {
+        return resource(id).revoke(relation).from(userIds);
     }
 
     /** Revoke relation from subject refs. */
-    public void revokeFromSubjects(String id, String relation, String... subjectRefs) {
-        resource(id).revoke(relation).fromSubjects(subjectRefs);
+    public RevokeResult revokeFromSubjects(String id, String relation, String... subjectRefs) {
+        return resource(id).revoke(relation).fromSubjects(subjectRefs);
     }
 
     /** Get all relations grouped by relation name. */
