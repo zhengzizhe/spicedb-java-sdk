@@ -15,8 +15,11 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 
 **Context:** This should be run in a dedicated worktree (created by brainstorming skill).
 
-**Save plans to:** `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
-- (User preferences for plan location override this default)
+**Artifact chain:** brainstorming creates `specs/YYYY-MM-DD-<topic>/spec.md`. This skill creates two files in the SAME directory:
+- `specs/YYYY-MM-DD-<topic>/plan.md` — architecture, file structure, approach
+- `specs/YYYY-MM-DD-<topic>/tasks.md` — structured task list with dependencies
+
+Read spec.md FIRST. The plan and tasks must trace back to spec requirements.
 
 ## Scope Check
 
@@ -60,47 +63,59 @@ This structure informs the task decomposition. Each task should produce self-con
 ---
 ```
 
-## Task Structure
+## Task Structure (in tasks.md)
+
+Tasks use a structured format with IDs, parallelization markers, and spec traceability:
+
+```
+- [ ] T001 [P] [SR:req-id] Description — `path/to/file.java`
+```
+
+- `T###` — sequential task ID
+- `[P]` — parallelizable (can run concurrently with other [P] tasks in same phase)
+- `[SR:xxx]` — traces back to a spec requirement (from spec.md)
+- Description — what to do
+- File path — primary file affected
+
+### Task phases in tasks.md
+
+```markdown
+## Phase 0: Setup
+- [ ] T001 Create feature branch and test scaffolding
+
+## Phase 1: Foundation (blocks all other phases)
+- [ ] T002 [SR:req-1] Define interfaces — `src/.../Foo.java`
+- [ ] T003 [SR:req-1] Write tests for interfaces — `src/test/.../FooTest.java`
+
+## Phase 2: Core Implementation
+- [ ] T004 [P] [SR:req-2] Implement FooService — `src/.../FooService.java`
+- [ ] T005 [P] [SR:req-3] Implement BarHandler — `src/.../BarHandler.java`
+
+## Phase 3: Integration
+- [ ] T006 [SR:req-4] Wire components together — `src/.../AuthxClient.java`
+- [ ] T007 Run full test suite and verify
+
+## Dependencies
+T004, T005 depend on T002, T003
+T006 depends on T004, T005
+T004 and T005 are parallelizable [P]
+```
+
+### Each task in plan.md keeps detailed steps
 
 ````markdown
-### Task N: [Component Name]
+### Task T004: Implement FooService
 
 **Files:**
-- Create: `exact/path/to/file.py`
-- Modify: `exact/path/to/existing.py:123-145`
-- Test: `tests/exact/path/to/test.py`
+- Create: `src/main/java/com/authx/sdk/FooService.java`
+- Test: `src/test/java/com/authx/sdk/FooServiceTest.java`
 
-- [ ] **Step 1: Write the failing test**
-
-```python
-def test_specific_behavior():
-    result = function(input)
-    assert result == expected
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `pytest tests/path/test.py::test_name -v`
-Expected: FAIL with "function not defined"
-
-- [ ] **Step 3: Write minimal implementation**
-
-```python
-def function(input):
-    return expected
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `pytest tests/path/test.py::test_name -v`
-Expected: PASS
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tests/path/test.py src/path/file.py
-git commit -m "feat: add specific feature"
-```
+**Steps:**
+1. Write failing test
+2. Run to verify it fails
+3. Implement minimal code to pass
+4. Run to verify it passes
+5. Commit
 ````
 
 ## No Placeholders
@@ -119,30 +134,41 @@ Every step must contain the actual content an engineer needs. These are **plan f
 - Exact commands with expected output
 - DRY, YAGNI, TDD, frequent commits
 
-## Self-Review
+## Self-Review — Cross-Artifact Consistency Analysis
 
-After writing the complete plan, look at the spec with fresh eyes and check the plan against it. This is a checklist you run yourself — not a subagent dispatch.
+After writing plan.md and tasks.md, run this analysis against spec.md. This is a checklist you run yourself — not a subagent dispatch.
 
-**1. Spec coverage:** Skim each section/requirement in the spec. Can you point to a task that implements it? List any gaps.
+**Pass 1 — Coverage:** For every requirement in spec.md, find the task(s) in tasks.md that implement it. Output a coverage table:
 
-**2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
+```
+| Spec Requirement | Task(s) | Status |
+|---|---|---|
+| req-1: ... | T002, T003 | Covered |
+| req-2: ... | T004 | Covered |
+| req-3: ... | — | **GAP** |
+```
 
-**3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
+Any GAP is a plan failure. Add the missing task.
 
-If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
+**Pass 2 — Placeholder scan:** Search plan.md for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
+
+**Pass 3 — Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
+
+**Pass 4 — Dependency integrity:** Are task dependencies in tasks.md consistent with the phase structure? Can parallelizable [P] tasks actually run independently?
+
+**Pass 5 — Contradiction scan:** Do plan.md and spec.md contradict each other? Does the architecture in plan.md actually satisfy the requirements in spec.md?
+
+If you find issues, fix them inline. If you find a spec requirement with no task, add the task.
 
 ## Execution Handoff
 
-After saving the plan, offer execution choice:
+After saving plan.md and tasks.md, commit both files and report:
 
-**"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. Two execution options:**
+> "Plan and tasks saved to `specs/YYYY-MM-DD-<topic>/`. Artifact chain:
+> - `spec.md` — what and why
+> - `plan.md` — how (architecture, file structure, detailed steps)
+> - `tasks.md` — execution checklist with dependencies
+>
+> Ready to execute with authx-executing-plans?"
 
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
-
-**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
-
-**Which approach?"**
-
-**Execution:**
-- **REQUIRED:** Use authx-executing-plans
-- Batch execution with checkpoints for review
+**REQUIRED:** Use authx-executing-plans for execution. The executing-plans skill reads tasks.md and marks items `[X]` as completed.

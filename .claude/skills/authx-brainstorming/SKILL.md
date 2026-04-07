@@ -27,7 +27,7 @@ You MUST create a task for each of these items and complete them in order:
 3. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
 4. **Propose 2-3 approaches** — with trade-offs and your recommendation
 5. **Present design** — in sections scaled to their complexity, get user approval after each section
-6. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
+6. **Write spec file** — save to `specs/YYYY-MM-DD-<topic>/spec.md` and commit
 7. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see below)
 8. **User reviews written spec** — ask user to review the spec file before proceeding
 9. **Transition to implementation** — invoke writing-plans skill to create implementation plan
@@ -44,7 +44,7 @@ digraph brainstorming {
     "Propose 2-3 approaches" [shape=box];
     "Present design sections" [shape=box];
     "User approves design?" [shape=diamond];
-    "Write design doc" [shape=box];
+    "Write spec.md" [shape=box];
     "Spec self-review\n(fix inline)" [shape=box];
     "User reviews spec?" [shape=diamond];
     "Invoke writing-plans skill" [shape=doublecircle];
@@ -59,10 +59,10 @@ digraph brainstorming {
     "Propose 2-3 approaches" -> "Present design sections";
     "Present design sections" -> "User approves design?";
     "User approves design?" -> "Present design sections" [label="no, revise"];
-    "User approves design?" -> "Write design doc" [label="yes"];
-    "Write design doc" -> "Spec self-review\n(fix inline)";
+    "User approves design?" -> "Write spec.md" [label="yes"];
+    "Write spec.md" -> "Spec self-review\n(fix inline)";
     "Spec self-review\n(fix inline)" -> "User reviews spec?";
-    "User reviews spec?" -> "Write design doc" [label="changes requested"];
+    "User reviews spec?" -> "Write spec.md" [label="changes requested"];
     "User reviews spec?" -> "Invoke writing-plans skill" [label="approved"];
 }
 ```
@@ -133,20 +133,24 @@ When to push back (the goal is right but the specific approach is wrong):
 
 **Documentation:**
 
-- Write the validated design (spec) to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
-  - (User preferences for spec location override this default)
-- Use elements-of-style:writing-clearly-and-concisely skill if available
-- Commit the design document to git
+- Write the validated spec to `specs/YYYY-MM-DD-<topic>/spec.md`
+- This directory will also hold `plan.md` and `tasks.md` (created by writing-plans)
+- Commit the spec file to git
 
-**Spec Self-Review:**
-After writing the spec document, look at it with fresh eyes:
+**Spec Quality Gate (must pass before user review):**
 
-1. **Placeholder scan:** Any "TBD", "TODO", incomplete sections, or vague requirements? Fix them.
-2. **Internal consistency:** Do any sections contradict each other? Does the architecture match the feature descriptions?
-3. **Scope check:** Is this focused enough for a single implementation plan, or does it need decomposition?
-4. **Ambiguity check:** Could any requirement be interpreted two different ways? If so, pick one and make it explicit.
+Run these checks on spec.md. ALL must pass. Fix issues inline.
 
-Fix any issues inline. No need to re-review — just fix and move on.
+| Check | Pass criteria |
+|---|---|
+| **Placeholder scan** | Zero "TBD", "TODO", incomplete sections, or vague requirements |
+| **Internal consistency** | No contradictions between sections |
+| **Scope check** | Focused enough for a single plan (if not, decompose first) |
+| **Ambiguity check** | No requirement can be interpreted two ways |
+| **Testability** | Every requirement has clear success criteria that can be verified |
+| **Traceability** | Every requirement has an ID (e.g., `req-1`, `req-2`) that tasks.md can reference |
+
+If any check fails, fix it before proceeding. Do NOT present a spec with known gaps to the user.
 
 **User Review Gate:**
 After the spec review loop passes, ask the user to review the written spec before proceeding:

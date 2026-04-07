@@ -15,25 +15,36 @@ Load plan, review critically, execute all tasks, report when complete.
 
 ## The Process
 
-### Step 1: Load and Review Plan
-1. Read plan file
-2. Review critically - identify any questions or concerns about the plan
-3. If concerns: Raise them with your human partner before starting
-4. If no concerns: Create TodoWrite and proceed
+### Step 1: Load and Review Artifacts
+1. Read `tasks.md` and `plan.md` from the specs directory
+2. Review critically — identify any questions or concerns
+3. If concerns: Raise them before starting
+4. If no concerns: Create task list and proceed
 
-### Step 2: Execute Tasks
+### Step 2: Execute Tasks by Phase
 
-For each task:
-1. Mark as in_progress
-2. Follow each step exactly (plan has bite-sized steps)
-3. Run verifications as specified
-4. Mark as completed
+For each phase in tasks.md:
+1. Execute tasks in phase order, respecting dependencies
+2. [P] tasks within the same phase can be dispatched to parallel agents
+3. After EACH task: compile (`./gradlew compileJava`). If it fails, fix before moving on.
+4. After EACH phase: run tests (`./gradlew test -x :test-app:test`). If new failures, stop and fix.
+5. Mark completed tasks as `[X]` in tasks.md
 
-### Step 3: Complete Development
+**Phase Gate:** Do NOT start the next phase until the current phase's tests pass.
 
-After all tasks complete and verified:
-- Verify all tests pass, present completion summary to user
-- Invoke authx-feedback-loop to audit document hierarchy
+### Step 3: Completion Gate
+
+After all tasks complete:
+1. Run full test suite: `./gradlew test -x :test-app:test`
+2. Verify zero new failures
+3. Present completion summary with coverage table:
+   ```
+   | Task | Status | Spec Requirement |
+   |---|---|---|
+   | T001 | [X] | req-1 |
+   | T002 | [X] | req-2 |
+   ```
+4. Invoke authx-feedback-loop to audit document hierarchy
 
 ## When to Stop and Ask for Help
 
