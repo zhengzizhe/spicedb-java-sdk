@@ -280,7 +280,7 @@ public class AuthxClient implements AutoCloseable {
         private long cacheMaxSize = 100_000;
         private boolean watchInvalidation = false;
         private Object redisClient;  // io.lettuce.core.RedisClient (Object to avoid compile-time dep)
-        private Duration redisTtl = Duration.ofSeconds(30);
+        private Duration redisTtl = Duration.ofSeconds(10);
 
         // Features
         private boolean coalescingEnabled = true;
