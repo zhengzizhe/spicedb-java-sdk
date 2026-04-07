@@ -26,7 +26,7 @@ public class OrganizationResource extends TypedResourceFactory<Organization.Rel,
     }
 
     @Override
-    public OrganizationHandle on(String id) {
+    public OrganizationHandle select(String id) {
         return new OrganizationHandle(this, id);
     }
 

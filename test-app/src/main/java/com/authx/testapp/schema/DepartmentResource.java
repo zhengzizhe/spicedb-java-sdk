@@ -26,7 +26,7 @@ public class DepartmentResource extends TypedResourceFactory<Department.Rel, Dep
     }
 
     @Override
-    public DepartmentHandle on(String id) {
+    public DepartmentHandle select(String id) {
         return new DepartmentHandle(this, id);
     }
 

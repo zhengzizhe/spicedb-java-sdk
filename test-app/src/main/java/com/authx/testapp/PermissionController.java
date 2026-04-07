@@ -33,7 +33,7 @@ public class PermissionController {
                                          @RequestParam String relation,
                                          @RequestParam String user) {
         var rel = Document.Rel.valueOf(relation.toUpperCase());
-        doc.on(id).grant(rel).toUser(user);
+        doc.select(id).grant(rel).toUser(user);
         return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
     }
 
@@ -42,7 +42,7 @@ public class PermissionController {
                                           @RequestParam String relation,
                                           @RequestParam String user) {
         var rel = Document.Rel.valueOf(relation.toUpperCase());
-        doc.on(id).revoke(rel).fromUser(user);
+        doc.select(id).revoke(rel).fromUser(user);
         return Map.of("status", "revoked", "relation", rel.relationName(), "user", user);
     }
 
@@ -51,13 +51,13 @@ public class PermissionController {
                                          @RequestParam String permission,
                                          @RequestParam String user) {
         var perm = Document.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = doc.on(id).check(perm).by(user);
+        boolean allowed = doc.select(id).check(perm).by(user);
         return Map.of("allowed", allowed, "permission", perm.permissionName(), "user", user);
     }
 
     @GetMapping("/doc/permissions")
     public Map<String, Boolean> docPermissions(@RequestParam String id, @RequestParam String user) {
-        var h = doc.on(id);
+        var h = doc.select(id);
         return Map.of(
                 "view",    h.check(Document.Perm.VIEW).by(user),
                 "edit",    h.check(Document.Perm.EDIT).by(user),
@@ -79,7 +79,7 @@ public class PermissionController {
                                             @RequestParam String relation,
                                             @RequestParam String user) {
         var rel = Folder.Rel.valueOf(relation.toUpperCase());
-        folder.on(id).grant(rel).toUser(user);
+        folder.select(id).grant(rel).toUser(user);
 
         return Map.of("status", "granted", "relation", rel.relationName(), "user", user);
     }
@@ -89,7 +89,7 @@ public class PermissionController {
                                             @RequestParam String permission,
                                             @RequestParam String user) {
         var perm = Folder.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = folder.on(id).check(perm).by(user);
+        boolean allowed = folder.select(id).check(perm).by(user);
         return Map.of("allowed", allowed, "permission", perm.permissionName(), "user", user);
     }
 

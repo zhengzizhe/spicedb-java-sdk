@@ -26,7 +26,7 @@ public class FolderResource extends TypedResourceFactory<Folder.Rel, Folder.Perm
     }
 
     @Override
-    public FolderHandle on(String id) {
+    public FolderHandle select(String id) {
         return new FolderHandle(this, id);
     }
 

@@ -32,7 +32,7 @@ public class TypedResourceFactory<R extends Relation.Named, P extends Permission
      * Start a chain on a specific resource id.
      * Subclasses override to return typed handle with grant/check/revoke.
      */
-    public TypedHandle<R, P> on(String id) {
+    public TypedHandle<R, P> select(String id) {
         return new TypedHandle<>(this, id);
     }
 

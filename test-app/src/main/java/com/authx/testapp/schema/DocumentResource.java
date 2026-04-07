@@ -26,7 +26,7 @@ public class DocumentResource extends TypedResourceFactory<Document.Rel, Documen
     }
 
     @Override
-    public DocumentHandle on(String id) {
+    public DocumentHandle select(String id) {
         return new DocumentHandle(this, id);
     }
 

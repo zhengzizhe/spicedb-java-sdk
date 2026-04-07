@@ -26,7 +26,7 @@ public class SpaceResource extends TypedResourceFactory<Space.Rel, Space.Perm> {
     }
 
     @Override
-    public SpaceHandle on(String id) {
+    public SpaceHandle select(String id) {
         return new SpaceHandle(this, id);
     }
 
