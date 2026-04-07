@@ -34,10 +34,15 @@ public class ResourcePolicy {
         this.timeout = builder.timeout;
     }
 
+    /** Cache policy for this scope, or {@code null} to inherit from parent. */
     public @Nullable CachePolicy cache() { return cache; }
+    /** Read consistency level for this scope, or {@code null} to inherit from parent. */
     public @Nullable ReadConsistency readConsistency() { return readConsistency; }
+    /** Retry policy for this scope, or {@code null} to inherit from parent. */
     public @Nullable RetryPolicy retry() { return retry; }
+    /** Circuit breaker policy for this scope, or {@code null} to inherit from parent. */
     public @Nullable CircuitBreakerPolicy circuitBreaker() { return circuitBreaker; }
+    /** Timeout for gRPC calls in this scope, or {@code null} to inherit from parent. */
     public @Nullable Duration timeout() { return timeout; }
 
     /**
@@ -66,6 +71,7 @@ public class ResourcePolicy {
                 .build();
     }
 
+    /** Creates a new {@link Builder} for constructing a resource policy. */
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {

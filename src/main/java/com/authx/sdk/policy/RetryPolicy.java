@@ -27,12 +27,18 @@ public class RetryPolicy {
         this.nonRetryableExceptions = Set.copyOf(builder.nonRetryableExceptions);
     }
 
+    /** Maximum number of retry attempts (0 = retries disabled). */
     public int maxAttempts() { return maxAttempts; }
+    /** Initial delay before the first retry. */
     public Duration baseDelay() { return baseDelay; }
+    /** Upper bound on the computed retry delay. */
     public Duration maxDelay() { return maxDelay; }
+    /** Exponential backoff multiplier applied to each successive attempt. */
     public double multiplier() { return multiplier; }
+    /** Randomization factor (0-1) applied to delay to avoid thundering herd. */
     public double jitterFactor() { return jitterFactor; }
 
+    /** Returns {@code true} if the given exception should be retried per the configured allow/deny lists. */
     public boolean shouldRetry(Exception e) {
         if (nonRetryableExceptions.stream().anyMatch(cls -> cls.isInstance(e))) return false;
         if (retryableExceptions.isEmpty()) return true; // default: retry all transient
@@ -52,10 +58,12 @@ public class RetryPolicy {
         return Duration.ofMillis((long) delay);
     }
 
+    /** Returns a retry policy with retries disabled (maxAttempts = 0). */
     public static RetryPolicy disabled() {
         return new Builder().maxAttempts(0).build();
     }
 
+    /** Returns the default retry policy (3 attempts, exponential backoff, non-retryable exceptions excluded). */
     public static RetryPolicy defaults() {
         return new Builder()
                 .doNotRetryOn(com.authx.sdk.exception.CircuitBreakerOpenException.class)
@@ -68,6 +76,7 @@ public class RetryPolicy {
                 .build();
     }
 
+    /** Creates a new {@link Builder} for constructing a retry policy. */
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {

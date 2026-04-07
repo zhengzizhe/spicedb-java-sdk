@@ -4,7 +4,9 @@ import com.authx.sdk.exception.InvalidPermissionException;
 import com.authx.sdk.exception.InvalidRelationException;
 import com.authx.sdk.exception.InvalidResourceException;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**

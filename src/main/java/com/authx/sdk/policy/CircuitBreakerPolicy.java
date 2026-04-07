@@ -37,26 +37,40 @@ public class CircuitBreakerPolicy {
         this.onStateChange = builder.onStateChange;
     }
 
+    /** Whether the circuit breaker is enabled. */
     public boolean enabled() { return enabled; }
+    /** Failure rate threshold percentage (0-100). */
     public double failureRateThreshold() { return failureRateThreshold; }
+    /** Slow call rate threshold percentage (0-100). */
     public double slowCallRateThreshold() { return slowCallRateThreshold; }
+    /** Duration above which a call is considered slow. */
     public Duration slowCallDuration() { return slowCallDuration; }
+    /** Sliding window type: count-based or time-based. */
     public SlidingWindowType slidingWindowType() { return slidingWindowType; }
+    /** Size of the sliding window (number of calls or seconds). */
     public int slidingWindowSize() { return slidingWindowSize; }
+    /** Minimum number of calls required before the failure rate is calculated. */
     public int minimumNumberOfCalls() { return minimumNumberOfCalls; }
+    /** How long the circuit breaker stays open before transitioning to half-open. */
     public Duration waitInOpenState() { return waitInOpenState; }
+    /** Number of calls permitted when the circuit breaker is half-open. */
     public int permittedCallsInHalfOpen() { return permittedCallsInHalfOpen; }
+    /** Permissions that fail-open (allow) when the circuit breaker is open. */
     public Set<String> failOpenPermissions() { return failOpenPermissions; }
+    /** Callback invoked on state transitions, receiving (fromState, toState). */
     public BiConsumer<String, String> onStateChange() { return onStateChange; }
 
+    /** Returns a disabled circuit breaker policy. */
     public static CircuitBreakerPolicy disabled() {
         return new Builder().enabled(false).build();
     }
 
+    /** Returns the default circuit breaker policy. */
     public static CircuitBreakerPolicy defaults() {
         return new Builder().build();
     }
 
+    /** Creates a new {@link Builder} for constructing a circuit breaker policy. */
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {

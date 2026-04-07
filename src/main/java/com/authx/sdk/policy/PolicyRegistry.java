@@ -93,12 +93,15 @@ public class PolicyRegistry {
         return resolve(resourceType).readConsistency();
     }
 
+    /** Returns the global default policy (after merging with built-in defaults). */
     public ResourcePolicy defaultPolicy() { return defaultPolicy; }
 
+    /** Creates a registry with built-in defaults only (no per-resource-type overrides). */
     public static PolicyRegistry withDefaults() {
         return new Builder().build();
     }
 
+    /** Creates a new {@link Builder} for constructing a custom registry. */
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {

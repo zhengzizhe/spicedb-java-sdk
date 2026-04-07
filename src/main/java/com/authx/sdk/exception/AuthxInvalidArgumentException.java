@@ -1,9 +1,6 @@
 package com.authx.sdk.exception;
 
-/**
- * Thrown when SpiceDB returns INVALID_ARGUMENT (malformed request, bad schema reference, etc.).
- * This exception is non-retryable by default.
- */
+/** Thrown for invalid requests (INVALID_ARGUMENT/NOT_FOUND/ALREADY_EXISTS). {@link #isRetryable()} returns {@code false}. */
 public class AuthxInvalidArgumentException extends AuthxException {
     public AuthxInvalidArgumentException(String message) { super(message); }
     public AuthxInvalidArgumentException(String message, Throwable cause) { super(message, cause); }

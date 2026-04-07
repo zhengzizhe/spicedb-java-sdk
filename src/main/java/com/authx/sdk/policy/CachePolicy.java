@@ -32,6 +32,7 @@ public class CachePolicy {
         this.permissionTtls = Map.copyOf(builder.permissionTtls);
     }
 
+    /** Whether caching is enabled for this scope. */
     public boolean enabled() { return enabled; }
 
     /**
@@ -42,17 +43,22 @@ public class CachePolicy {
         return permissionTtls.getOrDefault(permission, ttl);
     }
 
+    /** Default time-to-live for cached entries. */
     public Duration ttl() { return ttl; }
+    /** Maximum idle time before a cached entry is evicted, or {@code null} if not set. */
     public @Nullable Duration maxIdleTime() { return maxIdleTime; }
 
+    /** Returns a disabled cache policy (no caching). */
     public static CachePolicy disabled() {
         return new Builder().enabled(false).build();
     }
 
+    /** Convenience factory: enabled cache with the given TTL. */
     public static CachePolicy of(Duration ttl) {
         return new Builder().ttl(ttl).build();
     }
 
+    /** Creates a new {@link Builder} for constructing a cache policy. */
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {
