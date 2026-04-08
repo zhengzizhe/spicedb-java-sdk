@@ -17,43 +17,11 @@ Writes (`writeRelationships`, `deleteRelationships`, `deleteByFilter`) trigger *
 
 ---
 
-## L1 / L2 Cache Tiers
+## Cache Implementation
 
-The SDK supports a two-level cache via `TieredCache`:
+The SDK uses `CaffeineCache` (in-process) for caching `check()` results. Cache hit latency is < 1µs.
 
-| Tier | Implementation | Purpose |
-|------|---------------|---------|
-| **L1** | `CaffeineCache` (in-process) | Fast, small, per-JVM cache with variable per-entry expiry |
-| **L2** | `RedisCacheAdapter` (Redis via Lettuce) | Optional distributed cache for cross-instance sharing |
-
-**Read path**: L1 -> L2 -> SpiceDB. On an L2 hit, the entry is promoted to L1.
-
-**Write path**: entries are written to both L1 and L2.
-
-**Invalidation**: both tiers are invalidated together (pessimistic pre-invalidation on writes, Watch-based invalidation for cross-instance changes).
-
-To enable L2, pass a Lettuce `RedisClient` in the cache configuration:
-
-```java
-var redisClient = RedisClient.create("redis://localhost:6379");
-AuthxClient.builder()
-    .cache(c -> c.enabled(true).redis(redisClient).redisTtl(Duration.ofSeconds(30)))
-    .build();
-```
-
-If no `redis()` is configured, the SDK uses L1 only. If Caffeine is not on the classpath, the SDK logs a warning and falls back to a no-op cache. If `redis()` is set but Lettuce is not on the classpath, the SDK logs a warning and falls back to L1 only.
-
-### Redis Hash structure
-
-L2 uses Redis Hash-per-resource for O(1) invalidation:
-
-```
-Key:   authx:check:{resourceType}:{resourceId}
-Field: {permission}:{subjectType}:{subjectId}
-Value: {permissionship}|{zedToken}|{expiresAt}
-```
-
-Watch invalidation runs `DEL authx:check:document:doc-1` — a single O(1) command that removes all cached check results for that resource, regardless of permission or subject.
+If Caffeine is not on the classpath, the SDK logs a warning and falls back to a no-op cache.
 
 ### Cache key indexing
 
