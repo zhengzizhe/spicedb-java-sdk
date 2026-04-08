@@ -15,7 +15,18 @@ import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.spi.SdkComponents;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.telemetry.TelemetryReporter;
-import com.authx.sdk.transport.*;
+import com.authx.sdk.transport.CachedTransport;
+import com.authx.sdk.transport.CoalescingTransport;
+import com.authx.sdk.transport.GrpcTransport;
+import com.authx.sdk.transport.InstrumentedTransport;
+import com.authx.sdk.transport.InterceptorTransport;
+import com.authx.sdk.transport.PolicyAwareConsistencyTransport;
+import com.authx.sdk.transport.ResilientTransport;
+import com.authx.sdk.transport.SdkTransport;
+import com.authx.sdk.transport.SchemaLoader;
+import com.authx.sdk.transport.StaticNameResolver;
+import com.authx.sdk.transport.TokenTracker;
+import com.authx.sdk.transport.WatchCacheInvalidator;
 import com.authx.sdk.watch.WatchDispatcher;
 import com.authx.sdk.watch.WatchStrategy;
 import com.github.benmanes.caffeine.cache.Expiry;
@@ -149,6 +160,7 @@ public class AuthxClientBuilder {
         WatchCacheInvalidator watchInvalidator;
     }
 
+    /** Build and return a fully initialized {@link AuthxClient} connected to SpiceDB. */
     public AuthxClient build() {
         Objects.requireNonNull(presharedKey, "presharedKey is required");
         if (target == null && targets == null) throw new IllegalArgumentException("target or targets is required");

@@ -1,9 +1,20 @@
 package com.authx.sdk.action;
 
-import com.authx.sdk.model.*;
+import com.authx.sdk.model.CheckResult;
+import com.authx.sdk.model.Consistency;
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.PermissionMatrix;
+import com.authx.sdk.model.PermissionSet;
+import com.authx.sdk.model.ResourceRef;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Fluent action for checking multiple permissions in a single bulk RPC.
@@ -26,6 +37,7 @@ public class CheckAllAction {
         this.permissions = permissions;
     }
 
+    /** Override the consistency level for these checks. */
     public CheckAllAction withConsistency(Consistency consistency) {
         this.consistency = consistency;
         return this;
@@ -50,10 +62,12 @@ public class CheckAllAction {
         return new PermissionSet(map);
     }
 
+    /** Check all permissions against multiple user ids, returning a user-to-permissions matrix. */
     public PermissionMatrix byAll(String... userIds) {
         return byAll(Arrays.asList(userIds));
     }
 
+    /** Check all permissions against multiple user ids, returning a user-to-permissions matrix. */
     public PermissionMatrix byAll(Collection<String> userIds) {
         List<String> uidList = userIds instanceof List ? (List<String>) userIds : new ArrayList<>(userIds);
         // Build all (user x permission) items in one flat list

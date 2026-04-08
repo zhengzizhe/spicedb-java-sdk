@@ -121,6 +121,7 @@ public class ResourceFactory {
         return resource(id).relations().groupByRelation();
     }
 
+    /** Return the resource type this factory is bound to. */
     public String resourceType() {
         return resourceType;
     }

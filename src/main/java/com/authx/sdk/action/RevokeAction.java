@@ -1,11 +1,17 @@
 package com.authx.sdk.action;
 
-import com.authx.sdk.model.*;
+import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.ResourceRef;
+import com.authx.sdk.model.RevokeResult;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * Fluent action for revoking specific relations from subjects.
@@ -27,20 +33,24 @@ public class RevokeAction {
         this.relations = relations;
     }
 
+    /** Revoke the relation(s) from the given user ids and execute the delete. */
     public RevokeResult from(String... userIds) {
         return from(Arrays.asList(userIds));
     }
 
+    /** Revoke the relation(s) from the given user ids and execute the delete. */
     public RevokeResult from(Collection<String> userIds) {
         return deleteRelationships(userIds.stream()
                 .map(id -> SubjectRef.of(defaultSubjectType, id, null))
                 .toList());
     }
 
+    /** Revoke the relation(s) from the given subject refs. */
     public RevokeResult fromSubjects(String... subjectRefs) {
         return fromSubjects(Arrays.asList(subjectRefs));
     }
 
+    /** Revoke the relation(s) from the given subject refs. */
     public RevokeResult fromSubjects(Collection<String> subjectRefs) {
         return deleteRelationships(subjectRefs.stream().map(SubjectRef::parse).toList());
     }

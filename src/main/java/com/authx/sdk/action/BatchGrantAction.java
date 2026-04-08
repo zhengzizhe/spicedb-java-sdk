@@ -1,6 +1,8 @@
 package com.authx.sdk.action;
 
-import com.authx.sdk.model.*;
+import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.ResourceRef;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
 
@@ -27,10 +29,12 @@ public class BatchGrantAction {
         this.relations = relations;
     }
 
+    /** Grant the relation(s) to the given user ids and return to the batch builder. */
     public BatchBuilder to(String... userIds) {
         return to(Arrays.asList(userIds));
     }
 
+    /** Grant the relation(s) to the given user ids and return to the batch builder. */
     public BatchBuilder to(Collection<String> userIds) {
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         for (String rel : relations) {
@@ -45,6 +49,7 @@ public class BatchGrantAction {
         return batch;
     }
 
+    /** Grant the relation(s) to the given subject refs and return to the batch builder. */
     public BatchBuilder toSubjects(String... subjectRefs) {
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         for (String rel : relations) {

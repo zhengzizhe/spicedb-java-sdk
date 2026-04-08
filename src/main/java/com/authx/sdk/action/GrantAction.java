@@ -1,13 +1,21 @@
 package com.authx.sdk.action;
 
-import com.authx.sdk.model.*;
+import com.authx.sdk.model.CaveatRef;
+import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.ResourceRef;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Fluent action for granting one or more relations on a resource to subjects.
@@ -49,20 +57,24 @@ public class GrantAction {
         return this;
     }
 
+    /** Grant the relation(s) to the given user ids and execute the write. */
     public GrantResult to(String... userIds) {
         return to(Arrays.asList(userIds));
     }
 
+    /** Grant the relation(s) to the given user ids and execute the write. */
     public GrantResult to(Collection<String> userIds) {
         return writeRelationships(userIds.stream()
                 .map(id -> SubjectRef.of(defaultSubjectType, id, null))
                 .toList());
     }
 
+    /** Grant the relation(s) to the given subject refs (e.g., {@code "department:eng#all_members"}). */
     public GrantResult toSubjects(String... subjectRefs) {
         return toSubjects(Arrays.asList(subjectRefs));
     }
 
+    /** Grant the relation(s) to the given subject refs (e.g., {@code "department:eng#all_members"}). */
     public GrantResult toSubjects(Collection<String> subjectRefs) {
         return writeRelationships(subjectRefs.stream().map(SubjectRef::parse).toList());
     }

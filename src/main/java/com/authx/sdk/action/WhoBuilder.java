@@ -24,11 +24,13 @@ public class WhoBuilder {
         this.asyncExecutor = asyncExecutor;
     }
 
+    /** Look up subjects that have the given permission (uses LookupSubjects RPC). */
     public SubjectQuery withPermission(String permission) {
         return new SubjectQuery(resourceType, resourceId, transport, defaultSubjectType,
                 asyncExecutor, permission, true);
     }
 
+    /** Look up subjects that have the given direct relation (uses ReadRelationships RPC). */
     public SubjectQuery withRelation(String relation) {
         return new SubjectQuery(resourceType, resourceId, transport, defaultSubjectType,
                 asyncExecutor, relation, false);

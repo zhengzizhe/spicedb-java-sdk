@@ -1,6 +1,9 @@
 package com.authx.sdk;
 
-import com.authx.sdk.model.*;
+import com.authx.sdk.model.BatchResult;
+import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.ResourceRef;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
@@ -50,6 +53,7 @@ public class CrossResourceBatchBuilder {
         updates.add(update);
     }
 
+    /** Scoped context targeting a single resource within a cross-resource batch. */
     public static class ResourceScope {
         private final CrossResourceBatchBuilder batch;
         private final String resourceType;
@@ -61,10 +65,12 @@ public class CrossResourceBatchBuilder {
             this.resourceId = resourceId;
         }
 
+        /** Add grant operations for the given relations on the scoped resource. */
         public GrantScope grant(String... relations) {
             return new GrantScope(this, relations);
         }
 
+        /** Add revoke operations for the given relations on the scoped resource. */
         public RevokeScope revoke(String... relations) {
             return new RevokeScope(this, relations);
         }
@@ -80,6 +86,7 @@ public class CrossResourceBatchBuilder {
         }
     }
 
+    /** Grant scope within a cross-resource batch, targeting specific relations. */
     public static class GrantScope {
         private final ResourceScope scope;
         private final String[] relations;
@@ -89,10 +96,12 @@ public class CrossResourceBatchBuilder {
             this.relations = relations;
         }
 
+        /** Grant the relation(s) to the given user ids. */
         public ResourceScope to(String... userIds) {
             return to(Arrays.asList(userIds));
         }
 
+        /** Grant the relation(s) to the given user ids. */
         public ResourceScope to(Collection<String> userIds) {
             ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
             for (String rel : relations) {
@@ -107,6 +116,7 @@ public class CrossResourceBatchBuilder {
             return scope;
         }
 
+        /** Grant the relation(s) to the given subject refs. */
         public ResourceScope toSubjects(String... subjectRefs) {
             ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
             for (String rel : relations) {
@@ -123,6 +133,7 @@ public class CrossResourceBatchBuilder {
         }
     }
 
+    /** Revoke scope within a cross-resource batch, targeting specific relations. */
     public static class RevokeScope {
         private final ResourceScope scope;
         private final String[] relations;
@@ -132,10 +143,12 @@ public class CrossResourceBatchBuilder {
             this.relations = relations;
         }
 
+        /** Revoke the relation(s) from the given user ids. */
         public ResourceScope from(String... userIds) {
             return from(Arrays.asList(userIds));
         }
 
+        /** Revoke the relation(s) from the given user ids. */
         public ResourceScope from(Collection<String> userIds) {
             ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
             for (String rel : relations) {

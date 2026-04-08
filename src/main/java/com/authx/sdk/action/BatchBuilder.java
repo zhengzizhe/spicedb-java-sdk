@@ -26,10 +26,12 @@ public class BatchBuilder {
         this.defaultSubjectType = defaultSubjectType;
     }
 
+    /** Add grant operations for the given relations to this batch. */
     public BatchGrantAction grant(String... relations) {
         return new BatchGrantAction(this, resourceType, resourceId, defaultSubjectType, relations);
     }
 
+    /** Add revoke operations for the given relations to this batch. */
     public BatchRevokeAction revoke(String... relations) {
         return new BatchRevokeAction(this, resourceType, resourceId, defaultSubjectType, relations);
     }
@@ -38,6 +40,7 @@ public class BatchBuilder {
         updates.add(update);
     }
 
+    /** Execute all accumulated operations in a single atomic gRPC call. */
     public BatchResult execute() {
         if (updates.isEmpty()) return new BatchResult(null);
         // Send all updates (TOUCH + DELETE) in a single writeRelationships call

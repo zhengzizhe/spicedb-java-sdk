@@ -1,6 +1,9 @@
 package com.authx.sdk.action;
 
-import com.authx.sdk.model.*;
+import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.ResourceRef;
+import com.authx.sdk.model.RevokeResult;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 
 /**
@@ -23,6 +26,7 @@ public class RevokeAllAction {
         this.relations = relations;
     }
 
+    /** Revoke all matching relationships from the given user ids using filter-based delete. */
     public RevokeResult from(String... userIds) {
         return from(java.util.Arrays.asList(userIds));
     }

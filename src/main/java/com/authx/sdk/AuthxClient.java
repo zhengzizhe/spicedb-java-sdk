@@ -9,8 +9,8 @@ import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.RelationshipChange;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.policy.PolicyRegistry;
-import com.authx.sdk.transport.*;
-import com.authx.sdk.watch.WatchStrategy;
+import com.authx.sdk.transport.InMemoryTransport;
+import com.authx.sdk.transport.SdkTransport;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * AuthCSES SDK — Java client for SpiceDB permission management.
+ * AuthX SDK — Java client for SpiceDB permission management.
  * Connects directly to SpiceDB via gRPC. No platform dependency.
  *
  * <pre>
@@ -57,10 +57,12 @@ public class AuthxClient implements AutoCloseable {
         }
     }
 
+    /** Create a new builder for configuring and constructing an {@link AuthxClient}. */
     public static AuthxClientBuilder builder() {
         return new AuthxClientBuilder();
     }
 
+    /** Create an in-memory client for testing (no SpiceDB connection required). */
     public static AuthxClient inMemory() {
         var bus = new DefaultTypedEventBus();
         var lm = new LifecycleManager(bus);
@@ -130,18 +132,18 @@ public class AuthxClient implements AutoCloseable {
         }
     }
 
-    /**
-     * One-off resource handle.
-     */
+    /** Create a one-off resource handle for the given type and id. */
     public ResourceHandle resource(String type, String id) {
         if (caching.schemaCache() != null) caching.schemaCache().validateResourceType(type);
         return new ResourceHandle(type, id, transport, config.defaultSubjectType(), infra.asyncExecutor());
     }
 
+    /** Start a cross-resource lookup query (find all resources a subject can access). */
     public LookupQuery lookup(String resourceType) {
         return new LookupQuery(resourceType, transport, config.defaultSubjectType());
     }
 
+    /** Start a cross-resource batch builder for atomic operations across multiple resources. */
     public CrossResourceBatchBuilder batch() {
         return new CrossResourceBatchBuilder(transport, config.defaultSubjectType());
     }
@@ -162,6 +164,7 @@ public class AuthxClient implements AutoCloseable {
         caching.watchDispatcher().addGlobalListener(listener);
     }
 
+    /** Unsubscribe a previously registered relationship change listener. */
     public void offRelationshipChange(Consumer<RelationshipChange> listener) {
         if (caching.watchDispatcher() != null) {
             caching.watchDispatcher().removeGlobalListener(listener);
@@ -175,12 +178,22 @@ public class AuthxClient implements AutoCloseable {
     String defaultSubjectType() { return config.defaultSubjectType(); }
     java.util.concurrent.Executor asyncExecutor() { return infra.asyncExecutor(); }
 
+    /** Return the SDK metrics collector. */
     public SdkMetrics metrics() { return observability.metrics(); }
+
+    /** Return the typed event bus for SDK lifecycle and operational events. */
     public TypedEventBus eventBus() { return observability.eventBus(); }
+
+    /** Return the lifecycle manager for inspecting SDK initialization state. */
     public LifecycleManager lifecycle() { return infra.lifecycle(); }
+
+    /** Return the schema client for reading and writing SpiceDB schemas. */
     public SchemaClient schema() { return schemaClient; }
+
+    /** Return the cache handle for manual cache operations (invalidation, stats). */
     public CacheHandle cache() { return caching.handle(); }
 
+    /** Perform a health check against SpiceDB and return latency and reachability status. */
     public HealthResult health() {
         long start = System.nanoTime();
         try {

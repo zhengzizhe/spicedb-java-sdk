@@ -1,9 +1,18 @@
 package com.authx.sdk.action;
 
-import com.authx.sdk.model.*;
+import com.authx.sdk.model.Consistency;
+import com.authx.sdk.model.LookupSubjectsRequest;
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.ResourceRef;
+import com.authx.sdk.model.SubjectRef;
+import com.authx.sdk.model.Tuple;
 import com.authx.sdk.transport.SdkTransport;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
@@ -34,6 +43,7 @@ public class SubjectQuery {
         this.isPermission = isPermission;
     }
 
+    /** Override the consistency level for this query. */
     public SubjectQuery withConsistency(Consistency consistency) {
         this.consistency = consistency;
         return this;
@@ -45,6 +55,7 @@ public class SubjectQuery {
         return this;
     }
 
+    /** Execute the query and return subject ids as a list. */
     public List<String> fetch() {
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         if (isPermission) {
@@ -61,19 +72,23 @@ public class SubjectQuery {
         }
     }
 
+    /** Execute the query and return subject ids as a set. */
     public Set<String> fetchSet() {
         return new HashSet<>(fetch());
     }
 
+    /** Execute the query and return the first subject id, if any. */
     public Optional<String> fetchFirst() {
         var list = fetch();
         return list.isEmpty() ? Optional.empty() : Optional.of(list.getFirst());
     }
 
+    /** Execute the query and return the number of matching subjects. */
     public int fetchCount() {
         return fetch().size();
     }
 
+    /** Execute the query and return whether any matching subjects exist. */
     public boolean fetchExists() {
         // Fetch with limit=1 to avoid pulling all subjects just to check existence
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
@@ -88,6 +103,7 @@ public class SubjectQuery {
         }
     }
 
+    /** Asynchronous version of {@link #fetch()}, using the SDK's configured executor. */
     public CompletableFuture<List<String>> fetchAsync() {
         return CompletableFuture.supplyAsync(this::fetch, asyncExecutor);
     }

@@ -1,9 +1,18 @@
 package com.authx.sdk.action;
 
-import com.authx.sdk.model.*;
+import com.authx.sdk.model.BulkCheckResult;
+import com.authx.sdk.model.CheckRequest;
+import com.authx.sdk.model.CheckResult;
+import com.authx.sdk.model.Consistency;
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.ResourceRef;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
@@ -31,6 +40,7 @@ public class CheckAction {
         this.permissions = permissions;
     }
 
+    /** Override the consistency level for this check. */
     public CheckAction withConsistency(Consistency consistency) {
         this.consistency = consistency;
         return this;
@@ -42,6 +52,7 @@ public class CheckAction {
         return this;
     }
 
+    /** Execute the permission check against a single user id. */
     public CheckResult by(String userId) {
         var request = new CheckRequest(
                 ResourceRef.of(resourceType, resourceId),
@@ -57,10 +68,12 @@ public class CheckAction {
         return CompletableFuture.supplyAsync(() -> by(userId), asyncExecutor);
     }
 
+    /** Check the permission against multiple user ids in a single bulk RPC. */
     public BulkCheckResult byAll(String... userIds) {
         return byAll(Arrays.asList(userIds));
     }
 
+    /** Check the permission against multiple user ids in a single bulk RPC. */
     public BulkCheckResult byAll(Collection<String> userIds) {
         var request = CheckRequest.of(
                 ResourceRef.of(resourceType, resourceId),
