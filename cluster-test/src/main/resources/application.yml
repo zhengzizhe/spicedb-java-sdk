@@ -1,0 +1,32 @@
+server:
+  port: ${SERVER_PORT:8091}
+
+cluster:
+  node-index: ${NODE_INDEX:0}
+  node-count: 3
+
+spicedb:
+  targets: ${SPICEDB_TARGETS:localhost:50061,localhost:50062}
+  preshared-key: ${SPICEDB_PSK:testkey}
+  cache-enabled: true
+  cache-max-size: 200000
+  watch-invalidation: true
+  virtual-threads: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  metrics:
+    tags:
+      node: ${NODE_INDEX:0}
+
+benchmark:
+  threads: ${BENCH_THREADS:100}
+  duration-seconds: ${BENCH_DURATION:60}
+  warmup-seconds: ${BENCH_WARMUP:10}
+
+logging:
+  level:
+    com.authx: INFO

@@ -3,31 +3,31 @@
 > Track progress by marking items `[X]` as completed.
 
 ## Phase 1: Module Setup
-- [ ] T001 [SR:req-2] Register cluster-test submodule + build.gradle — `settings.gradle`, `cluster-test/build.gradle`
-- [ ] T002 [SR:req-2] Spring Boot app + SDK config + application.yml — `ClusterTestApp.java`, `SdkConfig.java`, `application.yml`
+- [X] T001 [SR:req-2] Register cluster-test submodule + build.gradle — `settings.gradle`, `cluster-test/build.gradle`
+- [X] T002 [SR:req-2] Spring Boot app + SDK config + application.yml — `ClusterTestApp.java`, `SdkConfig.java`, `application.yml`
 
 ## Phase 2: Data Generation + Import
-- [ ] T003 [SR:req-3] DataModel + RelationshipFileGenerator — `generator/DataModel.java`, `generator/RelationshipFileGenerator.java`
-- [ ] T004 [SR:req-3] BulkImporter (gRPC streaming) — `generator/BulkImporter.java`
+- [X] T003 [SR:req-3] DataModel + RelationshipFileGenerator — `generator/DataModel.java`, `generator/RelationshipFileGenerator.java`
+- [X] T004 [SR:req-3] BulkImporter (gRPC streaming) — `generator/BulkImporter.java`
 
 ## Phase 3: REST API
-- [ ] T005 [SR:req-3,req-4,req-5] TestController endpoints — `api/TestController.java`
+- [X] T005 [SR:req-3,req-4,req-5] TestController endpoints — `api/TestController.java`
 
 ## Phase 4: Benchmark Engine
-- [ ] T006 [SR:req-4] BenchmarkRunner + BenchmarkResult + ReadBenchmark (B1) — `benchmark/BenchmarkRunner.java`, `benchmark/BenchmarkResult.java`, `benchmark/ReadBenchmark.java`
-- [ ] T007 [P] [SR:req-4] WriteBenchmark (B2) + ConsistencyBenchmark (B3) — `benchmark/WriteBenchmark.java`, `benchmark/ConsistencyBenchmark.java`
-- [ ] T008 [P] [SR:req-4] DeepInheritanceBenchmark (B4) + BatchBenchmark (B5) + FaultRecoveryBenchmark (B6) — `benchmark/DeepInheritanceBenchmark.java`, `benchmark/BatchBenchmark.java`, `benchmark/FaultRecoveryBenchmark.java`
+- [X] T006 [SR:req-4] BenchmarkRunner + BenchmarkResult + ReadBenchmark (B1) — `benchmark/BenchmarkRunner.java`, `benchmark/BenchmarkResult.java`, `benchmark/ReadBenchmark.java`
+- [X] T007 [P] [SR:req-4] WriteBenchmark (B2) + ConsistencyBenchmark (B3) — `benchmark/WriteBenchmark.java`, `benchmark/ConsistencyBenchmark.java`
+- [X] T008 [P] [SR:req-4] DeepInheritanceBenchmark (B4) + BatchBenchmark (B5) + FaultRecoveryBenchmark (B6) — `benchmark/DeepInheritanceBenchmark.java`, `benchmark/BatchBenchmark.java`, `benchmark/FaultRecoveryBenchmark.java`
 
 ## Phase 5: Correctness Verification
-- [ ] T009 [SR:req-5] CorrectnessVerifier — `verify/CorrectnessVerifier.java`
+- [X] T009 [SR:req-5] CorrectnessVerifier — `verify/CorrectnessVerifier.java`
 
 ## Phase 6: Monitoring Stack
-- [ ] T010 [P] [SR:req-1] Prometheus config + Docker Compose update — `deploy/prometheus/prometheus.yml`, `deploy/docker-compose.yml`
-- [ ] T011 [P] [SR:req-1] Grafana provisioning + 3 dashboards — `deploy/grafana/**`
+- [X] T010 [P] [SR:req-1] Prometheus config + Docker Compose update — `deploy/prometheus/prometheus.yml`, `deploy/docker-compose.yml`
+- [X] T011 [P] [SR:req-1] Grafana provisioning + 3 dashboards — `deploy/grafana/**`
 
 ## Phase 7: Scripts + Verification
-- [ ] T012 [SR:req-6] Start/stop scripts — `cluster-test/scripts/start-cluster.sh`, `cluster-test/scripts/stop-cluster.sh`
-- [ ] T013 Final compile + smoke test
+- [X] T012 [SR:req-6] Start/stop scripts — `cluster-test/scripts/start-cluster.sh`, `cluster-test/scripts/stop-cluster.sh`
+- [X] T013 Final compile + smoke test
 
 ## Dependencies
 

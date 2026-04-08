@@ -1,0 +1,150 @@
+{
+  "uid": "spicedb-overview",
+  "title": "SpiceDB Overview",
+  "tags": ["spicedb", "grpc"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "gRPC Request Rate by Method",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(grpc_server_handled_total{job=\"spicedb\"}[5m])) by (grpc_method)",
+          "legendFormat": "{{grpc_method}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "gRPC Latency p50 / p99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum(rate(grpc_server_handling_seconds_bucket{job=\"spicedb\"}[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum(rate(grpc_server_handling_seconds_bucket{job=\"spicedb\"}[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "gRPC Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(grpc_server_handled_total{job=\"spicedb\", grpc_code!=\"OK\"}[5m])) by (grpc_code)",
+          "legendFormat": "{{grpc_code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "bars", "fillOpacity": 30, "lineWidth": 1 }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Dispatch Cache Hit Rate",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(spicedb_dispatch_cache_hit_total{job=\"spicedb\"}[5m])) / (sum(rate(spicedb_dispatch_cache_hit_total{job=\"spicedb\"}[5m])) + sum(rate(spicedb_dispatch_cache_miss_total{job=\"spicedb\"}[5m])))",
+          "legendFormat": "Hit Rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "green", "value": 0.8 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Namespace Cache Hit Rate",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(spicedb_namespace_cache_hit_total{job=\"spicedb\"}[5m])) / (sum(rate(spicedb_namespace_cache_hit_total{job=\"spicedb\"}[5m])) + sum(rate(spicedb_namespace_cache_miss_total{job=\"spicedb\"}[5m])))",
+          "legendFormat": "Hit Rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "green", "value": 0.8 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s"
+}
