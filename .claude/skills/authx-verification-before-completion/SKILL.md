@@ -21,6 +21,16 @@ NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
 
 If you haven't run the verification command in this message, you cannot claim it passes.
 
+## Three Red Lines
+
+These are absolute rules. Violating any one invalidates the completion claim.
+
+🚫 **Red Line 1: Where's the evidence?** Claiming "fixed" or "done" requires command output proving it. No output = no completion. `./gradlew test` output, `curl` response, grep result — something concrete.
+
+🚫 **Red Line 2: Did you verify, or did you guess?** Saying "probably an environment issue" or "API might not support this" without tool verification is **guessing, not diagnosing**. Before attributing failure to external causes, you MUST verify with tools.
+
+🚫 **Red Line 3: Did you exhaust, or did you quit?** Saying "I cannot solve this" requires proof that you completed the Failure Escalation Protocol (see authx-systematic-debugging). If you haven't reached L3 exhaustion, you haven't earned the right to give up.
+
 ## The Gate Function
 
 ```

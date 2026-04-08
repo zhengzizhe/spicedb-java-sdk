@@ -32,6 +32,13 @@ For each phase in tasks.md:
 
 **Phase Gate:** Do NOT start the next phase until the current phase's tests pass.
 
+**Iceberg Check (after each task):** After completing a task, ask:
+1. Does this change affect upstream or downstream code that wasn't in the task?
+2. Are there similar patterns elsewhere in the codebase that need the same treatment?
+3. Did I spot any code quality issues while working that I should fix now?
+
+If yes to any: fix it now, don't leave it for later. One problem in, zero problems out.
+
 ### Step 3: Completion Gate
 
 After all tasks complete:

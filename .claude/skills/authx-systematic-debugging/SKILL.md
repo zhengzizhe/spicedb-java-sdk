@@ -212,6 +212,19 @@ You MUST complete each phase before proceeding to the next.
 
    This is NOT a failed hypothesis - this is a wrong architecture.
 
+## Failure Escalation Protocol
+
+Track consecutive failures on the same issue. Escalate approach — don't repeat the same strategy.
+
+| Failures | Level | Forced Action |
+|----------|-------|---------------|
+| 1st | Normal | Standard Phase 1-4 debugging |
+| 2nd | **L1 — Switch approach** | You MUST try a fundamentally different approach. Not a parameter tweak — a different strategy. If you were guessing, start reading. If you were reading code, start searching. |
+| 3rd | **L2 — Forced checklist** | Complete ALL of these before attempting another fix: (1) Re-read the FULL error message word by word (2) WebSearch the exact error (3) Read the relevant source code — not skim, READ (4) List 3 distinct hypotheses for root cause (5) Test the most likely one |
+| 4th+ | **L3 — Exhaustion mode** | You are NOT allowed to say "cannot solve" or "defer" until you have: (1) Completed L2 checklist (2) Tried all 3 hypotheses (3) Searched with 3 different query formulations (4) Read all related source files (5) Asked yourself "what haven't I checked?" If all genuinely exhausted, state exactly what was tried and why each failed. |
+
+**"暂缓" is not an option until L3 is fully completed.** Saying "let's defer this" without exhausting approaches is giving up, not prioritizing.
+
 ## Red Flags - STOP and Follow Process
 
 If you catch yourself thinking:
