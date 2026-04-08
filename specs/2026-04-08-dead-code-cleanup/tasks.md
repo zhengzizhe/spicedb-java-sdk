@@ -4,17 +4,17 @@
 
 ## Phase 1: Dead Code & Dependency Removal
 
-- [ ] T001 [P] [SR:req-1] Delete LogRedactionInterceptor — `src/.../builtin/LogRedactionInterceptor.java`
-- [ ] T002 [P] [SR:req-2] Remove jackson-databind dependency — `build.gradle`
+- [X] T001 [P] [SR:req-1] Delete LogRedactionInterceptor — `src/.../builtin/LogRedactionInterceptor.java`
+- [X] T002 [P] [SR:req-2] Remove jackson-databind dependency — `build.gradle`
 
 ## Phase 2: Documentation Fixes
 
-- [ ] T003 [P] [SR:req-3] Update README stale L2 cache references — `README.md`, `README_en.md`
-- [ ] T004 [P] [SR:req-4] Mark cache-refactor spec as superseded — `specs/2026-04-07-cache-refactor/SUPERSEDED.md`
+- [X] T003 [P] [SR:req-3] Update README stale L2 cache references — `README.md`, `README_en.md`
+- [X] T004 [P] [SR:req-4] Mark cache-refactor spec as superseded — `specs/2026-04-07-cache-refactor/SUPERSEDED.md`
 
 ## Phase 3: Verification
 
-- [ ] T005 Final verification — compile + test + grep checks
+- [X] T005 Final verification — compile + test + grep checks
 
 ## Dependencies
 
