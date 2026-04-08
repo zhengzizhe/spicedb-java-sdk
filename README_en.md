@@ -8,7 +8,7 @@ A high-performance permission-checking client that connects directly to SpiceDB,
 
 - **Direct gRPC Connection**: Bypasses middleware, connects directly to SpiceDB via gRPC, supports DNS / static multi-address
 - **Tens of Thousands of Checks per Second**: Cache hit < 1us, cache miss (single node) < 10ms
-- **Two-Level Cache**: L1 in-memory cache (Caffeine) + optional L2 distributed cache, `PolicyAwareCheckCache` with independent TTL per resource type
+- **Smart Caching**: Caffeine in-memory cache + Watch-based real-time invalidation, with independent TTL per resource type
 - **Watch-Based Real-Time Invalidation**: Subscribes to SpiceDB Watch stream, automatically evicts cache entries on relationship changes
 - **Per-Resource-Type Policies**: Each resource type can have independent cache TTL, consistency, retry, circuit breaker, and timeout configuration
 - **Resilience4j Circuit Breaker & Retry**: CircuitBreaker + Retry + RateLimiter + Bulkhead, ready out of the box

@@ -8,7 +8,7 @@
 
 - **直连 gRPC**：绕过中间层，通过 gRPC 直连 SpiceDB，支持 DNS / 静态多地址
 - **每秒万级检查**：缓存命中 < 1µs，缓存未命中（单节点）< 10ms
-- **二级缓存**：L1 内存缓存（Caffeine）+ 可选 L2 分布式缓存，`PolicyAwareCheckCache` 按 resource type 独立 TTL
+- **智能缓存**：Caffeine 内存缓存 + Watch 实时失效，按 resource type 独立 TTL
 - **Watch 实时失效**：订阅 SpiceDB Watch 流，关系变更时自动淘汰缓存
 - **per-resource-type 策略**：每个资源类型可独立配置缓存 TTL、一致性、重试、熔断、超时
 - **Resilience4j 熔断重试**：CircuitBreaker + Retry + RateLimiter + Bulkhead，开箱即用
