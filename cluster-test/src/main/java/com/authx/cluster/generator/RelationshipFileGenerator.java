@@ -41,7 +41,9 @@ public class RelationshipFileGenerator {
      * @throws IOException if writing fails
      */
     public long generate(Path outputFile) throws IOException {
-        Files.createDirectories(outputFile.getParent());
+        if (outputFile.getParent() != null) {
+            Files.createDirectories(outputFile.getParent());
+        }
         log.info("Generating relationships to {}", outputFile);
 
         try (BufferedWriter writer = Files.newBufferedWriter(outputFile)) {

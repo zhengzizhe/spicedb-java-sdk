@@ -1,0 +1,50 @@
+name: document library benchmark
+weight: 1
+steps:
+# ── Check document view (most common, traverses folder→ancestors→space) ──
+{{- range $i := enumerate 40 }}
+- op: CheckPermission
+  resource: document:d_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}
+  subject: user:user_{{ randomObjectID }}_{{ randomObjectID }}
+  permission: view
+{{- end }}
+
+# ── Check document edit ──
+{{- range $i := enumerate 20 }}
+- op: CheckPermission
+  resource: document:d_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}
+  subject: user:user_{{ randomObjectID }}_{{ randomObjectID }}
+  permission: edit
+{{- end }}
+
+# ── Check folder view (ancestor dispatch) ──
+{{- range $i := enumerate 20 }}
+- op: CheckPermission
+  resource: folder:f_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}
+  subject: user:user_{{ randomObjectID }}_{{ randomObjectID }}
+  permission: view
+{{- end }}
+
+# ── Check space view ──
+{{- range $i := enumerate 10 }}
+- op: CheckPermission
+  resource: space:space_{{ randomObjectID }}_{{ randomObjectID }}
+  subject: user:user_{{ randomObjectID }}_{{ randomObjectID }}
+  permission: view
+{{- end }}
+
+# ── Write: grant + revoke ──
+{{- range $i := enumerate 10 }}
+- op: WriteRelationships
+  updates:
+  - op: TOUCH
+    resource: document:d_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}
+    subject: user:user_{{ randomObjectID }}_{{ randomObjectID }}
+    relation: viewer
+- op: WriteRelationships
+  updates:
+  - op: DELETE
+    resource: document:d_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}_{{ randomObjectID }}
+    subject: user:user_{{ randomObjectID }}_{{ randomObjectID }}
+    relation: viewer
+{{- end }}
