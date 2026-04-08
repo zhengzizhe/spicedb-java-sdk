@@ -3,20 +3,20 @@
 > Track progress by marking items `[X]` as completed.
 
 ## Phase 1: Extract ResourceHandle inner classes
-- [ ] T001 [SR:req-1,req-5] Extract 11 action classes to action/ package — `src/.../action/*.java`
-- [ ] T002 [SR:req-1] Slim down ResourceHandle — `src/.../ResourceHandle.java`
+- [X] T001 [SR:req-1,req-5] Extract 11 action classes to action/ package — `src/.../action/*.java`
+- [X] T002 [SR:req-1] Slim down ResourceHandle — `src/.../ResourceHandle.java`
 
 ## Phase 2: Extract AuthxClient Builder
-- [ ] T003 [SR:req-2] Extract Builder to AuthxClientBuilder.java — `src/.../AuthxClientBuilder.java`
-- [ ] T004 [SR:req-2] Slim down AuthxClient — `src/.../AuthxClient.java`
+- [X] T003 [SR:req-2] Extract Builder to AuthxClientBuilder.java — `src/.../AuthxClientBuilder.java`
+- [X] T004 [SR:req-2] Slim down AuthxClient — `src/.../AuthxClient.java`
 
 ## Phase 3: Javadoc + imports
-- [ ] T005 [P] [SR:req-3] Javadoc — ResourceHandle + action classes — `src/.../ResourceHandle.java`, `action/*.java`
-- [ ] T006 [P] [SR:req-3] Javadoc — AuthxClient + Builder + ResourceFactory + LookupQuery + CrossResourceBatchBuilder
-- [ ] T007 [SR:req-4] Import cleanup — no wildcards in API layer
+- [X] T005 [P] [SR:req-3] Javadoc — ResourceHandle + action classes — `src/.../ResourceHandle.java`, `action/*.java`
+- [X] T006 [P] [SR:req-3] Javadoc — AuthxClient + Builder + ResourceFactory + LookupQuery + CrossResourceBatchBuilder
+- [X] T007 [SR:req-4] Import cleanup — no wildcards in API layer
 
 ## Phase 4: Verification
-- [ ] T008 Final verification — compile + test + line count checks
+- [X] T008 Final verification — compile + test + line count checks
 
 ## Dependencies
 
