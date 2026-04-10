@@ -1,7 +1,32 @@
 server:
-  port: 8081
+  port: ${SERVER_PORT:8091}
+  tomcat:
+    threads:
+      max: 400
+      min-spare: 50
 
-# OpenTelemetry — export traces to Jaeger
+spring:
+  application:
+    name: authx-permission-service
+  threads:
+    virtual:
+      enabled: true
+
+# Actuator — Prometheus metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+# OpenTelemetry
 otel:
   sdk:
     disabled: ${OTEL_SDK_DISABLED:false}
@@ -9,15 +34,16 @@ otel:
     otlp:
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
   service:
-    name: ${OTEL_SERVICE_NAME:authx-test-app}
+    name: ${OTEL_SERVICE_NAME:authx-permission-service}
   traces:
     sampler: ${OTEL_TRACES_SAMPLER:always_on}
 
+# SpiceDB cluster
 spicedb:
-  target: "${SPICEDB_TARGET:localhost:50061}"
-  target-secondary: "${SPICEDB_TARGET_SECONDARY:localhost:50062}"
-  preshared-key: "${SPICEDB_PRESHARED_KEY:somerandomkeyhere}"
-  cache-enabled: true
-  cache-max-size: 10000
+  targets: "${SPICEDB_TARGETS:localhost:50051,localhost:50052,localhost:50053}"
+  preshared-key: "${SPICEDB_PRESHARED_KEY:testkey}"
+  cache:
+    enabled: true
+    max-size: ${SPICEDB_CACHE_MAX_SIZE:100000}
   watch-invalidation: ${SPICEDB_WATCH:true}
   virtual-threads: true

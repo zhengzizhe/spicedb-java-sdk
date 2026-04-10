@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.authcses"
-version = "0.0.1"
+version = "1.0.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -18,15 +18,18 @@ repositories {
 }
 
 dependencies {
-    // Our SDK
+    // AuthX SDK
     implementation(project(":"))
 
     // Spring Boot
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
-    // Caffeine (SDK optional dep)
+    // Caffeine (SDK cache)
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+
+    // Micrometer — Prometheus metrics export
+    implementation("io.micrometer:micrometer-registry-prometheus")
 
     // OpenTelemetry — trace export to Jaeger via OTLP
     implementation("io.opentelemetry:opentelemetry-sdk:1.40.0")

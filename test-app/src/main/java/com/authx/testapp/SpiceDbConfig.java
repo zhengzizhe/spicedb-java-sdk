@@ -15,19 +15,16 @@ import java.time.Duration;
 @Configuration
 public class SpiceDbConfig {
 
-    @Value("${spicedb.target}")
-    private String target;
-
-    @Value("${spicedb.target-secondary}")
-    private String targetSecondary;
+    @Value("${spicedb.targets}")
+    private String targets;
 
     @Value("${spicedb.preshared-key}")
     private String presharedKey;
 
-    @Value("${spicedb.cache-enabled}")
+    @Value("${spicedb.cache.enabled}")
     private boolean cacheEnabled;
 
-    @Value("${spicedb.cache-max-size}")
+    @Value("${spicedb.cache.max-size}")
     private long cacheMaxSize;
 
     @Value("${spicedb.watch-invalidation}")
@@ -36,41 +33,33 @@ public class SpiceDbConfig {
     @Value("${spicedb.virtual-threads}")
     private boolean virtualThreads;
 
-    /** Load-test PolicyRegistry: disabled circuit breaker + cache enabled */
-    private PolicyRegistry loadTestPolicies() {
+    @Bean(destroyMethod = "close")
+    public AuthxClient authxClient() {
+        String[] addrs = targets.split(",");
+        return AuthxClient.builder()
+                .connection(c -> c
+                        .targets(addrs)
+                        .presharedKey(presharedKey)
+                        .requestTimeout(Duration.ofSeconds(10)))
+                .cache(c -> c
+                        .enabled(cacheEnabled)
+                        .maxSize(cacheMaxSize)
+                        .watchInvalidation(watchInvalidation))
+                .features(f -> f
+                        .virtualThreads(virtualThreads)
+                        .telemetry(true)
+                        .shutdownHook(true))
+                .extend(e -> e.policies(policies()))
+                .build();
+    }
+
+    private PolicyRegistry policies() {
         return PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .circuitBreaker(CircuitBreakerPolicy.disabled())
                         .cache(CachePolicy.of(Duration.ofSeconds(30)))
                         .readConsistency(ReadConsistency.minimizeLatency())
                         .build())
-                .build();
-    }
-
-    /** Primary SDK client — connects to spicedb-1. */
-    @Bean(destroyMethod = "close")
-    @org.springframework.context.annotation.Primary
-    public AuthxClient primaryClient() {
-        return AuthxClient.builder()
-                .connection(c -> c.target(target).presharedKey(presharedKey)
-                        .requestTimeout(Duration.ofSeconds(30)))
-                .cache(c -> c.enabled(cacheEnabled).maxSize(cacheMaxSize)
-                        .watchInvalidation(watchInvalidation))
-                .features(f -> f.virtualThreads(virtualThreads).telemetry(true))
-                .extend(e -> e.policies(loadTestPolicies()))
-                .build();
-    }
-
-    /** Secondary SDK client — connects to spicedb-2 (for multi-instance testing). */
-    @Bean(name = "secondaryClient", destroyMethod = "close")
-    public AuthxClient secondaryClient() {
-        return AuthxClient.builder()
-                .connection(c -> c.target(targetSecondary).presharedKey(presharedKey)
-                        .requestTimeout(Duration.ofSeconds(30)))
-                .cache(c -> c.enabled(cacheEnabled).maxSize(cacheMaxSize)
-                        .watchInvalidation(watchInvalidation))
-                .features(f -> f.virtualThreads(virtualThreads).telemetry(true))
-                .extend(e -> e.policies(loadTestPolicies()))
                 .build();
     }
 }
