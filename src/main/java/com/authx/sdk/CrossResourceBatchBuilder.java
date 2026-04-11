@@ -42,11 +42,37 @@ public class CrossResourceBatchBuilder {
         return new ResourceScope(this, resource.resourceType(), resource.resourceId());
     }
 
-    /** Execute all accumulated operations in a single atomic gRPC call. */
+    /**
+     * Target a specific resource by {@code (type, id)} without needing a
+     * {@link ResourceHandle} — most callers want this since they already
+     * have both strings at call sites.
+     *
+     * <pre>
+     * client.batch()
+     *     .on("document", "doc-1").grant("editor").to("alice")
+     *     .on("task", "t-5").grant("assignee").to("bob")
+     *     .commit();
+     * </pre>
+     */
+    public ResourceScope on(String resourceType, String resourceId) {
+        return new ResourceScope(this, resourceType, resourceId);
+    }
+
+    /**
+     * Execute all accumulated operations in a single atomic
+     * {@code WriteRelationships} RPC. All-or-nothing: either every update
+     * applies, or none do. Returns the zedToken of the committed batch for
+     * subsequent write-after-read consistency.
+     */
     public BatchResult execute() {
         if (updates.isEmpty()) return new BatchResult(null);
         var r = transport.writeRelationships(updates);
         return new BatchResult(r.zedToken());
+    }
+
+    /** Alias for {@link #execute()} — read more naturally in some call sites. */
+    public BatchResult commit() {
+        return execute();
     }
 
     void addUpdate(RelationshipUpdate update) {
@@ -70,9 +96,23 @@ public class CrossResourceBatchBuilder {
             return new GrantScope(this, relations);
         }
 
+        /** Typed overload — grant one or more {@link Relation.Named} relations. */
+        public GrantScope grant(Relation.Named... relations) {
+            String[] names = new String[relations.length];
+            for (int i = 0; i < relations.length; i++) names[i] = relations[i].relationName();
+            return new GrantScope(this, names);
+        }
+
         /** Add revoke operations for the given relations on the scoped resource. */
         public RevokeScope revoke(String... relations) {
             return new RevokeScope(this, relations);
+        }
+
+        /** Typed overload — revoke one or more {@link Relation.Named} relations. */
+        public RevokeScope revoke(Relation.Named... relations) {
+            String[] names = new String[relations.length];
+            for (int i = 0; i < relations.length; i++) names[i] = relations[i].relationName();
+            return new RevokeScope(this, names);
         }
 
         /** Switch to a different resource. */
@@ -80,9 +120,19 @@ public class CrossResourceBatchBuilder {
             return batch.on(resource);
         }
 
+        /** Switch to a different resource by type/id. */
+        public ResourceScope on(String resourceType, String resourceId) {
+            return batch.on(resourceType, resourceId);
+        }
+
         /** Execute all operations. */
         public BatchResult execute() {
             return batch.execute();
+        }
+
+        /** Alias for {@link #execute()}. */
+        public BatchResult commit() {
+            return batch.commit();
         }
     }
 
