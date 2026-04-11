@@ -9,16 +9,17 @@ import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
  * Cross-resource batch permission check — send many arbitrary
  * {@code (resourceType, resourceId, permission, subject)} triples in one
  * {@code CheckBulkPermissions} RPC and receive the results as a
- * {@link CheckMatrix}. Unlike {@link TypedResourceFactory.TypedCheckAction}
- * which is bound to one resource type, this builder lets you mix types
- * in the same batch, so a UI showing "can alice view doc-1 AND complete
- * task-5 AND edit folder-9?" is one round trip instead of three.
+ * {@link CheckMatrix}. Unlike {@link TypedCheckAction} which is bound to
+ * one resource type, this builder lets you mix types in the same batch,
+ * so a UI showing "can alice view doc-1 AND complete task-5 AND edit
+ * folder-9?" is one round trip instead of three.
  *
  * <pre>
  * CheckMatrix result = client.batchCheck()
@@ -58,6 +59,68 @@ public final class BatchCheckBuilder {
     public BatchCheckBuilder add(String resourceType, String resourceId,
                                   Permission.Named permission, String userId) {
         return add(resourceType, resourceId, permission, SubjectRef.user(userId));
+    }
+
+    /** Typed overload — accepts a {@link ResourceType} descriptor in place of the raw string. */
+    public BatchCheckBuilder add(ResourceType<?, ?> resourceType, String resourceId,
+                                  Permission.Named permission, SubjectRef subject) {
+        return add(resourceType.name(), resourceId, permission, subject);
+    }
+
+    /** Typed overload with default-user subject. */
+    public BatchCheckBuilder add(ResourceType<?, ?> resourceType, String resourceId,
+                                  Permission.Named permission, String userId) {
+        return add(resourceType.name(), resourceId, permission, SubjectRef.user(userId));
+    }
+
+    /**
+     * Fan one {@code (type, permission, subject)} triple across many
+     * resource ids — common pattern for "can this user view any of these
+     * 50 docs?".
+     */
+    public BatchCheckBuilder addAll(ResourceType<?, ?> resourceType,
+                                     Collection<String> resourceIds,
+                                     Permission.Named permission,
+                                     String userId) {
+        for (String id : resourceIds) {
+            add(resourceType.name(), id, permission, SubjectRef.user(userId));
+        }
+        return this;
+    }
+
+    /** Raw-string overload for {@link #addAll}. */
+    public BatchCheckBuilder addAll(String resourceType,
+                                     Collection<String> resourceIds,
+                                     Permission.Named permission,
+                                     String userId) {
+        for (String id : resourceIds) {
+            add(resourceType, id, permission, SubjectRef.user(userId));
+        }
+        return this;
+    }
+
+    /** Bulk add from a pre-built list of {@link Cell}s. */
+    public BatchCheckBuilder addAll(Collection<Cell> cells) {
+        for (Cell c : cells) {
+            entries.add(new Entry(c.resourceType, c.resourceId, c.permission, c.subject));
+        }
+        return this;
+    }
+
+    /**
+     * Value object for pre-assembling a batch outside the builder, then
+     * feeding them in via {@link #addAll(Collection)}. Useful when the
+     * cells are computed dynamically (e.g., from a search result set).
+     */
+    public record Cell(String resourceType, String resourceId, String permission, SubjectRef subject) {
+        public static Cell of(ResourceType<?, ?> type, String id,
+                              Permission.Named perm, SubjectRef subject) {
+            return new Cell(type.name(), id, perm.permissionName(), subject);
+        }
+        public static Cell of(ResourceType<?, ?> type, String id,
+                              Permission.Named perm, String userId) {
+            return new Cell(type.name(), id, perm.permissionName(), SubjectRef.user(userId));
+        }
     }
 
     /** String-based overload for dynamic-permission cases. */

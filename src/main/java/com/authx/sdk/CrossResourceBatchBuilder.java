@@ -59,6 +59,37 @@ public class CrossResourceBatchBuilder {
     }
 
     /**
+     * Typed overload — accepts a {@link ResourceType} descriptor in place
+     * of the raw string, so business code can keep the same typed tokens
+     * it uses in {@code client.on(Xxx.TYPE)} chains.
+     */
+    public ResourceScope on(ResourceType<?, ?> resourceType, String resourceId) {
+        return new ResourceScope(this, resourceType.name(), resourceId);
+    }
+
+    /**
+     * Fan subsequent grant/revoke operations across many ids of the same
+     * resource type. Every terminal {@code to(user)} / {@code from(user)}
+     * on the returned scope applies to every id in the collection, still
+     * as part of the same atomic {@code WriteRelationships} RPC.
+     *
+     * <pre>
+     * client.batch()
+     *     .onAll(Document.TYPE, List.of("d-1", "d-2", "d-3"))
+     *         .grant(Document.Rel.VIEWER).to("alice")
+     *     .commit();
+     * </pre>
+     */
+    public MultiResourceScope onAll(ResourceType<?, ?> resourceType, Collection<String> resourceIds) {
+        return new MultiResourceScope(this, resourceType.name(), List.copyOf(resourceIds));
+    }
+
+    /** Raw-string overload for {@link #onAll(ResourceType, Collection)}. */
+    public MultiResourceScope onAll(String resourceType, Collection<String> resourceIds) {
+        return new MultiResourceScope(this, resourceType, List.copyOf(resourceIds));
+    }
+
+    /**
      * Execute all accumulated operations in a single atomic
      * {@code WriteRelationships} RPC. All-or-nothing: either every update
      * applies, or none do. Returns the zedToken of the committed batch for
@@ -125,6 +156,20 @@ public class CrossResourceBatchBuilder {
             return batch.on(resourceType, resourceId);
         }
 
+        /** Typed switch — accepts a {@link ResourceType} descriptor. */
+        public ResourceScope on(ResourceType<?, ?> resourceType, String resourceId) {
+            return batch.on(resourceType, resourceId);
+        }
+
+        /** Switch to a multi-id scope (same-type fan-out). */
+        public MultiResourceScope onAll(ResourceType<?, ?> resourceType, Collection<String> resourceIds) {
+            return batch.onAll(resourceType, resourceIds);
+        }
+
+        public MultiResourceScope onAll(String resourceType, Collection<String> resourceIds) {
+            return batch.onAll(resourceType, resourceIds);
+        }
+
         /** Execute all operations. */
         public BatchResult execute() {
             return batch.execute();
@@ -177,6 +222,133 @@ public class CrossResourceBatchBuilder {
                             resource,
                             Relation.of(rel),
                             parsed));
+                }
+            }
+            return scope;
+        }
+    }
+
+    /**
+     * Scope that fans every subsequent grant/revoke across a list of
+     * resource ids of the same type. All generated updates join the same
+     * batch — {@code commit()} still sends one atomic {@code WriteRelationships}.
+     */
+    public static class MultiResourceScope {
+        private final CrossResourceBatchBuilder batch;
+        private final String resourceType;
+        private final List<String> resourceIds;
+
+        MultiResourceScope(CrossResourceBatchBuilder batch, String resourceType, List<String> resourceIds) {
+            this.batch = batch;
+            this.resourceType = resourceType;
+            this.resourceIds = resourceIds;
+        }
+
+        public MultiGrantScope grant(String... relations) {
+            return new MultiGrantScope(this, relations);
+        }
+
+        public MultiGrantScope grant(Relation.Named... relations) {
+            String[] names = new String[relations.length];
+            for (int i = 0; i < relations.length; i++) names[i] = relations[i].relationName();
+            return new MultiGrantScope(this, names);
+        }
+
+        public MultiRevokeScope revoke(String... relations) {
+            return new MultiRevokeScope(this, relations);
+        }
+
+        public MultiRevokeScope revoke(Relation.Named... relations) {
+            String[] names = new String[relations.length];
+            for (int i = 0; i < relations.length; i++) names[i] = relations[i].relationName();
+            return new MultiRevokeScope(this, names);
+        }
+
+        /** Leave the fan and go back to single-resource scope. */
+        public ResourceScope on(ResourceType<?, ?> type, String id) {
+            return batch.on(type, id);
+        }
+
+        public ResourceScope on(String type, String id) {
+            return batch.on(type, id);
+        }
+
+        public MultiResourceScope onAll(ResourceType<?, ?> type, Collection<String> ids) {
+            return batch.onAll(type, ids);
+        }
+
+        public BatchResult execute() { return batch.execute(); }
+        public BatchResult commit()  { return batch.commit(); }
+    }
+
+    public static class MultiGrantScope {
+        private final MultiResourceScope scope;
+        private final String[] relations;
+
+        MultiGrantScope(MultiResourceScope scope, String[] relations) {
+            this.scope = scope;
+            this.relations = relations;
+        }
+
+        public MultiResourceScope to(String... userIds) {
+            return to(Arrays.asList(userIds));
+        }
+
+        public MultiResourceScope to(Collection<String> userIds) {
+            for (String id : scope.resourceIds) {
+                ResourceRef resource = ResourceRef.of(scope.resourceType, id);
+                for (String rel : relations) {
+                    for (String uid : userIds) {
+                        scope.batch.addUpdate(new RelationshipUpdate(
+                                Operation.TOUCH,
+                                resource,
+                                Relation.of(rel),
+                                SubjectRef.of(scope.batch.defaultSubjectType, uid, null)));
+                    }
+                }
+            }
+            return scope;
+        }
+
+        public MultiResourceScope toSubjects(String... subjectRefs) {
+            for (String id : scope.resourceIds) {
+                ResourceRef resource = ResourceRef.of(scope.resourceType, id);
+                for (String rel : relations) {
+                    for (String ref : subjectRefs) {
+                        SubjectRef parsed = SubjectRef.parse(ref);
+                        scope.batch.addUpdate(new RelationshipUpdate(
+                                Operation.TOUCH, resource, Relation.of(rel), parsed));
+                    }
+                }
+            }
+            return scope;
+        }
+    }
+
+    public static class MultiRevokeScope {
+        private final MultiResourceScope scope;
+        private final String[] relations;
+
+        MultiRevokeScope(MultiResourceScope scope, String[] relations) {
+            this.scope = scope;
+            this.relations = relations;
+        }
+
+        public MultiResourceScope from(String... userIds) {
+            return from(Arrays.asList(userIds));
+        }
+
+        public MultiResourceScope from(Collection<String> userIds) {
+            for (String id : scope.resourceIds) {
+                ResourceRef resource = ResourceRef.of(scope.resourceType, id);
+                for (String rel : relations) {
+                    for (String uid : userIds) {
+                        scope.batch.addUpdate(new RelationshipUpdate(
+                                Operation.DELETE,
+                                resource,
+                                Relation.of(rel),
+                                SubjectRef.of(scope.batch.defaultSubjectType, uid, null)));
+                    }
                 }
             }
             return scope;

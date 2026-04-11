@@ -81,6 +81,12 @@ public class TypedRevokeAction<R extends Relation.Named> {
         write(subjectRefs);
     }
 
+    /** Collection overload for {@link #fromSubjectRefs(String...)}. */
+    public void fromSubjectRefs(Collection<String> subjectRefs) {
+        if (subjectRefs == null || subjectRefs.isEmpty()) return;
+        write(subjectRefs.toArray(String[]::new));
+    }
+
     // ════════════════════════════════════════════════════════════════
     //  Internals
     // ════════════════════════════════════════════════════════════════

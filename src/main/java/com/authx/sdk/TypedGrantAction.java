@@ -20,9 +20,8 @@ import java.util.Map;
  *
  * <p>This class lives in the SDK core rather than being emitted per-resource
  * by codegen: because validation is runtime, the generator doesn't need to
- * know which subjects each relation accepts, and the generated code shrinks
- * to a trivial {@code DocumentResource extends
- * TypedResourceFactory<Document.Rel, Document.Perm>} facade.
+ * know which subjects each relation accepts, and the generated type class
+ * becomes a pure static API over the SDK's typed chain.
  *
  * <pre>
  * doc.select("doc-1").grant(Document.Rel.EDITOR).toUser("bob");
@@ -170,6 +169,12 @@ public class TypedGrantAction<R extends Relation.Named> {
     public void toSubjectRefs(String... subjectRefs) {
         if (subjectRefs == null || subjectRefs.length == 0) return;
         write(subjectRefs);
+    }
+
+    /** Collection overload for {@link #toSubjectRefs(String...)}. */
+    public void toSubjectRefs(Collection<String> subjectRefs) {
+        if (subjectRefs == null || subjectRefs.isEmpty()) return;
+        write(subjectRefs.toArray(String[]::new));
     }
 
     // ════════════════════════════════════════════════════════════════

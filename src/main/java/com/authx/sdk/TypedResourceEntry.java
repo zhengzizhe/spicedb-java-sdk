@@ -1,0 +1,145 @@
+package com.authx.sdk;
+
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.SubjectRef;
+
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Strongly-typed chain entry point returned by
+ * {@link AuthxClient#on(ResourceType)}. Knows the relation / permission
+ * enum classes for its resource type, so {@link #select(String...)},
+ * {@link #findBy(SubjectRef)} and friends hand back typed actions that
+ * accept only the matching enums.
+ *
+ * <pre>
+ * client.on(Document.TYPE)
+ *       .select(docId)
+ *       .check(Document.Perm.VIEW)
+ *       .by(userId);
+ *
+ * client.on(Document.TYPE)
+ *       .findByUser(userId)
+ *       .limit(100)
+ *       .can(Document.Perm.VIEW);
+ * </pre>
+ *
+ * <p>This type is deliberately lightweight: it holds the shared
+ * {@link ResourceFactory} (which provides transport / cache / schema
+ * validation) plus the enum class metadata from {@link ResourceType}.
+ * No RPCs are made until the caller reaches a terminal operation.
+ */
+public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
+                                      P extends Enum<P> & Permission.Named> {
+
+    private final ResourceFactory factory;
+    private final ResourceType<R, P> type;
+
+    TypedResourceEntry(ResourceFactory factory, ResourceType<R, P> type) {
+        this.factory = factory;
+        this.type = type;
+    }
+
+    /** The underlying resource type descriptor. */
+    public ResourceType<R, P> type() { return type; }
+
+    // ────────────────────────────────────────────────────────────────
+    //  select(...) — bind to one or more resource ids
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Bind to one or more resource ids and return a typed handle that
+     * supports {@code check / grant / revoke / checkAll / who}.
+     */
+    public TypedHandle<R, P> select(String... ids) {
+        if (ids == null || ids.length == 0) {
+            throw new IllegalArgumentException("select() requires at least one id");
+        }
+        return new TypedHandle<>(factory, ids, type.permClass());
+    }
+
+    /** Collection overload for {@link #select(String...)}. */
+    public TypedHandle<R, P> select(Collection<String> ids) {
+        return select(ids.toArray(String[]::new));
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //  findBy(...) — reverse lookup (lookupResources)
+    // ────────────────────────────────────────────────────────────────
+
+    /** "Which resources of this type can {@code subject} access?" */
+    public TypedFinder<P> findBy(SubjectRef subject) {
+        return new TypedFinder<>(factory, subject);
+    }
+
+    /** Convenience overload for the default user subject type. */
+    public TypedFinder<P> findByUser(String userId) {
+        return new TypedFinder<>(factory, SubjectRef.user(userId));
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //  Multi-subject finder — terminal runs one lookupResources per subject
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Multi-subject reverse lookup. Returns an intermediate that, when
+     * terminated with {@code .can(Perm)}, runs one {@code LookupResources}
+     * RPC per subject and returns a {@code Map<subjectId, List<resourceId>>}.
+     *
+     * <pre>
+     * Map&lt;String, List&lt;String&gt;&gt; perUser = client.on(Document.TYPE)
+     *     .findByUsers(List.of("alice", "bob", "carol"))
+     *     .can(Document.Perm.EDIT);
+     * </pre>
+     */
+    public MultiFinder<R, P> findBy(SubjectRef... subjects) {
+        return new MultiFinder<>(factory, List.of(subjects));
+    }
+
+    public MultiFinder<R, P> findBy(Collection<SubjectRef> subjects) {
+        return new MultiFinder<>(factory, List.copyOf(subjects));
+    }
+
+    public MultiFinder<R, P> findByUsers(String... userIds) {
+        var refs = new java.util.ArrayList<SubjectRef>(userIds.length);
+        for (String id : userIds) refs.add(SubjectRef.user(id));
+        return new MultiFinder<>(factory, refs);
+    }
+
+    public MultiFinder<R, P> findByUsers(Collection<String> userIds) {
+        var refs = new java.util.ArrayList<SubjectRef>(userIds.size());
+        for (String id : userIds) refs.add(SubjectRef.user(id));
+        return new MultiFinder<>(factory, refs);
+    }
+
+    /**
+     * Intermediate for multi-subject reverse lookup. Holds a subject list
+     * and an optional {@code limit}; the terminal is {@code can(P)}.
+     */
+    public static final class MultiFinder<R extends Enum<R> & Relation.Named,
+                                           P extends Enum<P> & Permission.Named> {
+        private final ResourceFactory factory;
+        private final List<SubjectRef> subjects;
+        private int limit = 0;
+
+        MultiFinder(ResourceFactory factory, List<SubjectRef> subjects) {
+            this.factory = factory;
+            this.subjects = subjects;
+        }
+
+        public MultiFinder<R, P> limit(int n) { this.limit = n; return this; }
+
+        /** Run one {@code LookupResources} per subject and collect results. */
+        public Map<String, List<String>> can(P permission) {
+            var out = new LinkedHashMap<String, List<String>>(subjects.size());
+            for (SubjectRef subject : subjects) {
+                out.put(subject.id(), new TypedFinder<P>(factory, subject).limit(limit).can(permission));
+            }
+            return out;
+        }
+    }
+}

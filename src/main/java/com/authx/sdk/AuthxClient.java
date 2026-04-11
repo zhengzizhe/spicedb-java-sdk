@@ -106,6 +106,28 @@ public class AuthxClient implements AutoCloseable {
     }
 
     /**
+     * Typed entry point — the preferred surface for business code. Hand
+     * in the generated {@code Xxx.TYPE} descriptor and chain downward:
+     *
+     * <pre>
+     * client.on(Document.TYPE).select(docId).check(Document.Perm.VIEW).by(userId);
+     * client.on(Document.TYPE).select(docId).grant(Document.Rel.EDITOR).to(userId);
+     * client.on(Document.TYPE).select(docId).checkAll().by(userId);
+     * client.on(Document.TYPE).findByUser(userId).limit(100).can(Document.Perm.VIEW);
+     * </pre>
+     *
+     * <p>Every operation that used to be spelled as a client-taking
+     * static on the generated class (e.g. {@code Document.check(client, ...)})
+     * now starts here. The generated class itself is pure type metadata:
+     * enums plus the {@link ResourceType} constant.
+     */
+    public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,
+            P extends Enum<P> & com.authx.sdk.model.Permission.Named>
+    TypedResourceEntry<R, P> on(ResourceType<R, P> resourceType) {
+        return new TypedResourceEntry<>(on(resourceType.name()), resourceType);
+    }
+
+    /**
      * Create a typed permission service from a {@link PermissionResource} annotated class.
      *
      * <pre>
@@ -156,8 +178,8 @@ public class AuthxClient implements AutoCloseable {
 
     /**
      * Start a cross-resource batch permission check. Unlike
-     * {@link TypedResourceFactory.TypedCheckAction} which is bound to one
-     * resource type, {@code batchCheck()} mixes arbitrary
+     * {@link TypedCheckAction} which is bound to one resource type,
+     * {@code batchCheck()} mixes arbitrary
      * (resourceType, id, permission, subject) tuples and sends them all in
      * a single {@code CheckBulkPermissions} RPC, returning a
      * {@link com.authx.sdk.model.CheckMatrix}. Ideal for UI pages that
