@@ -40,18 +40,42 @@ public final class SdkInfrastructure implements AutoCloseable {
     /**
      * Shuts down scheduler, channel, and removes the shutdown hook.
      * Must be called at most once (guarded by {@link #markClosed()}).
+     *
+     * <p>Both the scheduler and the channel are given a 5 s graceful
+     * termination window; on timeout we escalate to {@code shutdownNow()}
+     * (F11-8 review fix). Leaving a channel in "shutdown but not terminated"
+     * state would leak in-flight RPCs and the associated Netty resources,
+     * which shows up as "threads still alive" under long-lived test apps
+     * that create + destroy many clients.
      */
     @Override
     public void close() {
         if (scheduler != null) {
             scheduler.shutdown();
-            try { scheduler.awaitTermination(5, TimeUnit.SECONDS); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                scheduler.shutdownNow();
+            }
         }
         if (channel != null) {
             channel.shutdown();
-            try { channel.awaitTermination(5, TimeUnit.SECONDS); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
+                    channel.shutdownNow();
+                    // Give the forced shutdown a brief extra window; if it
+                    // still doesn't terminate, move on — we've done what we
+                    // can, and blocking the caller indefinitely is worse than
+                    // leaking a thread pool on JVM exit.
+                    channel.awaitTermination(2, TimeUnit.SECONDS);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                channel.shutdownNow();
+            }
         }
         if (shutdownHookRef != null && Thread.currentThread() != shutdownHookRef) {
             try { Runtime.getRuntime().removeShutdownHook(shutdownHookRef); }

@@ -15,7 +15,12 @@ class PolicyRegistryTest {
 
         assertNotNull(policy);
         assertEquals(ReadConsistency.session(), policy.readConsistency());
-        assertFalse(policy.cache().enabled()); // default cache is off
+        // F11-3: default cache policy is ENABLED with the CachePolicy.Builder
+        // default TTL. Previously this was force-disabled, which silently
+        // nullified AuthxClientBuilder.cache.enabled(true) because the
+        // policy-driven Expiry function resolved to Duration.ZERO.
+        assertTrue(policy.cache().enabled(), "default cache must be enabled so builder opt-in works");
+        assertEquals(Duration.ofSeconds(5), policy.cache().ttl(), "default TTL from CachePolicy.Builder is 5s");
         assertEquals(3, policy.retry().maxAttempts());
         assertTrue(policy.circuitBreaker().enabled());
         assertEquals(Duration.ofSeconds(5), policy.timeout());

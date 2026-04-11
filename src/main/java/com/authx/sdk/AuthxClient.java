@@ -9,6 +9,7 @@ import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.RelationshipChange;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.policy.PolicyRegistry;
+import com.authx.sdk.spi.HealthProbe;
 import com.authx.sdk.transport.InMemoryTransport;
 import com.authx.sdk.transport.SdkTransport;
 
@@ -36,6 +37,7 @@ public class AuthxClient implements AutoCloseable {
     private final SdkObservability observability;
     private final SdkCaching caching;
     private final SdkConfig config;
+    private final HealthProbe healthProbe;
     private final SchemaClient schemaClient;
     private final ConcurrentHashMap<String, ResourceFactory> factories = new ConcurrentHashMap<>();
 
@@ -43,12 +45,14 @@ public class AuthxClient implements AutoCloseable {
                    SdkInfrastructure infra,
                    SdkObservability observability,
                    SdkCaching caching,
-                   SdkConfig config) {
+                   SdkConfig config,
+                   HealthProbe healthProbe) {
         this.transport = Objects.requireNonNull(transport);
         this.infra = Objects.requireNonNull(infra);
         this.observability = Objects.requireNonNull(observability);
         this.caching = Objects.requireNonNull(caching);
         this.config = Objects.requireNonNull(config);
+        this.healthProbe = Objects.requireNonNull(healthProbe, "healthProbe");
         this.schemaClient = new SchemaClient(caching.schemaCache());
 
         // Wire dispatcher into Watch stream
@@ -71,7 +75,7 @@ public class AuthxClient implements AutoCloseable {
         var observability = new SdkObservability(new SdkMetrics(), bus, null);
         var caching = new SdkCaching(null, null, null, null);
         var config = new SdkConfig("user", PolicyRegistry.withDefaults(), false, false);
-        return new AuthxClient(new InMemoryTransport(), infra, observability, caching, config);
+        return new AuthxClient(new InMemoryTransport(), infra, observability, caching, config, HealthProbe.up());
     }
 
     // ---- Business API ----
@@ -193,20 +197,20 @@ public class AuthxClient implements AutoCloseable {
     /** Return the cache handle for manual cache operations (invalidation, stats). */
     public CacheHandle cache() { return caching.handle(); }
 
-    /** Perform a health check against SpiceDB and return latency and reachability status. */
+    /**
+     * Run the configured {@link HealthProbe} and return its result.
+     *
+     * <p>By default the probe is {@code SchemaReadHealthProbe} (uses
+     * {@code SchemaService.ReadSchema} which is schema-independent). Override
+     * via {@code SdkComponents.builder().healthProbe(...)}.
+     */
     public HealthResult health() {
-        long start = System.nanoTime();
-        try {
-            transport.readRelationships(
-                    ResourceRef.of("healthprobe", "probe"),
-                    null,
-                    Consistency.minimizeLatency());
-            long ms = (System.nanoTime() - start) / 1_000_000;
-            return new HealthResult(true, ms, "SpiceDB reachable");
-        } catch (Exception e) {
-            long ms = (System.nanoTime() - start) / 1_000_000;
-            return new HealthResult(false, ms, "SpiceDB unreachable: " + e.getMessage());
-        }
+        return HealthResult.fromProbe(healthProbe.check());
+    }
+
+    /** Expose the configured health probe (useful for actuator integration). */
+    public HealthProbe healthProbe() {
+        return healthProbe;
     }
 
     // ---- Lifecycle ----
@@ -214,23 +218,55 @@ public class AuthxClient implements AutoCloseable {
     @Override
     public void close() {
         if (!infra.markClosed()) return; // prevent double-close
-        observability.eventBus().publish(new SdkTypedEvent.ClientStopping(Instant.now()));
-        infra.lifecycle().stopping();
+        // Partial-failure resilience (F11-7): a throw from any one sub-close
+        // must NOT skip the remaining sub-closes. We wrap each step in its
+        // own try/catch so that e.g. a hung watch invalidator can't leak the
+        // gRPC channel. Failures are logged at WARN; we don't re-throw because
+        // close() is typically called from a shutdown hook or try-with-resources
+        // where the caller has no meaningful recovery path.
+        safeClose("eventBus.publish(ClientStopping)",
+                () -> observability.eventBus().publish(new SdkTypedEvent.ClientStopping(Instant.now())));
+        safeClose("lifecycle.stopping", () -> infra.lifecycle().stopping());
 
         // Shutdown order: scheduler → watch → telemetry flush → transport → channel → hook
         // Close scheduler first (stops periodic tasks), but keep channel alive for watch/transport
         if (infra.scheduler() != null) {
-            infra.scheduler().shutdown();
-            try { infra.scheduler().awaitTermination(5, TimeUnit.SECONDS); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            safeClose("scheduler.shutdown", () -> {
+                infra.scheduler().shutdown();
+                try {
+                    if (!infra.scheduler().awaitTermination(5, TimeUnit.SECONDS)) {
+                        infra.scheduler().shutdownNow();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    infra.scheduler().shutdownNow();
+                }
+            });
         }
-        if (caching.watchInvalidator() != null) caching.watchInvalidator().close();
-        if (observability.telemetry() != null) observability.telemetry().close();
-        transport.close();
-        infra.close(); // channel shutdown + hook removal (scheduler already stopped, will no-op)
+        if (caching.watchInvalidator() != null) {
+            safeClose("watchInvalidator.close", caching.watchInvalidator()::close);
+        }
+        if (observability.telemetry() != null) {
+            safeClose("telemetry.close", observability.telemetry()::close);
+        }
+        safeClose("transport.close", transport::close);
+        safeClose("infra.close", infra::close);
 
-        infra.lifecycle().stopped();
-        observability.eventBus().publish(new SdkTypedEvent.ClientStopped(Instant.now()));
+        safeClose("lifecycle.stopped", () -> infra.lifecycle().stopped());
+        safeClose("eventBus.publish(ClientStopped)",
+                () -> observability.eventBus().publish(new SdkTypedEvent.ClientStopped(Instant.now())));
+    }
+
+    /** Run a close step, logging any throw without propagating. */
+    private static void safeClose(String step, Runnable action) {
+        try {
+            action.run();
+        } catch (Throwable t) {
+            System.getLogger(AuthxClient.class.getName()).log(
+                    System.Logger.Level.WARNING,
+                    "AuthxClient close step failed: {0} — continuing shutdown. Error: {1}",
+                    step, t.toString());
+        }
     }
 
 }

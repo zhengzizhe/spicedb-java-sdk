@@ -60,10 +60,26 @@ public class ResourcePolicy {
 
     /**
      * Safe defaults for global fallback.
+     *
+     * <p>The cache sub-policy intentionally uses the {@link CachePolicy} builder's
+     * own default (enabled, 5 s TTL) rather than forcing {@code enabled(false)}.
+     * Rationale (F11-3 review fix): the SDK exposes {@code cache.enabled(true)}
+     * on {@link com.authx.sdk.AuthxClientBuilder} as the operator's opt-in for
+     * turning on the Caffeine L1 cache, and {@code AuthxClientBuilder} builds
+     * the cache based solely on that flag. If we then hand the builder a
+     * default {@link PolicyRegistry} whose {@link CachePolicy} says "cache is
+     * disabled", {@link PolicyRegistry#resolveCacheTtl} returns
+     * {@link Duration#ZERO}, which makes the Caffeine {@code Expiry} function
+     * return 0 ns — every inserted entry expires instantly and the cache
+     * reports 0 % hit rate despite being "enabled".
+     *
+     * <p>Users who genuinely want per-resource cache bypass can still call
+     * {@code .forResource("foo", ResourcePolicy.builder().cache(CachePolicy.disabled()).build())}
+     * explicitly. The global default should not silently defeat the opt-in.
      */
     public static ResourcePolicy defaults() {
         return new Builder()
-                .cache(CachePolicy.builder().enabled(false).build())
+                .cache(CachePolicy.builder().build())
                 .readConsistency(ReadConsistency.session())
                 .retry(RetryPolicy.defaults())
                 .circuitBreaker(CircuitBreakerPolicy.defaults())

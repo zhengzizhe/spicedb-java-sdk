@@ -12,6 +12,10 @@ import com.authx.sdk.metrics.SdkMetrics;
 import com.authx.sdk.model.CheckKey;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.policy.PolicyRegistry;
+import com.authx.sdk.health.ChannelStateHealthProbe;
+import com.authx.sdk.health.SchemaReadHealthProbe;
+import com.authx.sdk.spi.DuplicateDetector;
+import com.authx.sdk.spi.HealthProbe;
 import com.authx.sdk.spi.SdkComponents;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.telemetry.TelemetryReporter;
@@ -174,13 +178,18 @@ public class AuthxClientBuilder {
         var schemaLoader = new SchemaLoader();
         var tokenTracker = new TokenTracker(spi.tokenStore());
 
-        // Built-in interceptors
-        interceptors.addFirst(new ValidationInterceptor());
+        // Build the effective interceptor list locally — MUST NOT mutate the
+        // builder's own field, otherwise calling build() twice on the same
+        // builder would stack duplicate ValidationInterceptors.
+        final List<SdkInterceptor> effectiveInterceptors = new ArrayList<>(interceptors.size() + 1);
+        effectiveInterceptors.add(new ValidationInterceptor());
+        effectiveInterceptors.addAll(interceptors);
 
+        // Hoisted outside the try block so the catch can unwind partially-
+        // constructed resources (watchInvalidator, scheduler, telemetry
+        // reporter) regardless of which phase threw.
+        final BuildContext ctx = new BuildContext();
         ManagedChannel channel = null;
-        WatchCacheInvalidator watchInvalidator = null;
-        TelemetryReporter telemetryReporter = null;
-        ScheduledExecutorService scheduler = null;
 
         try {
             lm.begin();
@@ -192,22 +201,21 @@ public class AuthxClientBuilder {
                     SdkPhase.CHANNEL, () -> buildChannel());
             channel = grpcChannel;
 
-            // Phase: SCHEMA
-            Metadata authMeta = new Metadata();
+            // Phase: SCHEMA. authMeta is not reassigned so it is effectively
+            // final for the lambdas below — no alias needed.
+            final Metadata authMeta = new Metadata();
             authMeta.put(Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
                     "Bearer " + presharedKey);
-            final Metadata authMetaFinal = authMeta;
             lm.phase(SdkPhase.SCHEMA, () ->
-                    schemaLoader.load(grpcChannel, authMetaFinal, schemaCache));
+                    schemaLoader.load(grpcChannel, authMeta, schemaCache));
             // Enable on-miss refresh for schema validation
             schemaCache.setRefreshCallback(() ->
-                    schemaLoader.load(grpcChannel, authMetaFinal, schemaCache));
+                    schemaLoader.load(grpcChannel, authMeta, schemaCache));
 
             // Phase: TRANSPORT
-            final var ctx = new BuildContext();
             SdkTransport transport = lm.phase(SdkPhase.TRANSPORT, () ->
-                    buildTransportStack(grpcChannel, policies, spi, bus, sdkMetrics, tokenTracker, ctx));
-            telemetryReporter = ctx.telemetryReporter;
+                    buildTransportStack(grpcChannel, policies, spi, bus, sdkMetrics,
+                            tokenTracker, effectiveInterceptors, ctx));
             if (ctx.resilientTransport != null) {
                 sdkMetrics.setCircuitBreakerStateSupplier(
                         () -> ctx.resilientTransport.getCircuitBreakerState("_default").name());
@@ -215,13 +223,11 @@ public class AuthxClientBuilder {
 
             // Phase: WATCH
             lm.phase(SdkPhase.WATCH, () ->
-                    buildWatch(grpcChannel, sdkMetrics, ctx));
-            watchInvalidator = ctx.watchInvalidator;
+                    buildWatch(grpcChannel, sdkMetrics, spi, ctx));
 
             // Phase: SCHEDULER
             lm.phase(SdkPhase.SCHEDULER, () ->
-                    buildScheduler(grpcChannel, authMetaFinal, schemaLoader, schemaCache, sdkMetrics, ctx));
-            scheduler = ctx.scheduler;
+                    buildScheduler(grpcChannel, authMeta, schemaLoader, schemaCache, sdkMetrics, ctx));
 
             lm.complete();
 
@@ -238,7 +244,7 @@ public class AuthxClientBuilder {
             // Build Watch dispatcher (strategies → dispatcher → watchInvalidator)
             var dispatcher = !watchStrategies.isEmpty()
                     ? new WatchDispatcher(watchStrategies)
-                    : watchInvalidator != null ? new WatchDispatcher(List.of()) : null;
+                    : ctx.watchInvalidator != null ? new WatchDispatcher(List.of()) : null;
 
             // Async executor: virtual threads if enabled, otherwise direct (caller thread)
             Executor asyncExec = useVirtualThreads
@@ -246,12 +252,22 @@ public class AuthxClientBuilder {
                     : Runnable::run;
 
             // Build aggregation objects
-            var infraObj = new SdkInfrastructure(grpcChannel, scheduler, asyncExec, lm);
-            var observabilityObj = new SdkObservability(sdkMetrics, bus, telemetryReporter);
-            var cachingObj = new SdkCaching(ctx.checkCache, schemaCache, watchInvalidator, dispatcher);
+            var infraObj = new SdkInfrastructure(grpcChannel, ctx.scheduler, asyncExec, lm);
+            var observabilityObj = new SdkObservability(sdkMetrics, bus, ctx.telemetryReporter);
+            var cachingObj = new SdkCaching(ctx.checkCache, schemaCache, ctx.watchInvalidator, dispatcher);
             var configObj = new SdkConfig(defaultSubjectType, policies, coalescingEnabled, useVirtualThreads);
 
-            var client = new AuthxClient(transport, infraObj, observabilityObj, cachingObj, configObj);
+            // Resolve health probe: user-provided takes precedence, otherwise
+            // default to a composite of channel-state + schema-read so diagnostics
+            // show both the local channel health and end-to-end SpiceDB reachability.
+            HealthProbe probe = spi.healthProbe();
+            if (probe == null) {
+                probe = HealthProbe.all(
+                        new ChannelStateHealthProbe(grpcChannel),
+                        new SchemaReadHealthProbe(grpcChannel, presharedKey));
+            }
+
+            var client = new AuthxClient(transport, infraObj, observabilityObj, cachingObj, configObj, probe);
 
             if (registerShutdownHook) {
                 var hook = new Thread(client::close, "authx-sdk-shutdown");
@@ -261,13 +277,23 @@ public class AuthxClientBuilder {
 
             return client;
         } catch (Exception e) {
-            if (scheduler != null) {
-                scheduler.shutdown();
-                try { scheduler.awaitTermination(1, TimeUnit.SECONDS); }
+            // Unwind partially-constructed resources. ctx is visible here
+            // because it was hoisted above the try block — this is intentional:
+            // buildWatch() may assign ctx.watchInvalidator and then have
+            // start() throw, in which case the local variable (if we'd used
+            // one) would still be null but ctx.watchInvalidator would be the
+            // leaked reference. Always close via ctx.
+            if (ctx.scheduler != null) {
+                ctx.scheduler.shutdown();
+                try { ctx.scheduler.awaitTermination(1, TimeUnit.SECONDS); }
                 catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
             }
-            if (watchInvalidator != null) watchInvalidator.close();
-            if (telemetryReporter != null) telemetryReporter.close();
+            if (ctx.watchInvalidator != null) {
+                try { ctx.watchInvalidator.close(); } catch (Exception ignored) {}
+            }
+            if (ctx.telemetryReporter != null) {
+                try { ctx.telemetryReporter.close(); } catch (Exception ignored) {}
+            }
             if (channel != null) {
                 channel.shutdown();
                 try { channel.awaitTermination(1, TimeUnit.SECONDS); }
@@ -287,11 +313,22 @@ public class AuthxClientBuilder {
      */
     private SdkTransport buildTransportStack(ManagedChannel grpcChannel, PolicyRegistry policies,
             SdkComponents spi, TypedEventBus bus, SdkMetrics sdkMetrics,
-            TokenTracker tokenTracker, BuildContext ctx) {
+            TokenTracker tokenTracker, List<SdkInterceptor> effectiveInterceptors, BuildContext ctx) {
         SdkTransport t = new GrpcTransport(grpcChannel, presharedKey, requestTimeout.toMillis());
 
-        // Resilience (circuit breaker + retry via Resilience4j)
-        var resilientTransport = new ResilientTransport(t, policies, bus, sdkMetrics);
+        // Resilience (circuit breaker + retry via Resilience4j).
+        //
+        // Metric-recording ownership (F11-1): exactly ONE layer in the stack
+        // should call sdkMetrics.recordRequest(), otherwise every miss is
+        // counted twice and the histogram contains two points per request.
+        // When telemetry is enabled, InstrumentedTransport wraps this layer
+        // and is the outermost recorder (it sees retry-inclusive latency, which
+        // is what operators actually want). In that case we pass null sdkMetrics
+        // to ResilientTransport so it skips recording. When telemetry is
+        // disabled, ResilientTransport is the outermost layer in the stack and
+        // owns the recording itself.
+        var resilientMetrics = telemetryEnabled ? null : sdkMetrics;
+        var resilientTransport = new ResilientTransport(t, policies, bus, resilientMetrics);
         ctx.resilientTransport = resilientTransport;
         t = resilientTransport;
 
@@ -344,14 +381,28 @@ public class AuthxClientBuilder {
 
         t = new PolicyAwareConsistencyTransport(t, policies, tokenTracker);
         if (coalescingEnabled) t = new CoalescingTransport(t, sdkMetrics);
-        if (!interceptors.isEmpty()) t = new InterceptorTransport(t, interceptors);
+        if (!effectiveInterceptors.isEmpty()) t = new InterceptorTransport(t, effectiveInterceptors);
         return t;
     }
 
-    private void buildWatch(ManagedChannel grpcChannel, SdkMetrics sdkMetrics, BuildContext ctx) {
+    private void buildWatch(ManagedChannel grpcChannel, SdkMetrics sdkMetrics,
+                             SdkComponents spi, BuildContext ctx) {
         if (cacheEnabled && watchInvalidation && ctx.checkCache != null) {
+            // Resolve the duplicate detector: user-provided via SdkComponents wins,
+            // otherwise fall back to noop (backwards-compatible behavior — no dedup).
+            // Consumers who want cursor-replay dedup should configure:
+            //   .extend(e -> e.components(SdkComponents.builder()
+            //       .watchDuplicateDetector(DuplicateDetector.lru(10_000, Duration.ofMinutes(5)))
+            //       .build()))
+            DuplicateDetector<String> dedup = spi.watchDuplicateDetector();
+            if (dedup == null) {
+                dedup = DuplicateDetector.noop();
+            }
+            // listenerExecutor: null means "use SDK default (owned)", non-null means
+            // "user manages lifecycle (NOT owned)". See WatchCacheInvalidator constructor.
             ctx.watchInvalidator = new WatchCacheInvalidator(
-                    grpcChannel, presharedKey, ctx.checkCache, sdkMetrics);
+                    grpcChannel, presharedKey, ctx.checkCache, sdkMetrics,
+                    dedup, spi.watchListenerExecutor());
             ctx.watchInvalidator.start();
         }
     }
