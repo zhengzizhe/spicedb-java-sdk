@@ -232,12 +232,18 @@ public class GrpcTransport implements SdkTransport {
 
     @Override
     public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
+        // Note: intentionally NOT calling setOptionalConcreteLimit here.
+        // Older SpiceDB versions (pre-concrete-limit support) return
+        // "UNIMPLEMENTED: concrete limit is not yet supported" when the
+        // field is set, and detecting the server version at runtime is
+        // impractical. The limit is applied Java-side via the stream
+        // iterator cutoff below — a few extra rows on the wire before
+        // the stream is cancelled is negligible vs the compatibility gain.
         var builder = com.authzed.api.v1.LookupSubjectsRequest.newBuilder()
                 .setResource(objRef(request.resource()))
                 .setPermission(request.permission().name())
                 .setSubjectObjectType(request.subjectType())
                 .setConsistency(toGrpc(request.consistency()));
-        if (request.limit() > 0) builder.setOptionalConcreteLimit(request.limit());
 
         int limit = request.limit();
         try {
