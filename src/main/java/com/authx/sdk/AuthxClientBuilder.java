@@ -93,6 +93,8 @@ public class AuthxClientBuilder {
     private SdkComponents components;
     private final List<SdkInterceptor> interceptors = new ArrayList<>();
     private final List<WatchStrategy> watchStrategies = new ArrayList<>();
+    private final List<com.authx.sdk.spi.PolicyCustomizer> policyCustomizers = new ArrayList<>();
+    private final List<com.authx.sdk.spi.AuthxClientCustomizer> clientCustomizers = new ArrayList<>();
 
     // ============================================================
     //  Grouped configuration (lambda style)
@@ -119,6 +121,42 @@ public class AuthxClientBuilder {
     /** Extensibility (policies, SPI, interceptors). */
     public AuthxClientBuilder extend(Consumer<ExtendConfig> config) {
         config.accept(new ExtendConfig());
+        return this;
+    }
+
+    /**
+     * Apply a business-level {@link com.authx.sdk.spi.PolicyCustomizer}.
+     *
+     * <p>Customizers run against a fresh {@link PolicyRegistry.Builder} at
+     * {@link #build()} time, in the order they were registered. Use this
+     * to separate business policy decisions (cache TTL, consistency, retry
+     * budgets) from infrastructure config — see the {@code PolicyCustomizer}
+     * javadoc for the full rationale.
+     *
+     * <p>Multiple customizers compose: register a "sane defaults" customizer
+     * first, then an override customizer on top. The last caller wins on
+     * any given field because of how the builder assignment semantics work.
+     *
+     * <p>Calling both {@code .extend(e -> e.policies(...))} (setting a
+     * concrete registry directly) AND {@code .customize(policyCustomizer)}
+     * is not recommended: the direct registry wins and the customizers are
+     * silently ignored.
+     */
+    public AuthxClientBuilder customize(com.authx.sdk.spi.PolicyCustomizer customizer) {
+        policyCustomizers.add(Objects.requireNonNull(customizer, "customizer"));
+        return this;
+    }
+
+    /**
+     * Apply an {@link com.authx.sdk.spi.AuthxClientCustomizer} — the
+     * general-purpose escape hatch that sees the whole builder. Runs at
+     * the start of {@link #build()}, before any config is read. Use this
+     * when {@link #customize(com.authx.sdk.spi.PolicyCustomizer)} is too
+     * narrow — e.g. to inject an interceptor, a {@code tokenStore}, or a
+     * custom {@code HealthProbe}.
+     */
+    public AuthxClientBuilder customize(com.authx.sdk.spi.AuthxClientCustomizer customizer) {
+        clientCustomizers.add(Objects.requireNonNull(customizer, "customizer"));
         return this;
     }
 
@@ -166,10 +204,39 @@ public class AuthxClientBuilder {
 
     /** Build and return a fully initialized {@link AuthxClient} connected to SpiceDB. */
     public AuthxClient build() {
+        // Apply general client customizers FIRST, so they see all the
+        // infrastructure config the caller already set and can layer on
+        // top (add interceptors, inject components, etc.). Running them
+        // before the validation step below lets a customizer even fix
+        // missing config — e.g. a test harness injecting a stub target.
+        for (var c : clientCustomizers) {
+            c.customize(this);
+        }
+
         Objects.requireNonNull(presharedKey, "presharedKey is required");
         if (target == null && targets == null) throw new IllegalArgumentException("target or targets is required");
 
-        var policies = policyRegistry != null ? policyRegistry : PolicyRegistry.withDefaults();
+        // Resolve the effective PolicyRegistry. Precedence:
+        //   1. An explicit registry passed via .extend(e -> e.policies(...))
+        //      wins outright — explicit > implicit.
+        //   2. Otherwise, build a fresh Builder seeded with SDK defaults and
+        //      run every registered PolicyCustomizer against it. This is the
+        //      preferred path: infrastructure config supplies the builder,
+        //      business teams supply the customizers, neither needs to know
+        //      about the other.
+        //   3. If neither is configured, fall back to PolicyRegistry.withDefaults().
+        final PolicyRegistry policies;
+        if (policyRegistry != null) {
+            policies = policyRegistry;
+        } else if (!policyCustomizers.isEmpty()) {
+            var pBuilder = PolicyRegistry.builder();
+            for (var c : policyCustomizers) {
+                c.customize(pBuilder);
+            }
+            policies = pBuilder.build();
+        } else {
+            policies = PolicyRegistry.withDefaults();
+        }
         var spi = components != null ? components : SdkComponents.defaults();
         var bus = eventBus != null ? eventBus : new DefaultTypedEventBus();
         var lm = new LifecycleManager(bus);
