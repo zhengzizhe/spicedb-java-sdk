@@ -70,7 +70,20 @@ public class TelemetryReporter implements AutoCloseable {
         }
     }
 
-    void flush() {
+    /**
+     * Drain the buffer and deliver a batch to the sink.
+     *
+     * <p>F12-3: {@code synchronized} serializes the scheduled periodic flush
+     * against any manual flush (in particular the one triggered by
+     * {@link #close()}). Without this, both flushes would race on
+     * {@code buffer.drainTo()} — which is individually thread-safe but can
+     * return two disjoint batches that get passed to {@code sink.send()}
+     * concurrently. A user-supplied {@code TelemetrySink} is not guaranteed
+     * to be thread-safe (Kafka producers and file writers often aren't),
+     * so we synchronize at the reporter level to give sinks a
+     * one-caller-at-a-time contract.
+     */
+    synchronized void flush() {
         if (buffer.isEmpty()) return;
 
         List<Map<String, Object>> batch = new ArrayList<>(Math.min(buffer.size(), batchSize * 2));
@@ -103,10 +116,28 @@ public class TelemetryReporter implements AutoCloseable {
 
     @Override
     public void close() {
+        // Shutdown order (F12-3): stop accepting new scheduled work, wait for
+        // any in-flight flush to finish (its scheduler thread is still alive
+        // because shutdown() is a graceful request), then do a final flush
+        // from the calling thread. The synchronized modifier on flush() is
+        // what makes the "in-flight flush finishes before ours starts" step
+        // safe — otherwise we'd race sink.send() with a scheduled flush.
         scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                // Scheduled flush is taking too long — force interrupt and
+                // move on. The final flush below will deliver whatever's
+                // still in the buffer.
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            scheduler.shutdownNow();
+        }
+        // Final drain from the calling thread. Safe to call after
+        // shutdownNow() because flush() only touches buffer + sink, not the
+        // scheduler itself.
         flush();
-        try { scheduler.awaitTermination(5, TimeUnit.SECONDS); }
-        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
     public int pendingCount() { return buffer.size(); }

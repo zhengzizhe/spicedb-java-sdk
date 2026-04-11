@@ -47,7 +47,22 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
         var adjusted = request.withConsistency(
                 resolveConsistency(request.resource().type(), request.consistency()));
-        return delegate.checkBulk(adjusted, subjects);
+        var result = delegate.checkBulk(adjusted, subjects);
+        // F12-2: record the response zedToken so subsequent reads in the same
+        // session see at-least-this-revision consistency. The whole bulk result
+        // comes from a single SpiceDB dispatch, so every inner CheckResult
+        // carries the same zedToken — we just grab the first non-null one.
+        // Matches the symmetric behavior of single-subject check() above.
+        if (result != null) {
+            for (var entry : result.asMap().values()) {
+                String token = entry.zedToken();
+                if (token != null) {
+                    tokenTracker.recordRead(token);
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
     @Override

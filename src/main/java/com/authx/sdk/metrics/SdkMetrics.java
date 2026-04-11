@@ -37,9 +37,30 @@ public class SdkMetrics {
     private final LongAdder watchReconnects = new LongAdder();
 
     // ---- Latency (HdrHistogram dual-buffer, microseconds) ----
+    //
+    // Two distinct histograms here, with carefully-separated roles:
+    //
+    //   * recycleBuffer — the buffer the Recorder fills on each drain. Owned
+    //     exclusively by rotateHistogram(), never read by anything else. We
+    //     recycle the same instance to avoid per-rotation allocation.
+    //
+    //   * publishedInterval — a read-only copy that snapshot() reads from.
+    //     Refreshed by rotateHistogram() (every 5s by the scheduler) with a
+    //     defensive .copy() of recycleBuffer so readers see a stable, immutable
+    //     view. volatile because it's written on the scheduler thread and read
+    //     on caller threads.
+    //
+    // Historical bug (F10-1): both rotateHistogram and getHistogram used to
+    // call recorder.getIntervalHistogram(), and each call drains the recorder.
+    // That meant snapshot() silently discarded whatever the scheduler had just
+    // published. Callers that polled metrics right after a load test ran would
+    // see p50=p99=0 because the published window had been drained by their
+    // own snapshot() call before they could read it. Keeping the drain
+    // exclusively on rotateHistogram() fixes this.
     private static final long MAX_TRACKABLE_MICROS = 60_000_000L;
     private final Recorder recorder = new Recorder(MAX_TRACKABLE_MICROS, 3);
-    private volatile Histogram intervalHistogram;
+    private Histogram recycleBuffer;             // guarded by `this`
+    private volatile Histogram publishedInterval;
 
     // ---- Cache stats source (from Cache implementation, replaces manual hit/miss counting) ----
     private volatile Supplier<CacheStats> cacheStatsSource;
@@ -49,6 +70,13 @@ public class SdkMetrics {
 
     // ---- Record methods (called by transport layers) ----
 
+    // NOTE: these record methods are FALLBACK counters used only when no
+    // external cacheStatsSource has been wired (e.g. in-memory clients or
+    // tests). In normal production builds the AuthxClientBuilder calls
+    // setCacheStatsSource(...) to forward to CaffeineCache.stats(), and
+    // cacheHits() / cacheMisses() / cacheEvictions() then read from the
+    // source — the increments below still fire but their values are ignored.
+    // Kept public for backward-compat of the 1.0.x API.
     public void recordCacheHit() { cacheHits.increment(); }
     public void recordCacheMiss() { cacheMisses.increment(); }
     public void recordCacheEviction() { cacheEvictions.increment(); }
@@ -137,11 +165,35 @@ public class SdkMetrics {
 
     /** Full snapshot for logging or export. */
     public Snapshot snapshot() {
-        Histogram h = getHistogram();
-        double p50 = h.getValueAtPercentile(50.0) / 1000.0;
-        double p95 = h.getValueAtPercentile(95.0) / 1000.0;
-        double p99 = h.getValueAtPercentile(99.0) / 1000.0;
-        double avg = h.getMean() / 1000.0;
+        Histogram h = publishedInterval;
+        // Lazy first rotation: if no scheduled rotate has fired yet (common in
+        // the first 5 seconds after startup, or in tests that don't wire a
+        // scheduler), force one so the caller sees cumulative data instead of
+        // a misleadingly-empty histogram. After this point rotateHistogram()
+        // takes over on its 5s cadence.
+        if (h == null) {
+            synchronized (this) {
+                if (publishedInterval == null) {
+                    rotateHistogram();
+                }
+                h = publishedInterval;
+            }
+        }
+        // O2 fix: distinguish "no data in this window" from "0ms latency". An
+        // idle SDK between two rotations produces an empty histogram, and
+        // HdrHistogram.getValueAtPercentile() returns 0 for empty — which is
+        // indistinguishable from "everything was sub-microsecond fast".
+        // Return Double.NaN so operators (and the toString() formatter below)
+        // can tell the two cases apart.
+        double p50, p95, p99, avg;
+        if (h.getTotalCount() == 0) {
+            p50 = p95 = p99 = avg = Double.NaN;
+        } else {
+            p50 = h.getValueAtPercentile(50.0) / 1000.0;
+            p95 = h.getValueAtPercentile(95.0) / 1000.0;
+            p99 = h.getValueAtPercentile(99.0) / 1000.0;
+            avg = h.getMean() / 1000.0;
+        }
         return new Snapshot(
                 cacheHitRate(), cacheHits(), cacheMisses(), cacheEvictions(), cacheSize(),
                 totalRequests(), totalErrors(), errorRate(), coalescedRequests(),
@@ -155,36 +207,43 @@ public class SdkMetrics {
             double latencyP50Ms, double latencyP95Ms, double latencyP99Ms, double latencyAvgMs,
             String circuitBreakerState, long watchReconnects
     ) {
+        /** True iff the current rotation window contains no request samples. */
+        public boolean latencyWindowEmpty() {
+            return Double.isNaN(latencyP50Ms);
+        }
+
         @Override
         public String toString() {
+            String latencyStr = latencyWindowEmpty()
+                    ? "latency=[no data in window]"
+                    : String.format(
+                            "latency=[p50=%.2fms p95=%.2fms p99=%.2fms avg=%.2fms]",
+                            latencyP50Ms, latencyP95Ms, latencyP99Ms, latencyAvgMs);
             return String.format(
                     "SdkMetrics{cache=%.1f%% (%d/%d), size=%d, evictions=%d, " +
                     "requests=%d, errors=%d (%.2f%%), coalesced=%d, " +
-                    "latency=[p50=%.2fms p95=%.2fms p99=%.2fms avg=%.2fms], cb=%s, watchReconnects=%d}",
+                    "%s, cb=%s, watchReconnects=%d}",
                     cacheHitRate * 100, cacheHits, cacheHits + cacheMisses, cacheSize, cacheEvictions,
                     totalRequests, totalErrors, errorRate * 100, coalescedRequests,
-                    latencyP50Ms, latencyP95Ms, latencyP99Ms, latencyAvgMs,
-                    circuitBreakerState, watchReconnects);
+                    latencyStr, circuitBreakerState, watchReconnects);
         }
     }
 
     /**
-     * Rotate the interval histogram. Called periodically by the scheduler (e.g. every 5s)
-     * so that snapshot() reads a stable, fixed-window histogram instead of
-     * "everything since last read".
+     * Rotate the interval histogram. Called periodically by the scheduler
+     * (every 5s by default) so that {@link #snapshot()} reads a stable,
+     * fixed-window histogram instead of "everything since last read".
+     *
+     * <p>Drains the recorder into {@link #recycleBuffer} (reused to avoid
+     * per-rotation allocation), then publishes a defensive copy so concurrent
+     * readers can never observe a half-filled buffer.
      */
     public synchronized void rotateHistogram() {
-        intervalHistogram = recorder.getIntervalHistogram(intervalHistogram);
-    }
-
-    /**
-     * Retrieves the current interval histogram from the Recorder.
-     * Must be synchronized because Recorder.getIntervalHistogram is not safe
-     * for concurrent callers on the same intervalHistogram instance.
-     */
-    private synchronized Histogram getHistogram() {
-        intervalHistogram = recorder.getIntervalHistogram(intervalHistogram);
-        return intervalHistogram;
+        recycleBuffer = recorder.getIntervalHistogram(recycleBuffer);
+        // copy() allocates ~per-rotation; at 5s cadence this is ~0.2 Hz which
+        // is negligible. The alternative (handing out recycleBuffer directly)
+        // would race against the next drain.
+        publishedInterval = recycleBuffer.copy();
     }
 
 }

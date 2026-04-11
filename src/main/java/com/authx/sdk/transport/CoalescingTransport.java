@@ -45,17 +45,31 @@ public class CoalescingTransport extends ForwardingTransport {
         CompletableFuture<CheckResult> existing = inflight.putIfAbsent(key, myFuture);
 
         if (existing != null) {
-            // Another thread is already executing this exact request — wait for its result
+            // Another thread is already executing this exact request — wait for its result.
+            //
+            // F12-1: use get(timeout, unit) rather than orTimeout(...).join(). Both
+            // enforce the 30s budget, but get() responds to Thread.interrupt() —
+            // critical for HTTP request paths where a client disconnect interrupts
+            // the worker thread. join() would ignore the interrupt and keep the
+            // worker pinned until the 30s budget elapses, wasting capacity.
             if (metrics != null) metrics.recordCoalesced();
             try {
-                return existing.orTimeout(30, TimeUnit.SECONDS).join();
-            } catch (java.util.concurrent.CompletionException ce) {
-                if (ce.getCause() instanceof java.util.concurrent.TimeoutException) {
-                    throw new com.authx.sdk.exception.AuthxTimeoutException(
-                            "Coalesced check request timed out after 30s");
-                }
-                if (ce.getCause() instanceof RuntimeException re) throw re;
-                throw ce;
+                return existing.get(30, TimeUnit.SECONDS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new com.authx.sdk.exception.AuthxTimeoutException(
+                        "Coalesced check request interrupted while waiting for the in-flight owner");
+            } catch (java.util.concurrent.TimeoutException te) {
+                throw new com.authx.sdk.exception.AuthxTimeoutException(
+                        "Coalesced check request timed out after 30s");
+            } catch (java.util.concurrent.ExecutionException ee) {
+                // Owner's exception is wrapped in ExecutionException. Unwrap it so
+                // callers see the original RuntimeException (or SdkException) they'd
+                // see if they'd made the call themselves.
+                Throwable cause = ee.getCause();
+                if (cause instanceof RuntimeException re) throw re;
+                if (cause instanceof Error err) throw err;
+                throw new RuntimeException("Coalesced check failed", cause);
             }
         }
 
