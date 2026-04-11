@@ -54,11 +54,18 @@ public class SpiceDbConfig {
     }
 
     private PolicyRegistry policies() {
+        // SESSION consistency — the SDK's TokenTracker auto-chains zedTokens
+        // from writes into subsequent reads within the same JVM, so
+        // "onboard a user and immediately check if they can view the welcome
+        // doc" just works without the business code having to thread tokens
+        // manually. The tradeoff vs minimizeLatency is one extra zedToken
+        // field per request and a few hundred microseconds of server-side
+        // dispatch overhead. Fine for the demo.
         return PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .circuitBreaker(CircuitBreakerPolicy.disabled())
                         .cache(CachePolicy.of(Duration.ofSeconds(30)))
-                        .readConsistency(ReadConsistency.minimizeLatency())
+                        .readConsistency(ReadConsistency.session())
                         .build())
                 .build();
     }

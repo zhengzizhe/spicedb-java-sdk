@@ -1,175 +1,218 @@
 package com.authx.testapp;
 
 import com.authx.sdk.AuthxClient;
-import com.authx.sdk.model.CheckMatrix;
-import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.SubjectRef;
-import com.authx.testapp.schema.DocumentResource;
-import com.authx.testapp.schema.FolderResource;
-import com.authx.testapp.schema.SpaceResource;
-import com.authx.testapp.schema.constants.Document;
-import com.authx.testapp.schema.constants.Folder;
-import com.authx.testapp.schema.constants.Space;
+import com.authx.testapp.schema.Document;
+import com.authx.testapp.schema.Folder;
+import com.authx.testapp.schema.Space;
+import com.authx.testapp.service.DocumentSharingService;
+import com.authx.testapp.service.WorkspaceAccessService;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Demo surface for the 2.0.0 typed chain API.
+ * HTTP 面板 —— 薄的一层。业务逻辑在 {@link DocumentSharingService} /
+ * {@link WorkspaceAccessService}，Controller 只管参数解析和 JSON 序列化。
  *
- * <p>Every endpoint uses the compile-time-safe enum-parameterised chain:
- * {@code doc.select(id).grant(Rel.X).toUser(...)} /
- * {@code .check(Perm.X).by(...)} / {@code .who(Perm.X).asUserIds()} /
- * {@code .findBy(Subjects.user(...)).can(Perm.X)}. Subject-type mismatches
- * (e.g. granting a folder subject to an editor relation) are caught at
- * runtime by {@code SchemaCache.validateSubject} and raise
- * {@code IllegalArgumentException} with a clear message, without going to
- * SpiceDB at all.
+ * <p>Controller 只持有 {@link AuthxClient} + 两个 Service。业务代码需要
+ * check/grant 时, 直接从 {@code client} 开始链：
+ * {@code client.on(Document.TYPE).select(id).check(Document.Perm.VIEW).by(user)}.
  */
 @RestController
 public class PermissionController {
 
     private final AuthxClient client;
-    private final DocumentResource doc;
-    private final FolderResource folder;
-    private final SpaceResource space;
+    private final DocumentSharingService docs;
+    private final WorkspaceAccessService workspace;
 
-    public PermissionController(AuthxClient client) {
+    public PermissionController(AuthxClient client,
+                                 DocumentSharingService docs,
+                                 WorkspaceAccessService workspace) {
         this.client = client;
-        this.doc = new DocumentResource(client);
-        this.folder = new FolderResource(client);
-        this.space = new SpaceResource(client);
+        this.docs = docs;
+        this.workspace = workspace;
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  Document — check
+    //  Document check
     // ═══════════════════════════════════════════════════════════════
 
-    /** Single-subject × single-permission — the 99% case. Returns boolean. */
-    @GetMapping("/doc/check")
-    public Map<String, Object> docCheck(@RequestParam String id,
-                                         @RequestParam String permission,
-                                         @RequestParam String user) {
-        var perm = Document.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = doc.select(id).check(perm).by(user);
-        return Map.of("allowed", allowed, "doc", id,
-                "permission", perm.permissionName(), "user", user);
+    @GetMapping("/doc/can-open")
+    public Map<String, Object> canOpen(@RequestParam String user, @RequestParam String doc) {
+        return Map.of("allowed", docs.canOpen(user, doc), "user", user, "doc", doc);
     }
 
-    /** Caveat-aware check — returns full CheckResult with three-state permissionship. */
-    @GetMapping("/doc/check/detailed")
-    public Map<String, Object> docCheckDetailed(@RequestParam String id,
-                                                  @RequestParam String permission,
-                                                  @RequestParam String user) {
-        var perm = Document.Perm.valueOf(permission.toUpperCase());
-        CheckResult r = doc.select(id).check(perm).detailedBy(user);
-        return Map.of(
-                "permissionship", r.permissionship().name(),
-                "hasPermission", r.hasPermission(),
-                "zedToken", r.zedToken() != null ? r.zedToken() : "",
-                "doc", id,
-                "permission", perm.permissionName(),
-                "user", user);
-    }
-
-    /** Matrix check — N docs × M perms × K users → CheckMatrix (flat, indexable). */
-    @GetMapping("/doc/matrix")
-    public Map<String, Object> docMatrix(@RequestParam List<String> ids,
-                                          @RequestParam List<String> users) {
-        CheckMatrix matrix = doc.select(ids.toArray(String[]::new))
-                .check(Document.Perm.VIEW, Document.Perm.EDIT, Document.Perm.COMMENT)
-                .by(users.toArray(String[]::new));
-        return Map.of(
-                "cells", matrix.size(),
-                "allAllowed", matrix.allAllowed(),
-                "anyDenied", matrix.anyDenied(),
-                "rows", matrix.cells());
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Document — grant / revoke (chain API, subject-type runtime-validated)
-    // ═══════════════════════════════════════════════════════════════
-
-    @PostMapping("/doc/grant")
-    public Map<String, String> grantRel(@RequestParam String id,
-                                          @RequestParam String relation,
-                                          @RequestParam String user) {
-        var rel = Document.Rel.valueOf(relation.toUpperCase());
-        doc.select(id).grant(rel).toUser(user);
-        return Map.of("status", "granted", "doc", id, "relation", rel.relationName(), "user", user);
-    }
-
-    @PostMapping("/doc/revoke")
-    public Map<String, String> revokeRel(@RequestParam String id,
-                                           @RequestParam String relation,
-                                           @RequestParam String user) {
-        var rel = Document.Rel.valueOf(relation.toUpperCase());
-        doc.select(id).revoke(rel).fromUser(user);
-        return Map.of("status", "revoked", "doc", id, "relation", rel.relationName(), "user", user);
-    }
-
-    /** Demonstrates a grant via SubjectRef for non-user subject types. */
-    @PostMapping("/doc/grant/folder-link")
-    public Map<String, String> linkDocToFolder(@RequestParam String docId,
-                                                 @RequestParam String folderId) {
-        // Schema: document.folder relation accepts folder subject type only
-        doc.select(docId).grant(Document.Rel.FOLDER)
-                .to(SubjectRef.of("folder", folderId, null));
-        return Map.of("status", "linked", "doc", docId, "folder", folderId);
+    @GetMapping("/doc/can-edit")
+    public Map<String, Object> canEdit(@RequestParam String user, @RequestParam String doc) {
+        return Map.of("allowed", docs.canEdit(user, doc), "user", user, "doc", doc);
     }
 
     /**
-     * Demonstrates runtime validation: editor relation rejects a folder subject
-     * via {@code SchemaCache.validateSubject}. The SDK throws
-     * {@link com.authx.sdk.exception.InvalidRelationException} with a clear
-     * message listing the allowed subject types, so the business code can
-     * surface a meaningful error instead of hitting an opaque SpiceDB gRPC
-     * rejection after a round-trip.
+     * 文档详情页工具栏 —— 一次 RPC 拿 schema 里所有 permission 的状态。
+     * 返回 EnumMap, schema 加 permission 这里完全不用改。
      */
-    @GetMapping("/doc/grant/invalid")
-    public Map<String, Object> demonstrateInvalid(@RequestParam String docId) {
-        try {
-            doc.select(docId).grant(Document.Rel.EDITOR)
-                    .to(SubjectRef.of("folder", "f-whatever", null));
-            return Map.of("status", "unexpectedly succeeded");
-        } catch (com.authx.sdk.exception.InvalidRelationException e) {
-            return Map.of("status", "correctly rejected", "error", e.getMessage());
-        }
+    @GetMapping("/doc/toolbar")
+    public Map<String, Boolean> toolbar(@RequestParam String user, @RequestParam String doc) {
+        var perms = docs.computeToolbarFor(user, doc);
+        var out = new java.util.LinkedHashMap<String, Boolean>();
+        perms.forEach((k, v) -> out.put(k.name().toLowerCase(), v));
+        return out;
+    }
+
+    /** 文档列表页过滤可见项. */
+    @GetMapping("/doc/filter-visible")
+    public Map<String, Boolean> filterVisible(@RequestParam String user,
+                                                @RequestParam List<String> ids) {
+        return docs.filterVisible(user, ids);
+    }
+
+    /** 文档列表页完整权限矩阵 —— N 个 doc × 所有 perm, 一次 RPC. */
+    @GetMapping("/doc/list-permissions")
+    public Map<String, Map<String, Boolean>> listPermissions(@RequestParam String user,
+                                                               @RequestParam List<String> ids) {
+        var full = docs.permissionsForList(user, ids);
+        var out = new java.util.LinkedHashMap<String, Map<String, Boolean>>();
+        full.forEach((docId, perms) -> {
+            var row = new java.util.LinkedHashMap<String, Boolean>();
+            perms.forEach((k, v) -> row.put(k.name().toLowerCase(), v));
+            out.put(docId, row);
+        });
+        return out;
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  Who / Find (typed lookupSubjects / lookupResources)
+    //  Document grant / revoke
     // ═══════════════════════════════════════════════════════════════
 
-    /** "Who can view this document?" — lookupSubjects */
-    @GetMapping("/doc/viewers")
-    public Map<String, Object> whoCanView(@RequestParam String id,
-                                            @RequestParam(defaultValue = "50") int limit) {
-        List<String> viewers = doc.select(id).who(Document.Perm.VIEW).limit(limit).asUserIds();
-        return Map.of("doc", id, "viewers", viewers, "count", viewers.size());
+    @PostMapping("/doc/share-user")
+    public Map<String, String> shareUser(@RequestParam String doc,
+                                           @RequestParam String user,
+                                           @RequestParam String level) {
+        docs.shareWithUser(doc, user, DocumentSharingService.ShareLevel.valueOf(level.toUpperCase()));
+        return Map.of("status", "shared", "doc", doc, "user", user, "level", level);
     }
 
-    /** "Who can edit this document?" */
+    @PostMapping("/doc/share-group")
+    public Map<String, String> shareGroup(@RequestParam String doc,
+                                            @RequestParam String group,
+                                            @RequestParam String level) {
+        docs.shareWithGroup(doc, group, DocumentSharingService.ShareLevel.valueOf(level.toUpperCase()));
+        return Map.of("status", "shared", "doc", doc, "group", group, "level", level);
+    }
+
+    @PostMapping("/doc/make-public")
+    public Map<String, String> makePublic(@RequestParam String doc) {
+        docs.makePublic(doc);
+        return Map.of("status", "public", "doc", doc);
+    }
+
+    /** 限时分享 —— 默认 30 天后自动失效. */
+    @PostMapping("/doc/share-temp")
+    public Map<String, String> shareTemp(@RequestParam String doc,
+                                           @RequestParam String user,
+                                           @RequestParam(defaultValue = "30") int days,
+                                           @RequestParam(defaultValue = "VIEWER") String level) {
+        docs.shareTemporarily(doc, user,
+                DocumentSharingService.ShareLevel.valueOf(level.toUpperCase()),
+                Duration.ofDays(days));
+        return Map.of("status", "shared", "doc", doc, "user", user,
+                "expiresInDays", String.valueOf(days));
+    }
+
+    @PostMapping("/doc/unshare")
+    public Map<String, String> unshare(@RequestParam String doc, @RequestParam String user) {
+        docs.unshareWithUser(doc, user);
+        return Map.of("status", "unshared", "doc", doc, "user", user);
+    }
+
+    /** 跨类型 grant: 文档挂到文件夹下 (document.folder 关系). */
+    @PostMapping("/doc/move-to-folder")
+    public Map<String, String> moveToFolder(@RequestParam String doc,
+                                              @RequestParam String folder) {
+        docs.moveIntoFolder(doc, folder);
+        return Map.of("status", "moved", "doc", doc, "folder", folder);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Document lookup
+    // ═══════════════════════════════════════════════════════════════
+
     @GetMapping("/doc/editors")
-    public Map<String, Object> whoCanEdit(@RequestParam String id,
-                                            @RequestParam(defaultValue = "50") int limit) {
-        List<String> editors = doc.select(id).who(Document.Perm.EDIT).limit(limit).asUserIds();
-        return Map.of("doc", id, "editors", editors, "count", editors.size());
+    public Map<String, Object> listEditors(@RequestParam String doc,
+                                             @RequestParam(defaultValue = "50") int max) {
+        var list = docs.listEditors(doc, max);
+        return Map.of("doc", doc, "editors", list, "count", list.size());
     }
 
-    /** "Which documents can this user access for a given permission?" — lookupResources */
-    @GetMapping("/doc/find")
-    public Map<String, Object> findDocs(@RequestParam String user,
-                                          @RequestParam(defaultValue = "view") String permission,
-                                          @RequestParam(defaultValue = "100") int limit) {
-        var perm = Document.Perm.valueOf(permission.toUpperCase());
-        List<String> docs = doc.findBy(SubjectRef.user(user)).limit(limit).can(perm);
-        return Map.of("user", user, "permission", permission, "docs", docs, "count", docs.size());
+    @GetMapping("/doc/viewers")
+    public Map<String, Object> listViewers(@RequestParam String doc,
+                                             @RequestParam(defaultValue = "50") int max) {
+        var list = docs.listViewers(doc, max);
+        return Map.of("doc", doc, "viewers", list, "count", list.size());
+    }
+
+    @GetMapping("/doc/my-readable")
+    public Map<String, Object> myReadable(@RequestParam String user,
+                                            @RequestParam(defaultValue = "100") int max) {
+        var list = docs.myReadableDocs(user, max);
+        return Map.of("user", user, "docs", list, "count", list.size());
+    }
+
+    @GetMapping("/doc/my-editable")
+    public Map<String, Object> myEditable(@RequestParam String user,
+                                            @RequestParam(defaultValue = "100") int max) {
+        var list = docs.myEditableDocs(user, max);
+        return Map.of("user", user, "docs", list, "count", list.size());
+    }
+
+    /** 多 permission 一次问 —— findByUser.limit.can(P...) 变长重载. */
+    @GetMapping("/doc/my-docs-by-perm")
+    public Map<String, List<String>> myDocsByPerm(@RequestParam String user,
+                                                    @RequestParam(defaultValue = "100") int max) {
+        var result = docs.myDocsByPermissions(user, max);
+        var out = new java.util.LinkedHashMap<String, List<String>>();
+        result.forEach((p, ids) -> out.put(p.name().toLowerCase(), ids));
+        return out;
+    }
+
+    /** 多用户反查 —— findByUsers(Collection).can(Perm). */
+    @GetMapping("/doc/readable-for-users")
+    public Map<String, List<String>> readableForUsers(@RequestParam List<String> users,
+                                                        @RequestParam(defaultValue = "100") int max) {
+        return docs.readableDocsForUsers(users, max);
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  Folder / Space — same chain shape, narrower surface
+    //  Workspace — 跨资源
+    // ═══════════════════════════════════════════════════════════════
+
+    @GetMapping("/workspace/view")
+    public WorkspaceAccessService.WorkspaceView workspaceView(@RequestParam String user,
+                                                                 @RequestParam String space,
+                                                                 @RequestParam String folder) {
+        return workspace.renderWorkspace(user, space, folder);
+    }
+
+    @PostMapping("/workspace/onboard")
+    public Map<String, Object> onboard(@RequestParam String user,
+                                         @RequestParam String space,
+                                         @RequestParam String defaultFolder,
+                                         @RequestParam(required = false) List<String> welcomeDocs) {
+        String zedToken = workspace.onboardNewMember(space, defaultFolder, user,
+                welcomeDocs != null ? welcomeDocs : List.of());
+        return Map.of(
+                "status", "onboarded",
+                "user", user,
+                "space", space,
+                "zedToken", zedToken != null ? zedToken : "",
+                "writesCount", 2 + (welcomeDocs != null ? welcomeDocs.size() : 0));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Folder / Space direct check — 展示不同类型的链起点对等
     // ═══════════════════════════════════════════════════════════════
 
     @GetMapping("/folder/check")
@@ -177,9 +220,8 @@ public class PermissionController {
                                              @RequestParam String permission,
                                              @RequestParam String user) {
         var perm = Folder.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = folder.select(id).check(perm).by(user);
-        return Map.of("allowed", allowed, "folder", id,
-                "permission", perm.permissionName(), "user", user);
+        boolean allowed = client.on(Folder.TYPE).select(id).check(perm).by(user);
+        return Map.of("allowed", allowed, "folder", id, "permission", perm.permissionName(), "user", user);
     }
 
     @GetMapping("/space/check")
@@ -187,9 +229,32 @@ public class PermissionController {
                                             @RequestParam String permission,
                                             @RequestParam String user) {
         var perm = Space.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = space.select(id).check(perm).by(user);
-        return Map.of("allowed", allowed, "space", id,
-                "permission", perm.permissionName(), "user", user);
+        boolean allowed = client.on(Space.TYPE).select(id).check(perm).by(user);
+        return Map.of("allowed", allowed, "space", id, "permission", perm.permissionName(), "user", user);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Runtime validation demo
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * 故意在 editor relation 上挂 folder 主体 —— SchemaCache 本地拦住,
+     * 不发 RPC.
+     */
+    @GetMapping("/demo/invalid-grant")
+    public Map<String, Object> invalidGrantDemo(@RequestParam String doc) {
+        try {
+            client.on(Document.TYPE)
+                    .select(doc)
+                    .grant(Document.Rel.EDITOR)
+                    .to(SubjectRef.of("folder", "f-invalid", null));
+            return Map.of("status", "unexpectedly succeeded");
+        } catch (com.authx.sdk.exception.InvalidRelationException e) {
+            return Map.of(
+                    "status", "rejected_locally",
+                    "error", e.getMessage(),
+                    "note", "SchemaCache 在本地 fast-fail, 完全没有发 RPC 到 SpiceDB");
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -199,8 +264,7 @@ public class PermissionController {
     @GetMapping("/health")
     public Map<String, Object> health() {
         var h = client.health();
-        return Map.of(
-                "healthy", h.isHealthy(),
+        return Map.of("healthy", h.isHealthy(),
                 "latencyMs", h.spicedbLatencyMs(),
                 "details", h.details());
     }
