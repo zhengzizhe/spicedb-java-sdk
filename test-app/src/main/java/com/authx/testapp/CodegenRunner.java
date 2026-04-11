@@ -10,7 +10,7 @@ import com.authx.sdk.AuthxCodegen;
  */
 public class CodegenRunner {
     public static void main(String[] args) throws Exception {
-        String target = System.getenv().getOrDefault("SPICEDB_TARGET", "localhost:50061");
+        String target = System.getenv().getOrDefault("SPICEDB_TARGET", "127.0.0.1:50051");
         String key = System.getenv().getOrDefault("SPICEDB_PRESHARED_KEY", "testkey");
 
         try (var client = AuthxClient.builder()
