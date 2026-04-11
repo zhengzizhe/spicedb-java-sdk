@@ -168,6 +168,82 @@ public class SchemaCache {
         return types != null ? types : List.of();
     }
 
+    /**
+     * Validate that {@code subjectRef} is an allowed subject for
+     * {@code resourceType.relation} according to the schema. Throws
+     * {@link InvalidRelationException} with a clear message listing all
+     * allowed subject shapes when the check fails.
+     *
+     * <p>The {@code subjectRef} is the stringly "type:id" or
+     * "type:id#sub_relation" form used throughout the SDK, plus the wildcard
+     * "type:*". We match it against the declared subject types on the
+     * relation. Wildcards match only against declared wildcard subject types
+     * (not against regular typed ones).
+     *
+     * <p>When the schema cache is empty (common during startup before the
+     * initial load, or in in-memory clients for tests) this method becomes
+     * a no-op — we cannot validate without a schema, and refusing all grants
+     * during that window would break legitimate callers. Operators who want
+     * strict mode can block on schema loading at startup.
+     */
+    public void validateSubject(String resourceType, String relation, String subjectRef) {
+        var c = cache.get();
+        if (c.isEmpty()) return;                   // schema not yet loaded — fail open
+        var def = c.get(resourceType);
+        if (def == null) return;                   // unknown resource type — let other validators flag it
+        var allowed = def.relationSubjectTypes().get(relation);
+        if (allowed == null || allowed.isEmpty()) {
+            // Relation exists but has no registered subject types in the
+            // reflected schema. This can happen when the schema reflection
+            // RPC did not populate them. Fail open rather than spuriously
+            // rejecting every grant.
+            return;
+        }
+
+        // Parse the incoming ref. Shapes:
+        //   "user:alice"               → type=user, id=alice
+        //   "group:eng#member"         → type=group, id=eng, subRelation=member
+        //   "user:*"                   → type=user, id=*, wildcard
+        String type;
+        String idPart;
+        int colon = subjectRef.indexOf(':');
+        if (colon < 0) {
+            throw new InvalidRelationException(
+                    "Invalid subject reference \"" + subjectRef + "\": expected \"type:id\" form");
+        }
+        type = subjectRef.substring(0, colon);
+        idPart = subjectRef.substring(colon + 1);
+
+        String subRelation = "";
+        int hash = idPart.indexOf('#');
+        if (hash >= 0) {
+            subRelation = idPart.substring(hash + 1);
+            idPart = idPart.substring(0, hash);
+        }
+        boolean isWildcard = "*".equals(idPart);
+
+        for (SubjectType st : allowed) {
+            if (!st.type().equals(type)) continue;
+            if (isWildcard) {
+                if (st.isWildcard()) return;   // match: user:* allowed by "user | user:*"
+                continue;
+            }
+            if (st.isWildcard()) continue;     // wildcard declaration doesn't match concrete id
+            String declaredRel = st.optionalRelation() == null ? "" : st.optionalRelation();
+            if (declaredRel.equals(subRelation)) return;  // match
+        }
+
+        // No match — build a clear error listing the allowed shapes.
+        String allowedShapes = allowed.stream()
+                .map(SubjectType::toRefPrefix)
+                .distinct()
+                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
+        throw new InvalidRelationException(
+                resourceType + "." + relation + " does not accept subject \"" + subjectRef + "\". "
+                        + "Allowed subject types: " + allowedShapes
+                        + ". Check your schema, or use a different relation.");
+    }
+
     public Map<String, List<SubjectType>> getAllSubjectTypes(String resourceType) {
         var def = cache.get().get(resourceType);
         return def != null ? def.relationSubjectTypes() : Map.of();

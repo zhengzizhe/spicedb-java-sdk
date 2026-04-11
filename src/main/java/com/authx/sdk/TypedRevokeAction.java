@@ -1,10 +1,25 @@
 package com.authx.sdk;
 
+import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.SubjectRef;
+
+import java.util.Collection;
 
 /**
- * Typed revoke action. Iterates over ids × relations × subjects.
- * Codegen subclasses add fromUser(), fromFolder(), fromUserAll(), etc.
+ * Typed revoke action — mirror of {@link TypedGrantAction} for removing
+ * relationships. Subject-type methods validate against the schema at call
+ * time so revoking from a subject type the relation doesn't accept raises
+ * a clear {@link IllegalArgumentException} up-front rather than silently
+ * succeeding as a no-op revoke (SpiceDB tolerates revokes that match no
+ * tuples, which can hide programming errors).
+ *
+ * <pre>
+ * doc.select("doc-1").revoke(Document.Rel.EDITOR).fromUser("bob");
+ * doc.select("doc-1").revoke(Document.Rel.FOLDER).fromFolder("f-1");
+ * task.select("t-1").revoke(Task.Rel.DOCUMENT)
+ *     .from(SubjectRef.of("document", "doc-5", null));
+ * </pre>
  */
 public class TypedRevokeAction<R extends Relation.Named> {
 
@@ -19,15 +34,83 @@ public class TypedRevokeAction<R extends Relation.Named> {
         this.relations = relations;
     }
 
-    /** String escape hatch — varargs. */
-    public void from(String... subjectRefs) {
-        for (String id : ids)
-            for (R rel : relations)
-                factory.revokeFromSubjects(id, rel.relationName(), subjectRefs);
+    // ════════════════════════════════════════════════════════════════
+    //  Common subject-type shortcuts (validated against schema)
+    // ════════════════════════════════════════════════════════════════
+
+    public void fromUser(String... userIds) {
+        writeTypedSubjects("user", null, userIds);
     }
 
-    /** String escape hatch — Collection. */
-    public void from(java.util.Collection<String> subjectRefs) {
-        from(subjectRefs.toArray(String[]::new));
+    public void fromUser(Collection<String> userIds) {
+        fromUser(userIds.toArray(String[]::new));
+    }
+
+    public void fromGroupMember(String... groupIds) {
+        writeTypedSubjects("group", "member", groupIds);
+    }
+
+    public void fromGroupMember(Collection<String> groupIds) {
+        fromGroupMember(groupIds.toArray(String[]::new));
+    }
+
+    public void fromUserAll() {
+        write(new String[]{"user:*"});
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  Generic subject entry — supports any subject type in the schema
+    // ════════════════════════════════════════════════════════════════
+
+    public void from(SubjectRef... subjects) {
+        if (subjects == null || subjects.length == 0) return;
+        String[] refs = new String[subjects.length];
+        for (int i = 0; i < subjects.length; i++) {
+            refs[i] = subjects[i].toRefString();
+        }
+        write(refs);
+    }
+
+    public void from(Collection<SubjectRef> subjects) {
+        from(subjects.toArray(SubjectRef[]::new));
+    }
+
+    /** Raw-string escape hatch — still validated against schema at runtime. */
+    public void fromSubjectRefs(String... subjectRefs) {
+        if (subjectRefs == null || subjectRefs.length == 0) return;
+        write(subjectRefs);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  Internals
+    // ════════════════════════════════════════════════════════════════
+
+    private void writeTypedSubjects(String type, String subRelation, String[] ids) {
+        if (ids == null || ids.length == 0) return;
+        String[] refs = new String[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            refs[i] = (subRelation == null || subRelation.isEmpty())
+                    ? type + ":" + ids[i]
+                    : type + ":" + ids[i] + "#" + subRelation;
+        }
+        write(refs);
+    }
+
+    private void write(String[] refs) {
+        SchemaCache schema = factory.schemaCache();
+        if (schema != null) {
+            String resourceType = factory.resourceType();
+            for (R rel : relations) {
+                String relName = rel.relationName();
+                for (String ref : refs) {
+                    schema.validateSubject(resourceType, relName, ref);
+                }
+            }
+        }
+        for (String id : ids) {
+            for (R rel : relations) {
+                factory.revokeFromSubjects(id, rel.relationName(), refs);
+            }
+        }
     }
 }

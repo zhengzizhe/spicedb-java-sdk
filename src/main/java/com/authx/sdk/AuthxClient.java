@@ -100,7 +100,8 @@ public class AuthxClient implements AutoCloseable {
     public ResourceFactory on(String resourceType) {
         return factories.computeIfAbsent(resourceType, type -> {
             if (caching.schemaCache() != null) caching.schemaCache().validateResourceType(type);
-            return new ResourceFactory(type, transport, config.defaultSubjectType(), infra.asyncExecutor());
+            return new ResourceFactory(type, transport, config.defaultSubjectType(),
+                    infra.asyncExecutor(), caching.schemaCache());
         });
     }
 
@@ -129,7 +130,8 @@ public class AuthxClient implements AutoCloseable {
             var constructor = clazz.getDeclaredConstructor();
             constructor.setAccessible(true);
             T instance = constructor.newInstance();
-            instance.init(resourceType, transport, config.defaultSubjectType(), infra.asyncExecutor());
+            instance.init(resourceType, transport, config.defaultSubjectType(),
+                    infra.asyncExecutor(), caching.schemaCache());
             return instance;
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to create " + clazz.getSimpleName() + ": " + e.getMessage(), e);
@@ -150,6 +152,21 @@ public class AuthxClient implements AutoCloseable {
     /** Start a cross-resource batch builder for atomic operations across multiple resources. */
     public CrossResourceBatchBuilder batch() {
         return new CrossResourceBatchBuilder(transport, config.defaultSubjectType());
+    }
+
+    /**
+     * Start a cross-resource batch permission check. Unlike
+     * {@link TypedResourceFactory.TypedCheckAction} which is bound to one
+     * resource type, {@code batchCheck()} mixes arbitrary
+     * (resourceType, id, permission, subject) tuples and sends them all in
+     * a single {@code CheckBulkPermissions} RPC, returning a
+     * {@link com.authx.sdk.model.CheckMatrix}. Ideal for UI pages that
+     * compute multiple unrelated permissions for the same user on one page
+     * load (e.g. "can alice view this doc AND complete this task AND edit
+     * this folder?" as one round trip).
+     */
+    public BatchCheckBuilder batchCheck() {
+        return new BatchCheckBuilder(transport);
     }
 
     // ---- Watch (real-time relationship change events) ----
@@ -181,6 +198,7 @@ public class AuthxClient implements AutoCloseable {
     SdkTransport transport() { return transport; }
     String defaultSubjectType() { return config.defaultSubjectType(); }
     java.util.concurrent.Executor asyncExecutor() { return infra.asyncExecutor(); }
+    com.authx.sdk.cache.SchemaCache internalSchemaCache() { return caching.schemaCache(); }
 
     /** Return the SDK metrics collector. */
     public SdkMetrics metrics() { return observability.metrics(); }

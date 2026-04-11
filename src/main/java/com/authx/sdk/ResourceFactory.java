@@ -41,6 +41,13 @@ public class ResourceFactory {
     private volatile SdkTransport transport;
     private volatile String defaultSubjectType;
     private volatile Executor asyncExecutor = Runnable::run;
+    /**
+     * Shared SchemaCache reference. Used by the typed action classes
+     * (TypedGrantAction / TypedRevokeAction) to validate subject types at
+     * runtime before issuing a write. Nullable — tests and in-memory clients
+     * can operate without a schema, in which case validation is a no-op.
+     */
+    private volatile com.authx.sdk.cache.SchemaCache schemaCache;
 
     protected ResourceFactory() {}
 
@@ -58,6 +65,15 @@ public class ResourceFactory {
         this.asyncExecutor = asyncExecutor;
     }
 
+    ResourceFactory(String resourceType, SdkTransport transport, String defaultSubjectType,
+                    Executor asyncExecutor, com.authx.sdk.cache.SchemaCache schemaCache) {
+        this.resourceType = resourceType;
+        this.transport = transport;
+        this.defaultSubjectType = defaultSubjectType;
+        this.asyncExecutor = asyncExecutor;
+        this.schemaCache = schemaCache;
+    }
+
     void init(String resourceType, SdkTransport transport, String defaultSubjectType) {
         this.resourceType = resourceType;
         this.transport = transport;
@@ -71,6 +87,31 @@ public class ResourceFactory {
         this.defaultSubjectType = defaultSubjectType;
         this.asyncExecutor = asyncExecutor;
     }
+
+    void init(String resourceType, SdkTransport transport, String defaultSubjectType,
+              Executor asyncExecutor, com.authx.sdk.cache.SchemaCache schemaCache) {
+        this.resourceType = resourceType;
+        this.transport = transport;
+        this.defaultSubjectType = defaultSubjectType;
+        this.asyncExecutor = asyncExecutor;
+        this.schemaCache = schemaCache;
+    }
+
+    /**
+     * Package-private accessor for the schema cache, used by typed action
+     * classes in the same package to validate subject types before writes.
+     * {@code null}-safe — an absent cache means validation is skipped.
+     */
+    com.authx.sdk.cache.SchemaCache schemaCache() { return schemaCache; }
+
+    /** Package-private accessor for the transport chain, used by typed action classes. */
+    SdkTransport transport() { return transport; }
+
+    /** Package-private accessor for the default subject type (usually "user"). */
+    String defaultSubjectType() { return defaultSubjectType; }
+
+    /** Package-private accessor for the async executor used by typed action classes. */
+    Executor asyncExecutor() { return asyncExecutor; }
 
     // ---- Entry points ----
 
