@@ -1,16 +1,15 @@
 plugins {
     id "java-library"
-    id "maven-publish"
+    id "signing"
+    id "com.vanniktech.maven.publish" version "0.36.0"
 }
 
-group = "com.authx"
-version = rootProject.findProperty("sdkVersion") ?: "1.0.0-SNAPSHOT"
+group = "io.github.authxkit"
+version = rootProject.findProperty("sdkVersion") ?: "1.0.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
-    withSourcesJar()
-    withJavadocJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -30,10 +29,13 @@ repositories {
 
 dependencies {
     // SpiceDB gRPC
+    // Keep all grpc-* versions in lockstep.
+    // Upgraded 2026-04-10: 1.72.0 → 1.80.0 to pull in fix for CVE-2025-55163
+    // ("MadeYouReset" HTTP/2 DoS in Netty), which affects grpc-netty-shaded.
     implementation("com.authzed.api:authzed:1.5.4")
-    implementation("io.grpc:grpc-netty-shaded:1.72.0")
-    implementation("io.grpc:grpc-stub:1.72.0")
-    implementation("io.grpc:grpc-protobuf:1.72.0")
+    implementation("io.grpc:grpc-netty-shaded:1.80.0")
+    implementation("io.grpc:grpc-stub:1.80.0")
+    implementation("io.grpc:grpc-protobuf:1.80.0")
 
     // OpenTelemetry (no-op when no OTel SDK configured)
     implementation("io.opentelemetry:opentelemetry-api:1.40.0")
@@ -55,11 +57,13 @@ dependencies {
     compileOnly("io.micrometer:micrometer-core:1.13.0")
 
     // Testing
+    // assertj 3.25.3 → 3.27.7: fixes CVE-2026-24400 (XXE in isXmlEqualTo). Test-only.
+    // grpc-inprocess kept in lockstep with main grpc-* deps above.
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    testImplementation("org.assertj:assertj-core:3.25.3")
+    testImplementation("org.assertj:assertj-core:3.27.7")
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
-    testImplementation("io.grpc:grpc-inprocess:1.72.0")
+    testImplementation("io.grpc:grpc-inprocess:1.80.0")
     testImplementation("org.testcontainers:testcontainers:1.21.1")
     testImplementation("org.testcontainers:junit-jupiter:1.21.1")
     testRuntimeOnly("org.slf4j:slf4j-simple:2.0.12")
@@ -70,11 +74,52 @@ tasks.withType(Javadoc).configureEach {
     options.addStringOption("Xdoclint:none", "-quiet")
 }
 
-publishing {
-    publications {
-        maven(MavenPublication) {
-            from components.java
-            artifactId = "authx-sdk"
+signing {
+    useGpgCmd()
+}
+
+mavenPublishing {
+    // Upload to Central Portal staging; manual confirmation required to go live.
+    // Rationale: auto-release (true) means `gradle publish` makes the artifact
+    // permanently public — mistakes cannot be unpublished. Manual release lets
+    // us verify the staging deployment in the Central Portal UI first.
+    publishToMavenCentral(false)
+    signAllPublications()
+
+    coordinates("io.github.authxkit", "authx-spicedb-sdk", version.toString())
+
+    pom {
+        name = "AuthX SDK"
+        description = "An independent Java SDK for SpiceDB — production-grade client with tiered caching, Watch-based invalidation, Resilience4j circuit-breaker/retry, and OpenTelemetry observability. Not affiliated with Authzed, Inc."
+        url = "https://github.com/zhengzizhe/spicedb-java-sdk"
+        inceptionYear = "2026"
+
+        licenses {
+            license {
+                name = "The Apache License, Version 2.0"
+                url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                distribution = "repo"
+            }
+        }
+
+        developers {
+            developer {
+                id = "zhengzizhe"
+                name = "zhengzizhe"
+                email = "2312512956@qq.com"
+                url = "https://github.com/zhengzizhe"
+            }
+        }
+
+        scm {
+            connection = "scm:git:git://github.com/zhengzizhe/spicedb-java-sdk.git"
+            developerConnection = "scm:git:ssh://git@github.com/zhengzizhe/spicedb-java-sdk.git"
+            url = "https://github.com/zhengzizhe/spicedb-java-sdk"
+        }
+
+        issueManagement {
+            system = "GitHub Issues"
+            url = "https://github.com/zhengzizhe/spicedb-java-sdk/issues"
         }
     }
 }

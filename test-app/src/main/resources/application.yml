@@ -39,8 +39,10 @@ otel:
     sampler: ${OTEL_TRACES_SAMPLER:always_on}
 
 # SpiceDB cluster
+# NOTE: explicit 127.0.0.1 (not "localhost") avoids IPv4/IPv6 dual-stack
+# conflicts when other Docker containers on the host bind 0.0.0.0:50051.
 spicedb:
-  targets: "${SPICEDB_TARGETS:localhost:50051,localhost:50052,localhost:50053}"
+  targets: "${SPICEDB_TARGETS:127.0.0.1:50051,127.0.0.1:50052,127.0.0.1:50053}"
   preshared-key: "${SPICEDB_PRESHARED_KEY:testkey}"
   cache:
     enabled: true

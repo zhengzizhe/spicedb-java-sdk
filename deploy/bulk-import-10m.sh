@@ -29,7 +29,7 @@ set -euo pipefail
 #    total:          ~13,000,000 (超出部分在 target 处截断)
 # ═══════════════════════════════════════════════════════════════
 
-CRDB_HOST="localhost:26357"
+CRDB_HOST="127.0.0.1:26357"
 CRDB_BIN="cockroach"
 DATA_DIR="$HOME/spicedb-cluster/import"
 TARGET_COUNT=${1:-10000000}
@@ -231,7 +231,7 @@ log_info "验证 SpiceDB 可读..."
 sleep 3
 for p in 50051 50052 50053; do
     result=$(zed permission check document:doc-100 view user:user-42 \
-        --insecure --endpoint "localhost:$p" --token testkey 2>&1 | grep -v warn)
+        --insecure --endpoint "127.0.0.1:$p" --token testkey 2>&1 | grep -v warn)
     if [ "$result" = "true" ]; then
         log_ok "SpiceDB :$p → check(doc-100, view, user-42) = true"
     else
