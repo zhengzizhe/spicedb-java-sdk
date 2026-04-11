@@ -5,6 +5,8 @@ import com.authx.sdk.model.Consistency;
 import com.authx.sdk.policy.*;
 import org.junit.jupiter.api.*;
 
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -40,15 +42,14 @@ class MultiInstanceStressTest {
 
     @BeforeAll
     static void setup() {
-        // Check SpiceDB reachable
-        try {
-            var testClient = AuthxClient.builder()
-                    .connection(c -> c.target(SPICEDB_1).presharedKey(PRESHARED_KEY))
-                    .build();
-            testClient.close();
-        } catch (Exception e) {
-            assumeTrue(false, "SpiceDB not reachable on " + SPICEDB_1 + ": " + e.getMessage());
-        }
+        // Check SpiceDB reachable.
+        //
+        // NOTE: AuthxClient.builder().build() alone is NOT a reachability check —
+        // gRPC channels are lazy and will not connect until the first RPC. So we
+        // explicitly TCP-ping each required endpoint; if either port is closed
+        // we assume this integration test cannot run in the current environment.
+        assumeTrue(tcpPing(SPICEDB_1), "SpiceDB not reachable on " + SPICEDB_1);
+        assumeTrue(tcpPing(SPICEDB_2), "SpiceDB not reachable on " + SPICEDB_2);
 
         var policies = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
@@ -323,5 +324,16 @@ class MultiInstanceStressTest {
 
     private static void sleep(long ms) {
         try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
+    /** TCP-ping a {@code host:port} target. Returns false if the port is closed or unreachable. */
+    private static boolean tcpPing(String hostPort) {
+        String[] parts = hostPort.split(":", 2);
+        try (var sock = new Socket()) {
+            sock.connect(new InetSocketAddress(parts[0], Integer.parseInt(parts[1])), 500);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
