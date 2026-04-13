@@ -4,8 +4,11 @@ import com.authx.sdk.exception.InvalidPermissionException;
 import com.authx.sdk.exception.InvalidRelationException;
 import com.authx.sdk.exception.InvalidResourceException;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -18,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SchemaCache {
 
     private final AtomicReference<Map<String, DefinitionCache>> cache = new AtomicReference<>(Map.of());
+    private final AtomicReference<Map<String, CaveatDef>> caveatCache = new AtomicReference<>(Map.of());
     private volatile Runnable refreshCallback;
     private final java.util.concurrent.atomic.AtomicLong lastRefreshMs = new java.util.concurrent.atomic.AtomicLong(0);
     private static final long REFRESH_COOLDOWN_MS = 30_000; // 30 seconds
@@ -39,6 +43,21 @@ public class SchemaCache {
     ) {
         public DefinitionCache(Set<String> relations, Set<String> permissions) {
             this(relations, permissions, Map.of());
+        }
+    }
+
+    /** Caveat definition from the SpiceDB schema. */
+    public record CaveatDef(
+            String name,
+            Map<String, String> parameters,  // paramName → SpiceDB type string
+            String expression,
+            String comment
+    ) {
+        public CaveatDef {
+            Objects.requireNonNull(name, "name");
+            parameters = parameters != null ? Map.copyOf(parameters) : Map.of();
+            expression = expression != null ? expression : "";
+            comment = comment != null ? comment : "";
         }
     }
 
@@ -251,6 +270,20 @@ public class SchemaCache {
 
     public boolean hasResourceType(String resourceType) {
         return cache.get().containsKey(resourceType);
+    }
+
+    // ── Caveat accessors ──
+
+    public void updateCaveats(Map<String, CaveatDef> caveats) {
+        caveatCache.set(Map.copyOf(caveats));
+    }
+
+    public Set<String> getCaveatNames() {
+        return caveatCache.get().keySet();
+    }
+
+    public @Nullable CaveatDef getCaveat(String name) {
+        return caveatCache.get().get(name);
     }
 
     /**
