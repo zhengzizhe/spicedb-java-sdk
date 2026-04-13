@@ -63,6 +63,12 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
         return this;
     }
 
+    /** Alias for {@link #withContext(Map)}. */
+    public TypedCheckAllAction<E> given(Map<String, Object> ctx) { return withContext(ctx); }
+
+    /** Alias for {@link #withContext(Object...)}. */
+    public TypedCheckAllAction<E> given(Object... keyValues) { return withContext(keyValues); }
+
     // ────────────────────────────────────────────────────────────────
     //  Single-resource terminators
     // ────────────────────────────────────────────────────────────────

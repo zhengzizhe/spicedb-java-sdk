@@ -84,6 +84,12 @@ public class TypedGrantAction<R extends Relation.Named> {
         return this;
     }
 
+    /** Alias for {@link #withCaveat(CaveatRef)} — reads as "grant member onlyIf ...". */
+    public TypedGrantAction<R> onlyIf(CaveatRef ref) { return withCaveat(ref); }
+
+    /** Alias for {@link #withCaveat(String, Map)} — reads as "grant member onlyIf ...". */
+    public TypedGrantAction<R> onlyIf(String caveatName, Map<String, Object> context) { return withCaveat(caveatName, context); }
+
     /**
      * Attach an expiration timestamp. Past this instant SpiceDB treats the
      * relationship as revoked — permission computations will not include

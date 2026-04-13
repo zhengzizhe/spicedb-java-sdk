@@ -85,6 +85,12 @@ public class TypedCheckAction {
         return this;
     }
 
+    /** Alias for {@link #withContext(Map)} — reads as "check access given ...". */
+    public TypedCheckAction given(Map<String, Object> context) { return withContext(context); }
+
+    /** Alias for {@link #withContext(Object...)} — reads as "check access given CLIENT_IP, ip". */
+    public TypedCheckAction given(Object... keyValues) { return withContext(keyValues); }
+
     // ────────────────────────────────────────────────────────────────
     //  Simple path: single (id × perm) → boolean
     // ────────────────────────────────────────────────────────────────

@@ -58,6 +58,12 @@ public class CheckAction {
         return this;
     }
 
+    /** Alias for {@link #withContext(Map)} — reads as "check access given ...". */
+    public CheckAction given(Map<String, Object> context) { return withContext(context); }
+
+    /** Alias for {@link #withContext(Object...)} — reads as "check access given CLIENT_IP, ip". */
+    public CheckAction given(Object... keyValues) { return withContext(keyValues); }
+
     private static Map<String, Object> toMap(Object... kv) {
         if (kv.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
