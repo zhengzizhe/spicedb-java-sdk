@@ -52,6 +52,26 @@ public class CheckAction {
         return this;
     }
 
+    /** Caveat context from alternating key-value pairs, e.g. {@code withContext(IpAllowlist.CLIENT_IP, "10.0.0.5")}. */
+    public CheckAction withContext(Object... keyValues) {
+        this.context = toMap(keyValues);
+        return this;
+    }
+
+    private static Map<String, Object> toMap(Object... kv) {
+        if (kv.length % 2 != 0) {
+            throw new IllegalArgumentException("keyValues must have even length");
+        }
+        var map = new java.util.LinkedHashMap<String, Object>();
+        for (int i = 0; i < kv.length; i += 2) {
+            if (!(kv[i] instanceof String key)) {
+                throw new IllegalArgumentException("Key at index " + i + " must be a String");
+            }
+            map.put(key, kv[i + 1]);
+        }
+        return map;
+    }
+
     /** Execute the permission check against a single user id. */
     public CheckResult by(String userId) {
         var request = new CheckRequest(

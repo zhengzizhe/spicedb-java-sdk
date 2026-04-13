@@ -57,6 +57,12 @@ public class GrantAction {
         return this;
     }
 
+    /** Attach a caveat using a generated {@link CaveatRef}. */
+    public GrantAction withCaveat(CaveatRef ref) {
+        this.caveat = ref;
+        return this;
+    }
+
     /** Grant the relation(s) to the given user ids and execute the write. */
     public GrantResult to(String... userIds) {
         return to(Arrays.asList(userIds));

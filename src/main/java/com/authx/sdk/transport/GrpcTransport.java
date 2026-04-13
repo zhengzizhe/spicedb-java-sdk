@@ -32,6 +32,7 @@ import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.MetadataUtils;
 
+import com.google.protobuf.ListValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 
@@ -416,11 +417,22 @@ public class GrpcTransport implements SdkTransport {
     private static Struct toStruct(Map<String, Object> map) {
         var builder = Struct.newBuilder();
         for (var entry : map.entrySet()) {
-            builder.putFields(entry.getKey(), toValue(entry.getValue()));
+            String key = entry.getKey();
+            if (key == null || key.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Caveat context map keys must be non-null and non-empty");
+            }
+            try {
+                builder.putFields(key, toValue(entry.getValue()));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(
+                        "Failed to convert caveat context field '" + key + "': " + e.getMessage(), e);
+            }
         }
         return builder.build();
     }
 
+    @SuppressWarnings("unchecked")
     private static Value toValue(Object obj) {
         if (obj == null) {
             return Value.newBuilder().setNullValueValue(0).build();
@@ -430,9 +442,19 @@ public class GrpcTransport implements SdkTransport {
             return Value.newBuilder().setNumberValue(n.doubleValue()).build();
         } else if (obj instanceof Boolean b) {
             return Value.newBuilder().setBoolValue(b).build();
+        } else if (obj instanceof Map<?, ?> m) {
+            return Value.newBuilder()
+                    .setStructValue(toStruct((Map<String, Object>) m))
+                    .build();
+        } else if (obj instanceof List<?> list) {
+            var listBuilder = ListValue.newBuilder();
+            for (Object element : list) {
+                listBuilder.addValues(toValue(element));
+            }
+            return Value.newBuilder().setListValue(listBuilder).build();
         } else {
-            // Fallback: convert to string
-            return Value.newBuilder().setStringValue(obj.toString()).build();
+            throw new IllegalArgumentException(
+                    "Unsupported caveat context value type: " + obj.getClass().getName());
         }
     }
 

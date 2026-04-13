@@ -1,6 +1,7 @@
 package com.authx.sdk;
 
 import com.authx.sdk.cache.SchemaCache;
+import com.authx.sdk.model.CaveatRef;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectRef;
 
@@ -73,6 +74,13 @@ public class TypedGrantAction<R extends Relation.Named> {
     public TypedGrantAction<R> withCaveat(String caveatName, Map<String, Object> context) {
         this.caveatName = caveatName;
         this.caveatContext = context;
+        return this;
+    }
+
+    /** Attach a caveat using a generated {@link CaveatRef}. */
+    public TypedGrantAction<R> withCaveat(CaveatRef ref) {
+        this.caveatName = ref.name();
+        this.caveatContext = ref.context();
         return this;
     }
 

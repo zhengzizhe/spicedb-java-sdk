@@ -47,6 +47,22 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     public TypedCheckAllAction<E> withConsistency(Consistency c) { this.consistency = c; return this; }
     public TypedCheckAllAction<E> withContext(Map<String, Object> ctx) { this.context = ctx; return this; }
 
+    /** Caveat context from alternating key-value pairs. */
+    public TypedCheckAllAction<E> withContext(Object... keyValues) {
+        if (keyValues.length % 2 != 0) {
+            throw new IllegalArgumentException("keyValues must have even length");
+        }
+        var map = new java.util.LinkedHashMap<String, Object>();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            if (!(keyValues[i] instanceof String key)) {
+                throw new IllegalArgumentException("Key at index " + i + " must be a String");
+            }
+            map.put(key, keyValues[i + 1]);
+        }
+        this.context = map;
+        return this;
+    }
+
     // ────────────────────────────────────────────────────────────────
     //  Single-resource terminators
     // ────────────────────────────────────────────────────────────────
