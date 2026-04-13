@@ -128,6 +128,24 @@ public final class AuthxCodegen {
         Files.writeString(resourceTypesPath, emitResourceTypes(packageName, types));
         LOG.log(System.Logger.Level.INFO, "  Generated: " + resourceTypesPath);
 
+        // ── Caveat classes ──
+        Set<String> caveatNames = schema.getCaveatNames();
+        if (!caveatNames.isEmpty()) {
+            for (String caveatName : caveatNames) {
+                var cavDef = schema.getCaveat(caveatName);
+                if (cavDef == null) continue;
+                String cavFile = emitCaveatClass(cavDef.name(), cavDef.parameters(),
+                        cavDef.expression(), cavDef.comment(), packageName);
+                Path cavPath = basePkgDir.resolve(toPascalCase(caveatName) + ".java");
+                Files.writeString(cavPath, cavFile);
+                LOG.log(System.Logger.Level.INFO, "  Generated caveat: " + cavPath);
+            }
+
+            Path caveatsPath = basePkgDir.resolve("Caveats.java");
+            Files.writeString(caveatsPath, emitCaveats(packageName, caveatNames));
+            LOG.log(System.Logger.Level.INFO, "  Generated: " + caveatsPath);
+        }
+
         LOG.log(System.Logger.Level.INFO, "AuthxCodegen: done.");
     }
 
