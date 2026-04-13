@@ -1,15 +1,15 @@
 # Caveat Code Generation — Tasks
 
 ## Phase 1: Foundation
-- [ ] T001 [SR:req-2,req-7] Add CaveatDef record and accessors to SchemaCache + tests — `cache/SchemaCache.java`
-- [ ] T002 [SR:req-1] Extract caveats in SchemaLoader — `transport/SchemaLoader.java`
+- [X] T001 [SR:req-2,req-7] Add CaveatDef record and accessors to SchemaCache + tests — `cache/SchemaCache.java`
+- [X] T002 [SR:req-1] Extract caveats in SchemaLoader — `transport/SchemaLoader.java`
 
 ## Phase 2: Code Generation
-- [ ] T003 [SR:req-3,req-4,req-5,req-6,req-7] Add caveat class emission to AuthxCodegen + tests — `AuthxCodegen.java`
-- [ ] T004 [SR:req-3,req-4] Wire caveat generation into generate() entry point — `AuthxCodegen.java`
+- [X] T003 [SR:req-3,req-4,req-5,req-6,req-7] Add caveat class emission to AuthxCodegen + tests — `AuthxCodegen.java`
+- [X] T004 [SR:req-3,req-4] Wire caveat generation into generate() entry point — `AuthxCodegen.java`
 
 ## Phase 3: Verification
-- [ ] T005 [SR:req-7] Final verification — full test suite
+- [X] T005 [SR:req-7] Final verification — full test suite (789 tests, 0 failures)
 
 ## Dependencies
 T002 depends on T001 (SchemaCache must have CaveatDef before SchemaLoader can populate it)
