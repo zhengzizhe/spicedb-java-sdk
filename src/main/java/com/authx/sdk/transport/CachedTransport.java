@@ -63,16 +63,37 @@ public class CachedTransport extends ForwardingTransport {
         return delegate.check(request);
     }
 
+    /**
+     * Double-delete pattern (Facebook TAO / Hibernate L2 / Spring Cache):
+     * invalidate BEFORE the write so concurrent reads during the write don't
+     * see the soon-to-be-stale value, AND invalidate AFTER the write to clean
+     * up any entry that a concurrent reader managed to populate while the
+     * write was in flight. Without the second invalidation, a read scheduled
+     * between the pre-invalidation and the write completion can fetch the
+     * old value from SpiceDB and cache it for the full TTL window.
+     *
+     * <p>The post-invalidate runs in {@code finally} so partial writes (where
+     * SpiceDB persisted some updates before throwing) still purge the cache
+     * — better to refetch than serve stale data.
+     */
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        invalidateAffectedResources(updates);           // pessimistic pre-invalidation
-        return delegate.writeRelationships(updates);
+        invalidateAffectedResources(updates);           // pre-invalidate
+        try {
+            return delegate.writeRelationships(updates);
+        } finally {
+            invalidateAffectedResources(updates);       // post-invalidate (close race)
+        }
     }
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
         invalidateAffectedResources(updates);
-        return delegate.deleteRelationships(updates);
+        try {
+            return delegate.deleteRelationships(updates);
+        } finally {
+            invalidateAffectedResources(updates);
+        }
     }
 
     @Override
@@ -80,7 +101,11 @@ public class CachedTransport extends ForwardingTransport {
                                         Relation optionalRelation) {
         String indexKey = resource.type() + ":" + resource.id();
         invalidateByResource(indexKey);
-        return delegate.deleteByFilter(resource, subject, optionalRelation);
+        try {
+            return delegate.deleteByFilter(resource, subject, optionalRelation);
+        } finally {
+            invalidateByResource(indexKey);
+        }
     }
 
     @Override
