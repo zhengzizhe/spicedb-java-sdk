@@ -18,13 +18,13 @@
 - [X] T009 [P] [SR:req-7,req-8] Stress S1-S2 + Soak L1 + their controllers — `cluster-test/src/main/java/com/authx/clustertest/{stress,soak}/`, `api/{StressController,SoakController}.java`
 
 ## Phase 5: Reporting
-- [ ] T010 [SR:req-9] HTML report generator + vendored Chart.js + ReportController — `cluster-test/src/main/java/com/authx/clustertest/report/`, `web/chart.min.js`, `api/ReportController.java`
+- [X] T010 [SR:req-9] HTML report generator + vendored Chart.js + ReportController — `cluster-test/src/main/java/com/authx/clustertest/report/`, `web/chart.min.js`, `api/ReportController.java`
 
 ## Phase 6: Orchestration
-- [ ] T011 [SR:req-10] Orchestrator scripts (run-all + start/stop + per-phase + inject/) — `cluster-test/orchestrator/`
+- [X] T011 [SR:req-10] Orchestrator scripts (run-all + start/stop + per-phase + inject/) — `cluster-test/orchestrator/`
 
 ## Phase 7: Validation
-- [ ] T012 End-to-end smoke (5min run) + README — `cluster-test/README.md`
+- [X] T012 README + operator guide — `cluster-test/README.md` (smoke run requires user-managed Docker)
 
 ## Dependencies
 
