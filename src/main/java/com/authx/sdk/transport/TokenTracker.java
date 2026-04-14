@@ -6,6 +6,7 @@ import com.authx.sdk.spi.DistributedTokenStore;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Tracks ZedTokens for SESSION consistency, per resource type.
@@ -28,6 +29,14 @@ public class TokenTracker {
     private final ConcurrentHashMap<String, String> lastWriteTokens = new ConcurrentHashMap<>();
     private final DistributedTokenStore distributed;
     private final AtomicBoolean distributedAvailable = new AtomicBoolean(true);
+    /** Cumulative count of failed token-store operations. Exposed for monitoring. */
+    private final LongAdder distributedFailures = new LongAdder();
+    /**
+     * Optional event bus — wired by the builder to publish state-transition
+     * events ({@code TokenStoreUnavailable} / {@code TokenStoreRecovered}).
+     * Null = events not published (zero-cost when no bus configured).
+     */
+    private volatile com.authx.sdk.event.TypedEventBus eventBus;
 
     public TokenTracker() {
         this(null);
@@ -35,6 +44,21 @@ public class TokenTracker {
 
     public TokenTracker(DistributedTokenStore distributed) {
         this.distributed = distributed;
+    }
+
+    /** Allow the builder to wire an event bus after construction. */
+    public void setEventBus(com.authx.sdk.event.TypedEventBus bus) {
+        this.eventBus = bus;
+    }
+
+    /** Cumulative failed token-store operations (read or write) since startup. */
+    public long distributedFailureCount() {
+        return distributedFailures.sum();
+    }
+
+    /** True if the distributed store is currently considered available. */
+    public boolean isDistributedAvailable() {
+        return distributedAvailable.get();
     }
 
     /**
@@ -47,13 +71,9 @@ public class TokenTracker {
         if (distributed != null) {
             try {
                 distributed.set("last_write:" + resourceType, token);
-                distributedAvailable.set(true); // recovered
+                onDistributedSuccess();
             } catch (Exception e) {
-                if (distributedAvailable.compareAndSet(true, false)) {
-                    LOG.log(System.Logger.Level.WARNING,
-                            "Distributed token store unavailable, SESSION consistency degraded to local-only: {0}",
-                            e.getMessage());
-                }
+                onDistributedFailure(e);
             }
         }
     }
@@ -110,15 +130,55 @@ public class TokenTracker {
         if (distributed == null) return null;
         try {
             String value = distributed.get(key);
-            distributedAvailable.set(true); // recovered
+            onDistributedSuccess();
             return value;
         } catch (Exception e) {
-            if (distributedAvailable.compareAndSet(true, false)) {
-                LOG.log(System.Logger.Level.WARNING,
-                        "Distributed token store unavailable, SESSION consistency degraded to local-only: {0}",
-                        e.getMessage());
-            }
+            onDistributedFailure(e);
             return null;
+        }
+    }
+
+    /**
+     * Record a successful distributed-store operation. Publishes
+     * {@code TokenStoreRecovered} on the unavailable→available transition so
+     * subscribers can stop alerting / clear dashboards.
+     */
+    private void onDistributedSuccess() {
+        if (distributedAvailable.compareAndSet(false, true)) {
+            LOG.log(System.Logger.Level.INFO,
+                    "Distributed token store recovered, cross-instance SESSION consistency restored");
+            publishEvent(new com.authx.sdk.event.SdkTypedEvent.TokenStoreRecovered(java.time.Instant.now()));
+        }
+    }
+
+    /**
+     * Record a failed distributed-store operation. Always increments the
+     * failure counter (for monitoring); on the available→unavailable
+     * transition also logs WARN and publishes {@code TokenStoreUnavailable}.
+     * Subsequent failures are silent at log level (we don't want spam) but
+     * the counter keeps ticking so dashboards see the sustained outage.
+     */
+    private void onDistributedFailure(Exception e) {
+        distributedFailures.increment();
+        if (distributedAvailable.compareAndSet(true, false)) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Distributed token store unavailable, SESSION consistency degraded to local-only: {0}",
+                    e.getMessage());
+            publishEvent(new com.authx.sdk.event.SdkTypedEvent.TokenStoreUnavailable(
+                    java.time.Instant.now(),
+                    e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+        }
+    }
+
+    private void publishEvent(com.authx.sdk.event.SdkTypedEvent event) {
+        var bus = eventBus;
+        if (bus == null) return;
+        try {
+            bus.publish(event);
+        } catch (Exception pubEx) {
+            // Don't let a bad subscriber affect token tracking.
+            LOG.log(System.Logger.Level.WARNING,
+                    "TokenTracker event publish failed: {0}", pubEx.getMessage());
         }
     }
 

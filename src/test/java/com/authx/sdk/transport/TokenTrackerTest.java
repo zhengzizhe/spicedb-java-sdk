@@ -222,6 +222,70 @@ class TokenTrackerTest {
         // No assertion needed — just verifying no exception
     }
 
+    // ---- Observability: events + counter on degradation ----
+
+    @Test
+    void distributedStoreFailure_publishesUnavailableEvent_once() {
+        var bus = new com.authx.sdk.event.DefaultTypedEventBus(Runnable::run);
+        var unavailableEvents = new java.util.concurrent.atomic.AtomicInteger(0);
+        bus.subscribe(com.authx.sdk.event.SdkTypedEvent.TokenStoreUnavailable.class, e -> unavailableEvents.incrementAndGet());
+
+        var alwaysFailing = new DistributedTokenStore() {
+            @Override public void set(String key, String token) { throw new RuntimeException("redis down"); }
+            @Override public String get(String key) { throw new RuntimeException("redis down"); }
+        };
+        var tracker = new TokenTracker(alwaysFailing);
+        tracker.setEventBus(bus);
+
+        // Multiple failures, but only ONE event (state transition).
+        tracker.recordWrite("doc", "tok-1");
+        tracker.recordWrite("doc", "tok-2");
+        tracker.recordWrite("doc", "tok-3");
+
+        assertThat(unavailableEvents.get())
+                .as("Unavailable event must be emitted exactly once on first failure")
+                .isEqualTo(1);
+        // Counter accumulates ALL failures so dashboards see sustained outage.
+        assertThat(tracker.distributedFailureCount()).isGreaterThanOrEqualTo(3);
+        assertThat(tracker.isDistributedAvailable()).isFalse();
+    }
+
+    @Test
+    void distributedStoreRecovery_publishesRecoveredEvent() {
+        var bus = new com.authx.sdk.event.DefaultTypedEventBus(Runnable::run);
+        var unavailableEvents = new java.util.concurrent.atomic.AtomicInteger(0);
+        var recoveredEvents = new java.util.concurrent.atomic.AtomicInteger(0);
+        bus.subscribe(com.authx.sdk.event.SdkTypedEvent.TokenStoreUnavailable.class, e -> unavailableEvents.incrementAndGet());
+        bus.subscribe(com.authx.sdk.event.SdkTypedEvent.TokenStoreRecovered.class, e -> recoveredEvents.incrementAndGet());
+
+        // Toggle: starts working, then fails, then recovers
+        var failingFlag = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var store = new DistributedTokenStore() {
+            private final java.util.concurrent.ConcurrentHashMap<String, String> data = new java.util.concurrent.ConcurrentHashMap<>();
+            @Override public void set(String key, String token) {
+                if (failingFlag.get()) throw new RuntimeException("redis down");
+                data.put(key, token);
+            }
+            @Override public String get(String key) {
+                if (failingFlag.get()) throw new RuntimeException("redis down");
+                return data.get(key);
+            }
+        };
+        var tracker = new TokenTracker(store);
+        tracker.setEventBus(bus);
+
+        tracker.recordWrite("doc", "tok-1");           // OK, no events
+        failingFlag.set(true);
+        tracker.recordWrite("doc", "tok-2");           // → Unavailable event
+        tracker.recordWrite("doc", "tok-3");           // still failing, no extra event
+        failingFlag.set(false);
+        tracker.recordWrite("doc", "tok-4");           // → Recovered event
+
+        assertThat(unavailableEvents.get()).as("one Unavailable event").isEqualTo(1);
+        assertThat(recoveredEvents.get()).as("one Recovered event").isEqualTo(1);
+        assertThat(tracker.isDistributedAvailable()).isTrue();
+    }
+
     // ---- Helper ----
 
     private static class InMemoryDistributedStore implements DistributedTokenStore {

@@ -244,6 +244,11 @@ public class AuthxClientBuilder {
         var schemaCache = new SchemaCache();
         var schemaLoader = new SchemaLoader();
         var tokenTracker = new TokenTracker(spi.tokenStore());
+        // Wire event bus so cross-instance SESSION degradation/recovery
+        // become observable to business code.
+        if (eventBus != null) {
+            tokenTracker.setEventBus(eventBus);
+        }
 
         // Build the effective interceptor list locally — MUST NOT mutate the
         // builder's own field, otherwise calling build() twice on the same

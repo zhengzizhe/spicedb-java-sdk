@@ -26,6 +26,8 @@ public sealed interface SdkTypedEvent permits
         SdkTypedEvent.WatchDisconnected,
         SdkTypedEvent.WatchCursorExpired,
         SdkTypedEvent.WatchStreamStale,
+        SdkTypedEvent.TokenStoreUnavailable,
+        SdkTypedEvent.TokenStoreRecovered,
         SdkTypedEvent.SchemaRefreshed,
         SdkTypedEvent.SchemaLoadFailed,
         SdkTypedEvent.RateLimited,
@@ -93,6 +95,20 @@ public sealed interface SdkTypedEvent permits
      */
     record WatchStreamStale(Instant timestamp, Duration idleFor,
                             Duration threshold) implements SdkTypedEvent {}
+
+    /**
+     * The configured {@code DistributedTokenStore} (e.g. Redis) became
+     * unavailable. SESSION consistency for cross-instance reads has degraded
+     * to local-only — instance B cannot see instance A's writes through
+     * SESSION. Subscribe to alert that "cross-instance SESSION is broken".
+     *
+     * @param reason short error message from the underlying store
+     */
+    record TokenStoreUnavailable(Instant timestamp, String reason) implements SdkTypedEvent {}
+
+    /** The previously-unavailable {@code DistributedTokenStore} accepted an
+     *  operation again — cross-instance SESSION consistency restored. */
+    record TokenStoreRecovered(Instant timestamp) implements SdkTypedEvent {}
 
     // ---- Schema ----
     record SchemaRefreshed(Instant timestamp, int definitionCount) implements SdkTypedEvent {}
