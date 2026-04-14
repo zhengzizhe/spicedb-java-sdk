@@ -53,12 +53,19 @@ public class R3StreamStaleTest {
                     "toxiproxy unreachable: " + e.getMessage());
         }
 
-        var proxy = tp.getProxy("spicedb-1");
-        var toxic = proxy.toxics().bandwidth("stall-r3", ToxicDirection.DOWNSTREAM, 0);
+        // Stall ALL 3 proxies — the Watch stream may be on any of them since
+        // the SDK round-robins SpiceDB targets.
+        var toxics = new java.util.ArrayList<eu.rekawek.toxiproxy.model.Toxic>();
         try {
+            for (int n = 1; n <= 3; n++) {
+                var proxy = tp.getProxy("spicedb-" + n);
+                toxics.add(proxy.toxics().bandwidth("stall-r3", ToxicDirection.DOWNSTREAM, 0));
+            }
             Thread.sleep(90_000);
         } finally {
-            try { toxic.remove(); } catch (Exception ignored) { /* best-effort */ }
+            for (var t : toxics) {
+                try { t.remove(); } catch (Exception ignored) { /* best-effort */ }
+            }
         }
         sub.unsubscribe();
 
@@ -66,7 +73,7 @@ public class R3StreamStaleTest {
         return new ResilienceResult(
                 "R3", ok ? "PASS" : "FAIL", System.currentTimeMillis() - t0,
                 "Watch app-layer stall detection",
-                Map.of("toxic", "bandwidth=0", "durationSec", 90, "proxy", "spicedb-1"),
+                Map.of("toxic", "bandwidth=0", "durationSec", 90, "proxies", "spicedb-1,2,3 (all)"),
                 Map.of("staleEvents", staleCount.get()),
                 List.copyOf(events),
                 ok ? null : "expected at least 1 WatchStreamStale event");

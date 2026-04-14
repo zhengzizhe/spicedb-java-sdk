@@ -51,9 +51,14 @@ public class BulkImporter {
 
             var done = new CountDownLatch(1);
             var counted = new AtomicLong();
+            var firstError = new java.util.concurrent.atomic.AtomicReference<Throwable>();
             StreamObserver<BulkImportRelationshipsResponse> resp = new StreamObserver<>() {
                 public void onNext(BulkImportRelationshipsResponse r) { counted.addAndGet(r.getNumLoaded()); }
-                public void onError(Throwable t) { log.error("Bulk import failed", t); done.countDown(); }
+                public void onError(Throwable t) {
+                    log.error("Bulk import failed", t);
+                    firstError.compareAndSet(null, t);
+                    done.countDown();
+                }
                 public void onCompleted() { done.countDown(); }
             };
             StreamObserver<BulkImportRelationshipsRequest> req = stub.bulkImportRelationships(resp);
@@ -76,6 +81,10 @@ public class BulkImporter {
             }
             req.onCompleted();
             done.await(10, TimeUnit.MINUTES);
+            if (firstError.get() != null) {
+                throw new RuntimeException("Bulk import failed after " + counted.get()
+                        + " relationships: " + firstError.get().getMessage(), firstError.get());
+            }
             log.info("Imported {} relationships", counted.get());
             return counted.get();
         } finally {

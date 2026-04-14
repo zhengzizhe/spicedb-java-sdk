@@ -244,11 +244,11 @@ public class AuthxClientBuilder {
         var schemaCache = new SchemaCache();
         var schemaLoader = new SchemaLoader();
         var tokenTracker = new TokenTracker(spi.tokenStore());
-        // Wire event bus so cross-instance SESSION degradation/recovery
-        // become observable to business code.
-        if (eventBus != null) {
-            tokenTracker.setEventBus(eventBus);
-        }
+        // Wire the event bus so cross-instance SESSION degradation/recovery
+        // become observable. Must use the resolved `bus` (not the nullable
+        // `eventBus` field) so subscribers on AuthxClient.eventBus() receive
+        // events even when the user didn't explicitly configure a bus.
+        tokenTracker.setEventBus(bus);
 
         // Build the effective interceptor list locally — MUST NOT mutate the
         // builder's own field, otherwise calling build() twice on the same
@@ -295,7 +295,7 @@ public class AuthxClientBuilder {
 
             // Phase: WATCH
             lm.phase(SdkPhase.WATCH, () ->
-                    buildWatch(grpcChannel, sdkMetrics, spi, ctx));
+                    buildWatch(grpcChannel, sdkMetrics, spi, ctx, bus));
 
             // Phase: SCHEDULER
             lm.phase(SdkPhase.SCHEDULER, () ->
@@ -458,7 +458,7 @@ public class AuthxClientBuilder {
     }
 
     private void buildWatch(ManagedChannel grpcChannel, SdkMetrics sdkMetrics,
-                             SdkComponents spi, BuildContext ctx) {
+                             SdkComponents spi, BuildContext ctx, TypedEventBus bus) {
         if (cacheEnabled && watchInvalidation && ctx.checkCache != null) {
             // Resolve the duplicate detector: user-provided via SdkComponents wins,
             // otherwise fall back to noop (backwards-compatible behavior — no dedup).
@@ -476,10 +476,9 @@ public class AuthxClientBuilder {
                     grpcChannel, presharedKey, ctx.checkCache, sdkMetrics,
                     dedup, spi.watchListenerExecutor());
             // Wire the typed event bus so cursor-expiry data-loss windows
-            // become observable to business code.
-            if (eventBus != null) {
-                ctx.watchInvalidator.setEventBus(eventBus);
-            }
+            // become observable. Use the resolved `bus` (not the field) so
+            // events flow even when the user didn't set an explicit bus.
+            ctx.watchInvalidator.setEventBus(bus);
             ctx.watchInvalidator.start();
         }
     }

@@ -59,12 +59,20 @@ public class R2CursorExpiredTest {
                     "toxiproxy unreachable: " + e.getMessage());
         }
 
-        var proxy = tp.getProxy("spicedb-1");
-        var toxic = proxy.toxics().bandwidth("stall-r2", ToxicDirection.DOWNSTREAM, 0);
+        // SDK round-robins across all 3 SpiceDB targets, so stall ALL proxies —
+        // stalling just one doesn't catch the Watch stream if it happens to be
+        // on a different node.
+        var toxics = new java.util.ArrayList<eu.rekawek.toxiproxy.model.Toxic>();
         try {
+            for (int n = 1; n <= 3; n++) {
+                var proxy = tp.getProxy("spicedb-" + n);
+                toxics.add(proxy.toxics().bandwidth("stall-r2", ToxicDirection.DOWNSTREAM, 0));
+            }
             Thread.sleep(120_000);
         } finally {
-            try { toxic.remove(); } catch (Exception ignored) { /* best-effort */ }
+            for (var t : toxics) {
+                try { t.remove(); } catch (Exception ignored) { /* best-effort */ }
+            }
         }
 
         subExpired.unsubscribe();
@@ -74,7 +82,7 @@ public class R2CursorExpiredTest {
         return new ResilienceResult(
                 "R2", ok ? "PASS" : "FAIL", System.currentTimeMillis() - t0,
                 "Watch cursor expiry (with stream-stale fallback)",
-                Map.of("toxic", "bandwidth=0", "durationSec", 120, "proxy", "spicedb-1"),
+                Map.of("toxic", "bandwidth=0", "durationSec", 120, "proxies", "spicedb-1,2,3 (all)"),
                 Map.of("cursorExpired", expired.get(), "streamStale", stale.get()),
                 List.copyOf(events),
                 ok ? null : "expected at least 1 WatchCursorExpired or WatchStreamStale event");

@@ -11,17 +11,22 @@ trap "$DIR/stop-cluster.sh" EXIT
 "$DIR/start-cluster.sh"
 
 echo ""
-echo "═══ Phase 1: Data generation + import ═══"
-curl -sf -X POST http://localhost:8091/test/data/generate
+echo "═══ Phase 1: Data generation + import (1M relations, small dataset) ═══"
+# NOTE: 10M relations on a dev laptop through BulkImport + CRDB Raft is 20+min.
+# Use the 1M "small" dataset for local runs — still gives meaningful scale.
+# Override with ?small=false for full 10M if running on a dedicated benchmark host.
+curl -sf -X POST 'http://localhost:8091/test/data/generate?small=true'
+echo ""
 curl -sf -X POST http://localhost:8091/test/data/import
+echo ""
 
 echo ""
 echo "═══ Phase 2: Correctness ═══"
 "$DIR/run-correctness.sh"
 
 echo ""
-echo "═══ Phase 3: Baseline (B1-B5) ═══"
-"$DIR/run-baseline.sh"
+echo "═══ Phase 3: Baseline (B1-B5, 30s each) ═══"
+DURATION=30 THREADS=50 "$DIR/run-baseline.sh"
 
 echo ""
 echo "═══ Phase 4: Resilience (R1-R7) ═══"
@@ -32,8 +37,8 @@ echo "═══ Phase 5: Stress (S1-S2) ═══"
 "$DIR/run-stress.sh"
 
 echo ""
-echo "═══ Phase 6: Soak (L1) ═══"
-"$DIR/run-soak.sh"
+echo "═══ Phase 6: Soak (L1, 5min) ═══"
+DURATION_MIN=5 "$DIR/run-soak.sh"
 
 echo ""
 echo "═══ Phase 7: Generating HTML report ═══"

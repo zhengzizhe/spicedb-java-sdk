@@ -2,6 +2,9 @@
 #   docker compose -f deploy/docker-compose.yml \
 #                  -f cluster-test/deploy/docker-compose.cluster-test.yml up
 services:
+  # Toxiproxy for network failure injection. Proxy definitions are created
+  # by start-cluster.sh via the control API (port 8474) — the distroless
+  # toxiproxy image has no shell for an init container to use.
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.9.0
     ports:
@@ -11,11 +14,10 @@ services:
       - "50163:50163" # proxy → spicedb-3:50051
     networks: [default]
 
-  toxiproxy-init:
-    image: ghcr.io/shopify/toxiproxy:2.9.0
-    entrypoint: ["/init/init.sh"]
-    volumes:
-      - ./toxiproxy-init.sh:/init/init.sh:ro
-    depends_on:
-      - toxiproxy
-    networks: [default]
+  # Override: the base compose's schema-writer uses `sh -c` but the zed
+  # image is distroless. We disable it here and do the schema write from
+  # the host in start-cluster.sh (we have a local `zed` binary).
+  schema-writer:
+    image: alpine:3.20
+    entrypoint: ["/bin/true"]
+    restart: "no"
