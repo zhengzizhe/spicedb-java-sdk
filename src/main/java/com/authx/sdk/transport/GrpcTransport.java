@@ -204,9 +204,8 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(consistency));
         var request = requestBuilder.build();
 
-        try {
+        try (var iterator = CloseableGrpcIterator.from(() -> stub().readRelationships(request))) {
             List<Tuple> tuples = new ArrayList<>();
-            var iterator = stub().readRelationships(request);
             while (iterator.hasNext()) {
                 var resp = iterator.next();
                 var rel = resp.getRelationship();
@@ -240,9 +239,8 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(request.consistency()));
 
         int limit = request.limit();
-        try {
+        try (var iterator = CloseableGrpcIterator.from(() -> stub().lookupSubjects(builder.build()))) {
             List<SubjectRef> subjects = new ArrayList<>();
-            var iterator = stub().lookupSubjects(builder.build());
             while (iterator.hasNext() && (limit <= 0 || subjects.size() < limit)) {
                 var resp = iterator.next();
                 subjects.add(SubjectRef.of(request.subjectType(), resp.getSubject().getSubjectObjectId(), null));
@@ -263,9 +261,8 @@ public class GrpcTransport implements SdkTransport {
         if (request.limit() > 0) builder.setOptionalLimit(request.limit());
 
         int rlimit = request.limit();
-        try {
+        try (var iterator = CloseableGrpcIterator.from(() -> stub().lookupResources(builder.build()))) {
             List<ResourceRef> resources = new ArrayList<>();
-            var iterator = stub().lookupResources(builder.build());
             while (iterator.hasNext() && (rlimit <= 0 || resources.size() < rlimit)) {
                 var resp = iterator.next();
                 resources.add(ResourceRef.of(request.resourceType(), resp.getResourceObjectId()));
