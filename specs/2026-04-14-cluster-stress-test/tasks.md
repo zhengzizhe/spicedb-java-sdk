@@ -1,9 +1,9 @@
 # Cluster Stress Test — Tasks
 
 ## Phase 1: Module Foundation
-- [ ] T001 [SR:req-2] Create cluster-test Gradle submodule + build.gradle — `settings.gradle`, `cluster-test/build.gradle`
-- [ ] T002 [SR:req-2] Spring Boot app + AuthxClient bean + application.yml — `cluster-test/src/main/java/com/authx/clustertest/{ClusterTestApp,config/ClusterProps,config/SdkConfig}.java`
-- [ ] T003 [SR:req-2] ResultsRepo (per-instance JSON output) — `cluster-test/src/main/java/com/authx/clustertest/config/ResultsRepo.java`
+- [X] T001 [SR:req-2] Create cluster-test Gradle submodule + build.gradle — `settings.gradle`, `cluster-test/build.gradle`
+- [X] T002 [SR:req-2] Spring Boot app + AuthxClient bean + application.yml — `cluster-test/src/main/java/com/authx/clustertest/{ClusterTestApp,config/ClusterProps,config/SdkConfig}.java`
+- [X] T003 [SR:req-2] ResultsRepo (per-instance JSON output) — `cluster-test/src/main/java/com/authx/clustertest/config/ResultsRepo.java`
 
 ## Phase 2: Cluster Infrastructure
 - [ ] T004 [SR:req-1] Docker Compose extension + Toxiproxy — `cluster-test/deploy/docker-compose.cluster-test.yml`, `cluster-test/deploy/toxiproxy-init.sh`
