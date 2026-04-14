@@ -204,6 +204,17 @@ public class AuthxClientBuilder {
 
     /** Build and return a fully initialized {@link AuthxClient} connected to SpiceDB. */
     public AuthxClient build() {
+        // Auto-discover customizers from the classpath via ServiceLoader.
+        // Business modules declare their PolicyCustomizer / AuthxClientCustomizer
+        // implementations in META-INF/services and the SDK picks them up
+        // automatically — infrastructure code never needs to wire them.
+        // Explicitly registered customizers (via .customize()) run first,
+        // then SPI-discovered ones, so explicit always wins on conflicts.
+        java.util.ServiceLoader.load(com.authx.sdk.spi.AuthxClientCustomizer.class)
+                .forEach(clientCustomizers::add);
+        java.util.ServiceLoader.load(com.authx.sdk.spi.PolicyCustomizer.class)
+                .forEach(policyCustomizers::add);
+
         // Apply general client customizers FIRST, so they see all the
         // infrastructure config the caller already set and can layer on
         // top (add interceptors, inject components, etc.). Running them
