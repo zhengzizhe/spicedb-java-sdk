@@ -1,6 +1,7 @@
 package com.authx.sdk;
 
 import com.authx.sdk.cache.Cache;
+import com.authx.sdk.cache.CacheStats;
 import com.authx.sdk.cache.IndexedCache;
 import com.authx.sdk.model.CheckKey;
 import com.authx.sdk.model.CheckResult;
@@ -41,5 +42,10 @@ public class CacheHandle {
     /** Current number of cached entries. */
     public long size() {
         return cache != null ? cache.size() : 0;
+    }
+
+    /** Cache statistics snapshot (hit/miss/eviction counts). Returns empty stats if cache disabled. */
+    public CacheStats stats() {
+        return cache != null ? cache.stats() : CacheStats.EMPTY;
     }
 }

@@ -6,16 +6,16 @@
 - [X] T003 [SR:req-2] ResultsRepo (per-instance JSON output) — `cluster-test/src/main/java/com/authx/clustertest/config/ResultsRepo.java`
 
 ## Phase 2: Cluster Infrastructure
-- [ ] T004 [SR:req-1] Docker Compose extension + Toxiproxy — `cluster-test/deploy/docker-compose.cluster-test.yml`, `cluster-test/deploy/toxiproxy-init.sh`
+- [X] T004 [SR:req-1] Docker Compose extension + Toxiproxy — `cluster-test/deploy/docker-compose.cluster-test.yml`, `cluster-test/deploy/toxiproxy-init.sh`
 
 ## Phase 3: Data Pipeline
-- [ ] T005 [SR:req-3] Data generator + bulk importer + DataController — `cluster-test/src/main/java/com/authx/clustertest/data/`, `api/DataController.java`
+- [X] T005 [SR:req-3] Data generator + bulk importer + DataController — `cluster-test/src/main/java/com/authx/clustertest/data/`, `api/DataController.java`
 
 ## Phase 4: Test Suites (parallelizable — all build on T002+T003+T005)
-- [ ] T006 [P] [SR:req-4] Correctness C1-C8 + CorrectnessController — `cluster-test/src/main/java/com/authx/clustertest/correctness/`, `api/CorrectnessController.java`
-- [ ] T007 [P] [SR:req-5] Benchmark B1-B5 + ScenarioRunner + BenchmarkController — `cluster-test/src/main/java/com/authx/clustertest/benchmark/`, `api/BenchmarkController.java`
-- [ ] T008 [P] [SR:req-6] Resilience R1-R7 (toxiproxy) + ResilienceController — `cluster-test/src/main/java/com/authx/clustertest/resilience/`, `api/ResilienceController.java`
-- [ ] T009 [P] [SR:req-7,req-8] Stress S1-S2 + Soak L1 + their controllers — `cluster-test/src/main/java/com/authx/clustertest/{stress,soak}/`, `api/{StressController,SoakController}.java`
+- [X] T006 [P] [SR:req-4] Correctness C1-C8 + CorrectnessController — `cluster-test/src/main/java/com/authx/clustertest/correctness/`, `api/CorrectnessController.java`
+- [X] T007 [P] [SR:req-5] Benchmark B1-B5 + ScenarioRunner + BenchmarkController — `cluster-test/src/main/java/com/authx/clustertest/benchmark/`, `api/BenchmarkController.java`
+- [X] T008 [P] [SR:req-6] Resilience R1-R7 (toxiproxy) + ResilienceController — `cluster-test/src/main/java/com/authx/clustertest/resilience/`, `api/ResilienceController.java`
+- [X] T009 [P] [SR:req-7,req-8] Stress S1-S2 + Soak L1 + their controllers — `cluster-test/src/main/java/com/authx/clustertest/{stress,soak}/`, `api/{StressController,SoakController}.java`
 
 ## Phase 5: Reporting
 - [ ] T010 [SR:req-9] HTML report generator + vendored Chart.js + ReportController — `cluster-test/src/main/java/com/authx/clustertest/report/`, `web/chart.min.js`, `api/ReportController.java`
