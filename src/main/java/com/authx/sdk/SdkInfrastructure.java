@@ -50,7 +50,13 @@ public final class SdkInfrastructure implements AutoCloseable {
      */
     @Override
     public void close() {
-        if (scheduler != null) {
+        // Each sub-resource is closed in its own safeClose so a throw from
+        // one (e.g. SecurityException on scheduler shutdown under a custom
+        // SecurityManager, or a transport bug in channel.shutdown()) cannot
+        // skip the others — that would leak threads and Netty buffers.
+        // Mirrors the same pattern AuthxClient.close() uses one level up.
+        safeClose("scheduler.shutdown", () -> {
+            if (scheduler == null) return;
             scheduler.shutdown();
             try {
                 if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -60,8 +66,9 @@ public final class SdkInfrastructure implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 scheduler.shutdownNow();
             }
-        }
-        if (channel != null) {
+        });
+        safeClose("channel.shutdown", () -> {
+            if (channel == null) return;
             channel.shutdown();
             try {
                 if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -76,10 +83,28 @@ public final class SdkInfrastructure implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 channel.shutdownNow();
             }
-        }
-        if (shutdownHookRef != null && Thread.currentThread() != shutdownHookRef) {
-            try { Runtime.getRuntime().removeShutdownHook(shutdownHookRef); }
-            catch (IllegalStateException ignored) {}
+        });
+        safeClose("removeShutdownHook", () -> {
+            if (shutdownHookRef != null && Thread.currentThread() != shutdownHookRef) {
+                try { Runtime.getRuntime().removeShutdownHook(shutdownHookRef); }
+                catch (IllegalStateException ignored) {}
+            }
+        });
+    }
+
+    /**
+     * Run a sub-close, logging any throw without propagating. Mirrors the
+     * AuthxClient.safeClose pattern so failures in one resource cleanup
+     * never prevent the next resource from closing.
+     */
+    private static void safeClose(String step, Runnable action) {
+        try {
+            action.run();
+        } catch (Throwable t) {
+            System.getLogger(SdkInfrastructure.class.getName()).log(
+                    System.Logger.Level.WARNING,
+                    "SdkInfrastructure close step failed: {0} — continuing shutdown. Error: {1}",
+                    step, t.toString());
         }
     }
 }
