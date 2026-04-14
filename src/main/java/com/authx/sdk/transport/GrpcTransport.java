@@ -47,7 +47,6 @@ public class GrpcTransport implements SdkTransport {
 
     private static final System.Logger LOG = System.getLogger(GrpcTransport.class.getName());
     private static final int MAX_BATCH_SIZE = 500;
-    private static final int MAX_STREAM_RESULTS = 10_000;
 
     private final ManagedChannel channel;
     private final Metadata authMetadata;
@@ -209,12 +208,6 @@ public class GrpcTransport implements SdkTransport {
             List<Tuple> tuples = new ArrayList<>();
             var iterator = stub().readRelationships(request);
             while (iterator.hasNext()) {
-                if (tuples.size() >= MAX_STREAM_RESULTS) {
-                    LOG.log(System.Logger.Level.WARNING,
-                            "readRelationships truncated at {0} results for {1}:{2}",
-                            MAX_STREAM_RESULTS, resource.type(), resource.id());
-                    break;
-                }
                 var resp = iterator.next();
                 var rel = resp.getRelationship();
                 String subRel = rel.getSubject().getOptionalRelation();
@@ -250,8 +243,7 @@ public class GrpcTransport implements SdkTransport {
         try {
             List<SubjectRef> subjects = new ArrayList<>();
             var iterator = stub().lookupSubjects(builder.build());
-            int effectiveLimit = limit > 0 ? Math.min(limit, MAX_STREAM_RESULTS) : MAX_STREAM_RESULTS;
-            while (iterator.hasNext() && subjects.size() < effectiveLimit) {
+            while (iterator.hasNext() && (limit <= 0 || subjects.size() < limit)) {
                 var resp = iterator.next();
                 subjects.add(SubjectRef.of(request.subjectType(), resp.getSubject().getSubjectObjectId(), null));
             }
@@ -274,8 +266,7 @@ public class GrpcTransport implements SdkTransport {
         try {
             List<ResourceRef> resources = new ArrayList<>();
             var iterator = stub().lookupResources(builder.build());
-            int effectiveLimit = rlimit > 0 ? Math.min(rlimit, MAX_STREAM_RESULTS) : MAX_STREAM_RESULTS;
-            while (iterator.hasNext() && resources.size() < effectiveLimit) {
+            while (iterator.hasNext() && (rlimit <= 0 || resources.size() < rlimit)) {
                 var resp = iterator.next();
                 resources.add(ResourceRef.of(request.resourceType(), resp.getResourceObjectId()));
             }
