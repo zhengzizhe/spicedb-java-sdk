@@ -470,6 +470,11 @@ public class AuthxClientBuilder {
             ctx.watchInvalidator = new WatchCacheInvalidator(
                     grpcChannel, presharedKey, ctx.checkCache, sdkMetrics,
                     dedup, spi.watchListenerExecutor());
+            // Wire the typed event bus so cursor-expiry data-loss windows
+            // become observable to business code.
+            if (eventBus != null) {
+                ctx.watchInvalidator.setEventBus(eventBus);
+            }
             ctx.watchInvalidator.start();
         }
     }

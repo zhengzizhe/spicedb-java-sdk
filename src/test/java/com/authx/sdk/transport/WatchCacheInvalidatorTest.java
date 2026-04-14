@@ -656,6 +656,82 @@ class WatchCacheInvalidatorTest {
         server.shutdownNow();
     }
 
+    @Test
+    void cursorExpired_invalidatesCacheAndPublishesEvent() throws Exception {
+        // Verifies the K8s-informer-style data-loss recovery:
+        //   - cache.invalidateAll() is called
+        //   - WatchCursorExpired event is published with the expired token
+        // Server triggers the same call sequence as cursorExpired_resetsToken...
+        // but we also wire a real Caffeine cache + capturing event bus.
+
+        AtomicInteger callCount = new AtomicInteger(0);
+        CountDownLatch thirdCallReceived = new CountDownLatch(1);
+
+        String serverName = InProcessServerBuilder.generateName();
+        var server = InProcessServerBuilder.forName(serverName)
+                .directExecutor()
+                .addService(new WatchServiceGrpc.WatchServiceImplBase() {
+                    @Override
+                    public void watch(WatchRequest request, StreamObserver<WatchResponse> responseObserver) {
+                        int call = callCount.incrementAndGet();
+                        if (call == 1) {
+                            responseObserver.onNext(WatchResponse.newBuilder()
+                                    .addUpdates(RelationshipUpdate.newBuilder()
+                                            .setOperation(RelationshipUpdate.Operation.OPERATION_TOUCH)
+                                            .setRelationship(simpleRel("doc", "1", "v", "user", "a")))
+                                    .setChangesThrough(ZedToken.newBuilder().setToken("tok-good"))
+                                    .build());
+                            responseObserver.onError(Status.UNAVAILABLE.asRuntimeException());
+                        } else if (call == 2) {
+                            responseObserver.onError(Status.FAILED_PRECONDITION
+                                    .withDescription("specified start cursor is too old, revision has been garbage collected")
+                                    .asRuntimeException());
+                        } else {
+                            thirdCallReceived.countDown();
+                        }
+                    }
+                })
+                .build().start();
+
+        var channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
+        Cache<CheckKey, CheckResult> cache = new CaffeineCache<>(100L, Duration.ofMinutes(5), CheckKey::resourceIndex);
+        // Pre-populate cache so we can verify it gets cleared
+        var key = new CheckKey(
+                ResourceRef.of("doc", "1"),
+                Permission.of("view"),
+                SubjectRef.user("alice"));
+        cache.put(key, CheckResult.allowed("seed-token"));
+        assertThat(cache.size()).isEqualTo(1);
+
+        // Capture published events
+        var bus = new com.authx.sdk.event.DefaultTypedEventBus(Runnable::run);
+        AtomicReference<com.authx.sdk.event.SdkTypedEvent.WatchCursorExpired> capturedEvent = new AtomicReference<>();
+        bus.subscribe(com.authx.sdk.event.SdkTypedEvent.WatchCursorExpired.class, capturedEvent::set);
+
+        var invalidator = new WatchCacheInvalidator(channel, "test-key", cache, new SdkMetrics());
+        invalidator.setEventBus(bus);
+        invalidator.start();
+
+        // Wait until the third Watch call (proves cursor expiry was processed)
+        assertThat(thirdCallReceived.await(15, TimeUnit.SECONDS))
+                .as("SDK should resubscribe after cursor expiry").isTrue();
+
+        // Cache must be empty — Debezium-style full invalidation
+        assertThat(cache.size())
+                .as("cache must be fully invalidated on cursor expiry")
+                .isEqualTo(0);
+
+        // Event must have been published
+        assertThat(capturedEvent.get())
+                .as("WatchCursorExpired event must be published")
+                .isNotNull();
+        assertThat(capturedEvent.get().expiredCursor()).isEqualTo("tok-good");
+        assertThat(capturedEvent.get().consecutiveOccurrences()).isEqualTo(1);
+
+        invalidator.close();
+        server.shutdownNow();
+    }
+
     // ─── B1: Accurate connection detection via onHeaders ─────────────────
 
     @Test

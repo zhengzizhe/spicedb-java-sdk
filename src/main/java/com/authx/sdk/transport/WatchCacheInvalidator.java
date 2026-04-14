@@ -102,6 +102,18 @@ public class WatchCacheInvalidator implements AutoCloseable {
     private final ExecutorService listenerExecutor;
     private final boolean ownsListenerExecutor;
 
+    /**
+     * Optional event bus for publishing watch lifecycle events
+     * (e.g. {@code WatchCursorExpired}). Set via {@link #setEventBus} after
+     * construction by the builder. Null = events not published.
+     */
+    private volatile com.authx.sdk.event.TypedEventBus eventBus;
+
+    /** Allow the builder to wire an event bus after construction. */
+    public void setEventBus(com.authx.sdk.event.TypedEventBus bus) {
+        this.eventBus = bus;
+    }
+
     /** Register a listener for relationship changes. */
     public void addListener(Consumer<RelationshipChange> listener) {
         listeners.add(listener);
@@ -385,9 +397,37 @@ public class WatchCacheInvalidator implements AutoCloseable {
                 // window, thread starvation, ...) and we must not tight-loop.
                 if (lastToken.get() != null && isCursorExpired(e)) {
                     consecutiveCursorExpiries++;
+                    String expiredToken = lastToken.get();
+
+                    // K8s informer / etcd / Debezium pattern: when the cursor
+                    // is too old, all events between the last cursor and now
+                    // are LOST. Cache entries written before the disconnect may
+                    // now reflect state that was overwritten during the gap, so
+                    // we cannot trust any of them. Full invalidation is the
+                    // only correct response — losing cache warmth is far
+                    // cheaper than serving wrong permission decisions.
+                    if (cache != null) {
+                        cache.invalidateAll();
+                    }
+
+                    // Publish event so business code can alert / audit / wait
+                    // for re-warming. Subscribers do their own thing; we just
+                    // make the data-loss window observable.
+                    var bus = eventBus;
+                    if (bus != null) {
+                        try {
+                            bus.publish(new com.authx.sdk.event.SdkTypedEvent.WatchCursorExpired(
+                                    java.time.Instant.now(), expiredToken, consecutiveCursorExpiries));
+                        } catch (Exception pubEx) {
+                            // Don't let a bad subscriber kill the watch loop.
+                            LOG.log(System.Logger.Level.WARNING,
+                                    "WatchCursorExpired event publish failed: {0}", pubEx.getMessage());
+                        }
+                    }
+
                     LOG.log(System.Logger.Level.WARNING,
                             "Watch cursor expired (likely SpiceDB gc-window elapsed during disconnect). " +
-                                    "Resetting cursor and resubscribing from HEAD. " +
+                                    "Cache fully invalidated. Resubscribing from HEAD. " +
                                     "Events between the last cursor and now are LOST. " +
                                     "Recurrence count: {0}. Last error: {1}",
                             consecutiveCursorExpiries, e.getMessage());

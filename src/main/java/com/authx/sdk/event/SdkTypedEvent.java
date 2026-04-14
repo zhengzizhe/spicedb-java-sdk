@@ -24,6 +24,7 @@ public sealed interface SdkTypedEvent permits
         SdkTypedEvent.TransportCall,
         SdkTypedEvent.WatchConnected,
         SdkTypedEvent.WatchDisconnected,
+        SdkTypedEvent.WatchCursorExpired,
         SdkTypedEvent.SchemaRefreshed,
         SdkTypedEvent.SchemaLoadFailed,
         SdkTypedEvent.RateLimited,
@@ -53,6 +54,24 @@ public sealed interface SdkTypedEvent permits
     // ---- Watch ----
     record WatchConnected(Instant timestamp) implements SdkTypedEvent {}
     record WatchDisconnected(Instant timestamp, String reason) implements SdkTypedEvent {}
+
+    /**
+     * Watch cursor became too old (SpiceDB GC window elapsed during disconnect).
+     * The L1 cache has been fully invalidated because events between the last
+     * cursor and now are LOST — any cached entries could be stale. The Watch
+     * stream is resubscribing from HEAD; after this point fresh events flow
+     * normally again.
+     *
+     * <p>Subscribe to this event to alert on data-loss windows in production.
+     *
+     * @param expiredCursor the cursor token that SpiceDB rejected (may be null
+     *                      if the original token wasn't captured)
+     * @param consecutiveOccurrences how many cursor-expiry events have happened
+     *                               in a row without any successful data receive
+     *                               in between — &gt; 1 indicates a chronic issue
+     */
+    record WatchCursorExpired(Instant timestamp, String expiredCursor,
+                              int consecutiveOccurrences) implements SdkTypedEvent {}
 
     // ---- Schema ----
     record SchemaRefreshed(Instant timestamp, int definitionCount) implements SdkTypedEvent {}
