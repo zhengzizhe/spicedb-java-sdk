@@ -13,7 +13,7 @@ Only `check()` results that satisfy **both** of these conditions are cached:
 
 All other operation types (`writeRelationships`, `deleteRelationships`, `lookupSubjects`, `lookupResources`, `readRelationships`, `expand`) are **never cached**.
 
-Writes (`writeRelationships`, `deleteRelationships`, `deleteByFilter`) trigger **pessimistic pre-invalidation**: all cached entries for the affected resource are evicted before the write reaches SpiceDB.
+Writes (`writeRelationships`, `deleteRelationships`, `deleteByFilter`) trigger **double-delete invalidation** (Facebook TAO / Hibernate L2 / Spring Cache pattern): all cached entries for the affected resource are evicted **both before and after** the write reaches SpiceDB. The post-write invalidation runs in `finally` so partial writes (where SpiceDB persisted some updates before throwing) still purge the cache. Without the post-invalidation, a concurrent reader landing between the pre-invalidation and the write completion can repopulate the cache with the soon-to-be-stale value, poisoning it for the full TTL window.
 
 ---
 
@@ -110,6 +110,31 @@ Watch invalidation operates at the **resource level**: when any relationship inv
 
 Reconnection uses exponential backoff starting at 1 second, doubling up to 30 seconds, with 25% random jitter. Permanent gRPC errors (UNIMPLEMENTED, UNAUTHENTICATED, PERMISSION_DENIED) cause immediate stop with a single warning log.
 
+### Cursor expiry: full cache invalidation
+
+When the disconnect window exceeds SpiceDB's GC window (default ~1 hour), the cursor SDK reconnects with becomes too old. SpiceDB returns `FAILED_PRECONDITION` and the SDK cannot resume from the last seen revision — events between the disconnect and reconnect are **permanently lost**.
+
+To avoid serving wrong permission decisions from cache entries written before the gap, the SDK applies the K8s-informer / etcd / Debezium pattern: on cursor expiry it **fully invalidates the L1 cache** and publishes a `WatchCursorExpired` event before resubscribing from HEAD. Subscribe to alert on data-loss windows in production:
+
+```java
+client.eventBus().subscribe(SdkTypedEvent.WatchCursorExpired.class, e -> {
+    log.error("Permission cache invalidated due to Watch gap (expired cursor: {})", e.expiredCursor());
+    alertManager.fire("permission.watch_gap");
+});
+```
+
+### Application-layer stall detection
+
+gRPC keepalive only catches TCP-level death. A SpiceDB server that's deadlocked, a stuck datastore replica, or a middlebox dropping packets while keeping NAT alive can leave the Watch stream "connected but blind" — `hasNext()` blocks forever and cache invalidation silently stops working.
+
+The SDK applies the Kafka `max.poll.interval.ms` / etcd `WithProgressNotify` pattern: it tracks the wall-clock time of the last received message (data or checkpoint, since SpiceDB sends checkpoints every few seconds even when idle) and forces a reconnect when the gap exceeds **60 seconds** (configurable via `WatchCacheInvalidator.setStaleStreamThreshold`). On detection the SDK publishes a `WatchStreamStale` event:
+
+```java
+client.eventBus().subscribe(SdkTypedEvent.WatchStreamStale.class, e -> {
+    log.error("Watch stalled for {}s, reconnecting", e.idleFor().toSeconds());
+});
+```
+
 ### Graceful degradation
 
 If Watch is unavailable (e.g., SpiceDB backend does not support it, or the connection is lost permanently), the SDK falls back to **TTL-only expiration**. A warning is logged once; cache continues to function with the configured TTLs. This means entries may be stale up to their TTL duration, but the system remains operational.
@@ -155,7 +180,16 @@ When provided, `TokenTracker` writes tokens to both local and distributed storag
 
 ### Graceful degradation
 
-If the distributed token store becomes unavailable at runtime, `TokenTracker` silently degrades to local-only tokens. A single warning is logged on the first failure; subsequent failures are suppressed to avoid log spam. When the store recovers, it is used again automatically.
+If the distributed token store becomes unavailable at runtime, `TokenTracker` degrades to local-only tokens. The first failure logs a WARN; subsequent log lines are suppressed to avoid spam, but the SDK exposes the outage through three observable signals:
+
+| Signal | Use |
+|---|---|
+| `SdkTypedEvent.TokenStoreUnavailable(reason)` | Fired on first failure — subscribe to alert |
+| `SdkTypedEvent.TokenStoreRecovered` | Fired when an operation succeeds again — subscribe to clear alerts |
+| `tokenTracker.distributedFailureCount()` | LongAdder counter — accumulates every failure for monitoring dashboards |
+| `tokenTracker.isDistributedAvailable()` | Boolean for K8s readiness probes |
+
+Without these signals the application would have no way to detect that cross-instance SESSION consistency is broken — reads would silently fall back to MinimizeLatency and serve stale data.
 
 ### Consistency modes reference
 

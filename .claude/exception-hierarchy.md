@@ -94,6 +94,7 @@ Note: These only have `(String message)` constructors — no cause wrapping. Thi
 ### gRPC Layer
 - [ ] Every `StatusRuntimeException` goes through `mapGrpcException()` — never caught and rethrown raw
 - [ ] Streaming RPCs (Watch, LookupResources, LookupSubjects, ReadRelationships) handle `StatusRuntimeException` in their iteration loops
+- [ ] Streaming RPC iterators are wrapped in `CloseableGrpcIterator` and consumed inside try-with-resources, so early break / loop exception sends `RST_STREAM` to SpiceDB instead of leaking the HTTP/2 stream
 - [ ] New gRPC methods added to SpiceDB get an explicit case in the mapping, not just the default
 
 ### Resilience Layer

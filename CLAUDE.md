@@ -8,7 +8,7 @@ Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired auth
 
 - **Java 21**, Gradle, gRPC (Netty-shaded)
 - **Resilience**: Resilience4j (circuit breaker, retry, rate limiter, bulkhead)
-- **Cache**: Caffeine (optional), tiered cache with Watch-based invalidation
+- **Cache**: Caffeine (optional, single-tier L1) with Watch-based invalidation
 - **Observability**: OpenTelemetry API, Micrometer (optional), HdrHistogram
 - **Testing**: JUnit 5, AssertJ, Mockito
 
