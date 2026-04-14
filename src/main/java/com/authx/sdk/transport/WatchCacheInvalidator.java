@@ -246,6 +246,36 @@ public class WatchCacheInvalidator implements AutoCloseable {
      */
     private static final int CURSOR_EXPIRY_BACKOFF_THRESHOLD = 3;
 
+    /**
+     * Default threshold for application-layer stall detection. SpiceDB sends
+     * checkpoints every few seconds even on idle streams, so silence longer
+     * than this almost always means SpiceDB is stuck (deadlocked datastore
+     * replica, internal bug) or a middlebox dropped the stream while keeping
+     * TCP alive. Forces a reconnect via {@link WatchStreamSession#close()}.
+     *
+     * <p>Set generously vs. SpiceDB's checkpoint cadence so healthy streams
+     * never trigger false positives. Override via
+     * {@link #setStaleStreamThreshold(Duration)} if your SpiceDB has an
+     * unusually long quantization window.
+     */
+    private static final Duration DEFAULT_STALE_STREAM_THRESHOLD = Duration.ofSeconds(60);
+
+    private volatile Duration staleStreamThreshold = DEFAULT_STALE_STREAM_THRESHOLD;
+    /**
+     * Wall-clock instant of the last received message (data or checkpoint).
+     * Updated on every WatchResponse — see {@link #processResponse}. Read in
+     * the watch loop to detect application-layer stalls.
+     */
+    private volatile java.time.Instant lastMessageAt = java.time.Instant.now();
+
+    /** Override the application-layer stall threshold. Must be &gt; 0. */
+    public void setStaleStreamThreshold(Duration threshold) {
+        if (threshold == null || threshold.isZero() || threshold.isNegative()) {
+            throw new IllegalArgumentException("staleStreamThreshold must be positive");
+        }
+        this.staleStreamThreshold = threshold;
+    }
+
     private void watchLoop() {
         // Outer try/finally guarantees the state field always transitions to
         // STOPPED when the watch thread exits — even if the catch block itself
@@ -277,6 +307,9 @@ public class WatchCacheInvalidator implements AutoCloseable {
                 session = new WatchStreamSession(channel, authMetadata, requestBuilder.build());
                 currentSession.set(session);
                 session.start();
+                // Reset the staleness clock for the new session — a previous
+                // session's silence shouldn't trigger a stall on the new one.
+                lastMessageAt = java.time.Instant.now();
 
                 // Drain events from the session's queue until it closes.
                 //
@@ -353,6 +386,37 @@ public class WatchCacheInvalidator implements AutoCloseable {
                     // if we'd checked before polling we could drop a concurrently-delivered
                     // message that arrived just before onClose fired.
                     if (session.isClosed()) break;
+
+                    // Application-layer stall detection (Kafka max.poll.interval.ms /
+                    // etcd WithProgressNotify pattern). lastMessageAt was reset to
+                    // "now" when the session opened, so we won't false-trigger before
+                    // the first message — the threshold has to elapse with no traffic.
+                    {
+                        Duration idle = Duration.between(lastMessageAt, java.time.Instant.now());
+                        if (idle.compareTo(staleStreamThreshold) > 0) {
+                            LOG.log(System.Logger.Level.WARNING,
+                                    "Watch stream stalled (no message for {0}s, threshold={1}s). " +
+                                            "Forcing reconnect — SpiceDB may be deadlocked or middlebox " +
+                                            "dropped the stream.",
+                                    idle.toSeconds(), staleStreamThreshold.toSeconds());
+                            var bus = eventBus;
+                            if (bus != null) {
+                                try {
+                                    bus.publish(new com.authx.sdk.event.SdkTypedEvent.WatchStreamStale(
+                                            java.time.Instant.now(), idle, staleStreamThreshold));
+                                } catch (Exception pubEx) {
+                                    LOG.log(System.Logger.Level.WARNING,
+                                            "WatchStreamStale event publish failed: {0}", pubEx.getMessage());
+                                }
+                            }
+                            // Cancel the underlying gRPC call → triggers onClose →
+                            // the outer loop's exception/retry path takes over.
+                            session.close();
+                            // Reset the clock so the next session starts fresh.
+                            lastMessageAt = java.time.Instant.now();
+                            break;
+                        }
+                    }
                 }
 
                 // Session ended. If it was an error, re-throw to hit the retry handler.
@@ -508,6 +572,9 @@ public class WatchCacheInvalidator implements AutoCloseable {
      * session-based drain loop.
      */
     private void processResponse(WatchResponse response) {
+        // Application-layer liveness: any message (data or checkpoint) proves
+        // SpiceDB is producing — refresh the staleness clock.
+        lastMessageAt = java.time.Instant.now();
         // Track token for reconnection (always, even on checkpoints)
         if (response.hasChangesThrough()) {
             lastToken.set(response.getChangesThrough().getToken());

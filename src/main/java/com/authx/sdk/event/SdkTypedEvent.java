@@ -25,6 +25,7 @@ public sealed interface SdkTypedEvent permits
         SdkTypedEvent.WatchConnected,
         SdkTypedEvent.WatchDisconnected,
         SdkTypedEvent.WatchCursorExpired,
+        SdkTypedEvent.WatchStreamStale,
         SdkTypedEvent.SchemaRefreshed,
         SdkTypedEvent.SchemaLoadFailed,
         SdkTypedEvent.RateLimited,
@@ -72,6 +73,26 @@ public sealed interface SdkTypedEvent permits
      */
     record WatchCursorExpired(Instant timestamp, String expiredCursor,
                               int consecutiveOccurrences) implements SdkTypedEvent {}
+
+    /**
+     * Detected an application-layer stall on the Watch stream — TCP and gRPC
+     * keepalive look fine, but no business message (data or checkpoint) has
+     * arrived for longer than the configured threshold. The current session
+     * has been forcibly cancelled to trigger reconnection logic.
+     *
+     * <p>Healthy SpiceDB sends a checkpoint every few seconds even when there
+     * are no relationship changes, so prolonged silence almost always means
+     * SpiceDB is stuck (deadlocked datastore replica, GC pause, internal bug)
+     * or a middlebox dropped the stream while keeping the TCP connection alive.
+     *
+     * <p>Subscribe to alert on Watch staleness — without this signal the SDK
+     * could sit "connected but blind" indefinitely.
+     *
+     * @param idleFor how long we waited without receiving any message
+     * @param threshold the configured threshold that was exceeded
+     */
+    record WatchStreamStale(Instant timestamp, Duration idleFor,
+                            Duration threshold) implements SdkTypedEvent {}
 
     // ---- Schema ----
     record SchemaRefreshed(Instant timestamp, int definitionCount) implements SdkTypedEvent {}
