@@ -86,7 +86,7 @@ final class MatrixHtml {
                   <dt>场景总数</dt><dd>${d.totalCells}</dd>
                   <dt>总耗时</dt><dd>${(d.totalElapsedMs/1000).toFixed(0)} 秒</dd>
                   <dt>生成时间</dt><dd>${d.generatedAt}</dd>
-                  <dt>传输层</dt><dd>InMemoryTransport（纯内存，无网络）</dd>
+                  <dt>传输层</dt><dd>InMemoryTransport + LatencySim（每次后端 RPC 模拟 2ms，接近真实 SpiceDB+CRDB RTT）</dd>
                   <dt>并发</dt><dd>100 线程（部分场景特殊）</dd>
                   <dt>工作集</dt><dd>10,000 primed 资源</dd>
                 </dl>
@@ -101,7 +101,7 @@ final class MatrixHtml {
               const tpsHit = s[0].tps, tpsMiss = s[s.length-1].tps;
               const speedup = (tpsHit / tpsMiss).toFixed(1);
               return `<section><h2>1. 缓存命中 vs 未命中</h2>
-                <div class="desc">5 个场景，从纯命中（全部走 Caffeine 内存查找）到纯未命中（每次都走完整 transport 链），以及中间的混合比例。</div>
+                <div class="desc">5 个场景，从纯命中到纯未命中。后端未命中时走 LatencySim 模拟 2ms SpiceDB+CRDB RTT，命中时直接走 Caffeine（~μs 级）。这是符合真实生产的对比。</div>
                 <table>
                   <tr><th>场景</th><th class="num">TPS</th><th class="num">实测命中率</th>
                       <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>

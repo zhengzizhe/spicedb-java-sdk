@@ -7,6 +7,7 @@ import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.transport.CachedTransport;
 import com.authx.sdk.transport.CoalescingTransport;
 import com.authx.sdk.transport.InMemoryTransport;
+import com.authx.sdk.transport.SdkTransport;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -113,13 +114,14 @@ public final class SdkMatrix {
 
     private static MatrixCell scenario_depth(MatrixRunner runner, String name,
                                               long durationMs, int depth) throws InterruptedException {
-        // Build a client where check() goes through DepthSimTransport (simulates
-        // Zanzibar recursion cost) → cache → InMemory. Cache covers the 100μs
-        // depth cost ONLY on hits; misses pay the depth penalty.
+        // Build a client where check() goes through DepthSimTransport → LatencySim
+        // (2ms backend) → InMemory, with Cache on top. Deep scenarios pay
+        // (2ms + depth × 100μs) on miss, ~1μs on hit.
         var inner = new InMemoryTransport();
         var metrics = new SdkMetrics();
         var cache = new CaffeineCache<CheckKey, CheckResult>(100_000, Duration.ofMinutes(10), CheckKey::resourceIndex);
-        var depthTransport = new DepthSimTransport(inner, depth);
+        SdkTransport withLatency = new LatencySimTransport(inner, 2000);    // 2ms backend
+        var depthTransport = new DepthSimTransport(withLatency, depth);
         var chain = new CachedTransport(depthTransport, cache, metrics);
         // Simulate prod pattern: warm cache for primed; measurement uses the primed set
         // so most checks hit the cache and SKIP the depth penalty — this is the real

@@ -33,15 +33,30 @@ public final class MatrixClient implements AutoCloseable {
     private final CaffeineCache<CheckKey, CheckResult> cache;
     private final SdkMetrics metrics;
 
+    /** Default: 2ms backend latency (typical SpiceDB+CRDB RTT). */
     public static MatrixClient create(boolean cacheEnabled, boolean coalescing) {
-        return create(cacheEnabled, coalescing, 100_000, Duration.ofMinutes(10));
+        return create(cacheEnabled, coalescing, 100_000, Duration.ofMinutes(10), 2000);
     }
 
     public static MatrixClient create(boolean cacheEnabled, boolean coalescing,
                                        long cacheMaxSize, Duration ttl) {
+        return create(cacheEnabled, coalescing, cacheMaxSize, ttl, 2000);
+    }
+
+    /**
+     * @param backendLatencyMicros simulated latency per backend RPC, in microseconds.
+     *                             Pass 0 to disable (InMemoryTransport will respond in ~1μs).
+     *                             Pass 2000 (default) to simulate a typical SpiceDB+CRDB round-trip.
+     */
+    public static MatrixClient create(boolean cacheEnabled, boolean coalescing,
+                                       long cacheMaxSize, Duration ttl,
+                                       long backendLatencyMicros) {
         var inner = new InMemoryTransport();
         var metrics = new SdkMetrics();
         SdkTransport chain = inner;
+        if (backendLatencyMicros > 0) {
+            chain = new LatencySimTransport(chain, backendLatencyMicros);
+        }
         CaffeineCache<CheckKey, CheckResult> cache = null;
         if (cacheEnabled) {
             cache = new CaffeineCache<>(cacheMaxSize, ttl, CheckKey::resourceIndex);
@@ -75,11 +90,25 @@ public final class MatrixClient implements AutoCloseable {
         }
     }
 
-    /** Warm the cache by issuing N reads against primed keys. */
+    /** Warm the cache by issuing N reads against primed keys — parallel so
+     *  backend-latency simulation doesn't stretch setup time linearly. */
     public void warmCache(int n) {
         if (cache == null) return;
-        for (int i = 0; i < n; i++) {
-            check("primed-" + i, "view", "u-" + i);
+        int threads = 32;
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        try {
+            var latch = new java.util.concurrent.CountDownLatch(n);
+            for (int i = 0; i < n; i++) {
+                final int idx = i;
+                pool.submit(() -> {
+                    try { check("primed-" + idx, "view", "u-" + idx); }
+                    finally { latch.countDown(); }
+                });
+            }
+            try { latch.await(5, java.util.concurrent.TimeUnit.MINUTES); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        } finally {
+            pool.shutdown();
         }
     }
 
