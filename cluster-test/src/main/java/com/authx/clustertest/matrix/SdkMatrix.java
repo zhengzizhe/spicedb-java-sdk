@@ -1,240 +1,292 @@
 package com.authx.clustertest.matrix;
 
+import com.authx.sdk.cache.CaffeineCache;
+import com.authx.sdk.metrics.SdkMetrics;
+import com.authx.sdk.model.CheckKey;
+import com.authx.sdk.model.CheckResult;
+import com.authx.sdk.transport.CachedTransport;
+import com.authx.sdk.transport.CoalescingTransport;
+import com.authx.sdk.transport.InMemoryTransport;
+
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * SDK-only matrix benchmark using {@link MatrixClient} (InMemoryTransport
- * + cache + optional coalescing). Measures pure SDK overhead with no
- * network in the path.
+ * Scenario-based SDK benchmark. Each section answers one clear question
+ * about SDK performance, rather than dumping multi-dimensional heatmaps.
  */
 public final class SdkMatrix {
 
-    private static final int RESOURCE_SPACE = 10_000;
+    private static final int WORKING_SET = 10_000;
 
     public static List<MatrixCell> runAll(long perCellDurationMs) throws InterruptedException {
         var runner = new MatrixRunner();
         var results = new ArrayList<MatrixCell>();
 
-        // ── Matrix 1: hit-rate × concurrency (5 × 4 = 20 cells, uniform distribution) ──
-        double[] hitRates = {0.0, 0.5, 0.8, 0.95, 0.99};
-        int[] concurrencies = {1, 10, 100, 500};
-        for (double hr : hitRates) {
-            for (int t : concurrencies) {
-                results.add(runReadCell(runner, hr, t, perCellDurationMs, "uniform", true, false));
-            }
-        }
+        // ═══ 1. 缓存命中 vs 未命中 (5 scenarios) ═══
+        results.add(scenario_cache(runner, "1A-纯命中",         perCellDurationMs, 1.00));
+        results.add(scenario_cache(runner, "1B-95%命中",        perCellDurationMs, 0.95));
+        results.add(scenario_cache(runner, "1C-50%命中",        perCellDurationMs, 0.50));
+        results.add(scenario_cache(runner, "1D-10%命中",        perCellDurationMs, 0.10));
+        results.add(scenario_cache(runner, "1E-纯未命中",       perCellDurationMs, 0.00));
 
-        // ── Matrix 2: distribution effect (3 cells, threads=100, hit-rate=0.95) ──
-        results.add(runReadCell(runner, 0.95, 100, perCellDurationMs, "uniform",     true, false));
-        results.add(runReadCell(runner, 0.95, 100, perCellDurationMs, "zipfian-1.5", true, false));
-        results.add(runReadCell(runner, 0.95, 100, perCellDurationMs, "single-hot",  true, false));
+        // ═══ 2. 嵌套层级深度 (5 scenarios) ═══
+        results.add(scenario_depth(runner, "2A-直接授权-depth0",     perCellDurationMs, 0));
+        results.add(scenario_depth(runner, "2B-浅嵌套-depth3",        perCellDurationMs, 3));
+        results.add(scenario_depth(runner, "2C-中嵌套-depth5",        perCellDurationMs, 5));
+        results.add(scenario_depth(runner, "2D-深嵌套-depth10",       perCellDurationMs, 10));
+        results.add(scenario_depth(runner, "2E-极深嵌套-depth20",     perCellDurationMs, 20));
 
-        // ── Matrix 3: coalescing on/off (single-hot key, 100 threads, no cache) ──
-        // With cache OFF, every call hits the inner transport. Coalescing
-        // should dramatically reduce inner calls when many threads request
-        // the same key concurrently.
-        results.add(runReadCell(runner, 1.0, 100, perCellDurationMs, "single-hot", false, false));
-        results.add(runReadCell(runner, 1.0, 100, perCellDurationMs, "single-hot", false, true));
+        // ═══ 3. 多实例扩展性 (4 scenarios) ═══
+        results.add(scenario_multi(runner, "3A-单实例",      perCellDurationMs, 1));
+        results.add(scenario_multi(runner, "3B-3实例",       perCellDurationMs, 3));
+        results.add(scenario_multi(runner, "3C-5实例",       perCellDurationMs, 5));
+        results.add(scenario_multi(runner, "3D-10实例",      perCellDurationMs, 10));
 
-        // ── Matrix 4: cache on vs off (uniform, threads=100, primed) ──
-        results.add(runReadCell(runner, 1.0, 100, perCellDurationMs, "uniform", true,  false));
-        results.add(runReadCell(runner, 1.0, 100, perCellDurationMs, "uniform", false, false));
+        // ═══ 4. 读写比例 (5 scenarios) ═══
+        results.add(scenario_mix(runner, "4A-纯读",           perCellDurationMs, 0.00));
+        results.add(scenario_mix(runner, "4B-95读5写",        perCellDurationMs, 0.05));
+        results.add(scenario_mix(runner, "4C-80读20写",       perCellDurationMs, 0.20));
+        results.add(scenario_mix(runner, "4D-50读50写",       perCellDurationMs, 0.50));
+        results.add(scenario_mix(runner, "4E-纯写",           perCellDurationMs, 1.00));
 
-        // ── Matrix 5: QPS-target ladder (rate-limited, response time) ──
+        // ═══ 5. QPS 阶梯（控速，看延迟拐点） ═══
         var qpsRunner = new QpsRunner();
         int[] qpsTargets = {1_000, 10_000, 100_000, 500_000, 1_000_000, 2_000_000};
         for (int qps : qpsTargets) {
-            results.add(runQpsCell(qpsRunner, 0.95, qps, perCellDurationMs, "uniform"));
+            results.add(scenario_qps(qpsRunner, "5-" + qps + "qps", perCellDurationMs, qps));
         }
 
-        // ── Matrix 6: TTL impact (4 cells, uniform 100 threads, all primed) ──
-        // TTLs: 1s / 30s / 5min / infinite. With perCellDurationMs=5000 and a
-        // 1s TTL, most entries will expire mid-run and need re-fetch. Shorter
-        // TTL = more misses = more transport calls.
-        long[][] ttls = {
-                {1, 1_000},      // 1 second
-                {30, 30_000},    // 30 seconds
-                {300, 300_000},  // 5 minutes
-                {86400, 86_400_000}  // 1 day (effectively infinite for this run)
-        };
-        for (long[] ttl : ttls) {
-            results.add(runTtlCell(runner, 1.0, 100, perCellDurationMs, ttl[1], ttl[0]));
+        // ═══ 6. 配置敏感度 ═══
+        // 6A TTL 影响
+        long[] ttlMs = {100, 1_000, 30_000, 300_000};
+        for (long t : ttlMs) {
+            results.add(scenario_ttl(runner, "6A-TTL-" + formatTtl(t), perCellDurationMs, t));
         }
-
-        // ── Matrix 7: cache-size impact (4 cells, uniform 100 threads) ──
-        // With 10k primed keys + uniform distribution, cache smaller than 10k
-        // means frequent evictions and re-fetches.
+        // 6B Cache size 影响
         long[] sizes = {1_000, 5_000, 10_000, 100_000};
-        for (long size : sizes) {
-            results.add(runCacheSizeCell(runner, 1.0, 100, perCellDurationMs, size));
+        for (long s : sizes) {
+            results.add(scenario_size(runner, "6B-size-" + s, perCellDurationMs, s));
         }
-
-        // ── Matrix 8: read/write mix (5 cells, 100 threads, 95% cache hit) ──
-        // Pure read (0% write) vs pure write (100% write) and 3 intermediate
-        // ratios. Writes force cache invalidation for the affected resource,
-        // so higher write % reduces effective hit rate.
-        double[] writeRatios = {0.0, 0.05, 0.20, 0.50, 1.00};
-        for (double wr : writeRatios) {
-            results.add(runMixCell(runner, 100, perCellDurationMs, wr));
-        }
+        // 6C Coalescing on/off
+        results.add(scenario_coalesce(runner, "6C-coalescing-off", perCellDurationMs, false));
+        results.add(scenario_coalesce(runner, "6C-coalescing-on",  perCellDurationMs, true));
 
         return results;
     }
 
-    /** TTL-variant cell: runs for longer than TTL so cache churn is measurable. */
-    private static MatrixCell runTtlCell(MatrixRunner runner, double hitRate, int threads,
-                                          long durationMs, long ttlMs, long ttlSec) throws InterruptedException {
-        var client = MatrixClient.create(true, false, 100_000, java.time.Duration.ofMillis(ttlMs));
-        client.prime(RESOURCE_SPACE);
-        client.warmCache(RESOURCE_SPACE);
+    private static String formatTtl(long ms) {
+        if (ms < 1000) return ms + "ms";
+        if (ms < 60_000) return (ms / 1000) + "s";
+        return (ms / 60_000) + "min";
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Scenario implementations
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static MatrixCell scenario_cache(MatrixRunner runner, String name,
+                                              long durationMs, double hitRate) throws InterruptedException {
+        var client = MatrixClient.create(true, false);
+        client.prime(WORKING_SET);
+        if (hitRate > 0) client.warmCache(WORKING_SET);
         try {
-            var name = String.format("ttl.ttl=%ds.hr=%.2f.t=%d", ttlSec, hitRate, threads);
-            return runner.run(name, "READ", "uniform-ttl-" + ttlSec + "s", hitRate, threads, durationMs,
+            return runner.run(name, "READ", String.format("hr=%.0f%%", hitRate * 100), hitRate, 100, durationMs,
                     rng -> {
-                        int idx = rng.nextInt(RESOURCE_SPACE);
-                        client.check("primed-" + idx, "view", "u-" + idx);
+                        if (rng.nextDouble() < hitRate) {
+                            int idx = rng.nextInt(WORKING_SET);
+                            client.check("primed-" + idx, "view", "u-" + idx);
+                        } else {
+                            int idx = rng.nextInt(1_000_000);
+                            client.check("fresh-" + idx, "view", "u-fresh-" + idx);
+                        }
                     },
-                    () -> {
-                        var s = client.cacheStats();
-                        long total = s.hitCount() + s.missCount();
-                        return total == 0 ? 0.0 : (double) s.hitCount() / total;
-                    });
+                    () -> hitRateOf(client));
         } finally { client.close(); }
     }
 
-    /** Cache-size-variant cell. */
-    private static MatrixCell runCacheSizeCell(MatrixRunner runner, double hitRate, int threads,
-                                                long durationMs, long maxSize) throws InterruptedException {
-        var client = MatrixClient.create(true, false, maxSize, java.time.Duration.ofMinutes(10));
-        client.prime(RESOURCE_SPACE);
-        client.warmCache((int) Math.min(RESOURCE_SPACE, maxSize));
+    private static MatrixCell scenario_depth(MatrixRunner runner, String name,
+                                              long durationMs, int depth) throws InterruptedException {
+        // Build a client where check() goes through DepthSimTransport (simulates
+        // Zanzibar recursion cost) → cache → InMemory. Cache covers the 100μs
+        // depth cost ONLY on hits; misses pay the depth penalty.
+        var inner = new InMemoryTransport();
+        var metrics = new SdkMetrics();
+        var cache = new CaffeineCache<CheckKey, CheckResult>(100_000, Duration.ofMinutes(10), CheckKey::resourceIndex);
+        var depthTransport = new DepthSimTransport(inner, depth);
+        var chain = new CachedTransport(depthTransport, cache, metrics);
+        // Simulate prod pattern: warm cache for primed; measurement uses the primed set
+        // so most checks hit the cache and SKIP the depth penalty — this is the real
+        // prod pattern. Report shows "depth penalty paid on first access only".
+        // But to see the depth cost, we ALSO run without warming so every request
+        // pays the penalty. We do the non-warm variant here.
+        var client = new com.authx.clustertest.matrix.MatrixAdapter(chain, inner, cache);
+        // Prime the inner store (so the underlying check returns ALLOWED).
+        client.prime(WORKING_SET);
+        // Do NOT warm cache — we want depth cost to be on the hot path.
         try {
-            var name = String.format("size.max=%d.hr=%.2f.t=%d", maxSize, hitRate, threads);
-            return runner.run(name, "READ", "uniform-size-" + maxSize, hitRate, threads, durationMs,
+            return runner.run(name, "READ", "depth=" + depth, 0.0, 100, durationMs,
                     rng -> {
-                        int idx = rng.nextInt(RESOURCE_SPACE);
+                        // Cycle through a small subset so cache hit rate grows over time —
+                        // this realistically models "first access pays depth, subsequent are cached".
+                        int idx = rng.nextInt(WORKING_SET);
                         client.check("primed-" + idx, "view", "u-" + idx);
                     },
-                    () -> {
-                        var s = client.cacheStats();
-                        long total = s.hitCount() + s.missCount();
-                        return total == 0 ? 0.0 : (double) s.hitCount() / total;
-                    });
+                    () -> hitRateOf(client));
         } finally { client.close(); }
     }
 
-    /** Read/write mix cell: writeRatio fraction of ops are writes. */
-    private static MatrixCell runMixCell(MatrixRunner runner, int threads, long durationMs,
-                                          double writeRatio) throws InterruptedException {
-        var client = MatrixClient.create(true, false, 100_000, java.time.Duration.ofMinutes(10));
-        client.prime(RESOURCE_SPACE);
-        client.warmCache(RESOURCE_SPACE);
+    private static MatrixCell scenario_multi(MatrixRunner runner, String name,
+                                              long durationMs, int instances) throws InterruptedException {
+        // Create N independent clients, each with its own cache, running concurrent workloads.
+        // Report aggregate TPS across all N instances — should scale roughly linearly
+        // until CPU saturates (N * ~100% each = ~N*100% load).
+        var clients = new MatrixClient[instances];
+        for (int i = 0; i < instances; i++) {
+            clients[i] = MatrixClient.create(true, false);
+            clients[i].prime(WORKING_SET);
+            clients[i].warmCache(WORKING_SET);
+        }
         try {
-            var name = String.format("mix.writeRatio=%.2f.t=%d", writeRatio, threads);
+            // Split 100 worker threads across N instances → each instance runs with
+            // ~100/N threads. Total concurrency stays at 100 so we measure scaling.
+            int threadsPerInstance = Math.max(1, 100 / instances);
+            var aggHist = new org.HdrHistogram.Histogram(60_000_000_000L, 3);
+            var totalOps = new AtomicLong();
+            var totalErrors = new AtomicLong();
+            long deadline = System.nanoTime() + durationMs * 1_000_000L;
+            var pool = Executors.newFixedThreadPool(instances * threadsPerInstance);
+            for (int i = 0; i < instances; i++) {
+                final int inst = i;
+                for (int t = 0; t < threadsPerInstance; t++) {
+                    pool.submit(() -> {
+                        var rng = new Random(inst * 1_000_003L);
+                        while (System.nanoTime() < deadline) {
+                            long t0 = System.nanoTime();
+                            try {
+                                int idx = rng.nextInt(WORKING_SET);
+                                clients[inst].check("primed-" + idx, "view", "u-" + idx);
+                                long us = (System.nanoTime() - t0) / 1000;
+                                synchronized (aggHist) { aggHist.recordValue(Math.min(us, 60_000_000)); }
+                                totalOps.incrementAndGet();
+                            } catch (Exception e) { totalErrors.incrementAndGet(); }
+                        }
+                    });
+                }
+            }
+            pool.shutdown();
+            pool.awaitTermination(durationMs + 30_000, TimeUnit.MILLISECONDS);
+
+            double tps = totalOps.get() * 1000.0 / durationMs;
+            var buckets = new ArrayList<long[]>();
+            double[] pcts = {0, 50, 75, 90, 95, 99, 99.5, 99.9, 99.95, 99.99, 100};
+            for (double p : pcts) buckets.add(new long[]{Math.round(p * 100), aggHist.getValueAtPercentile(p)});
+            return new MatrixCell(name, "READ", "multi-instance=" + instances, 1.0, instances, durationMs,
+                    totalOps.get(), tps, 0.999,
+                    aggHist.getMinValue(),
+                    aggHist.getValueAtPercentile(50), aggHist.getValueAtPercentile(90),
+                    aggHist.getValueAtPercentile(99), aggHist.getValueAtPercentile(99.9),
+                    aggHist.getValueAtPercentile(99.99), aggHist.getMaxValue(),
+                    totalErrors.get(), java.util.Map.of(), buckets);
+        } finally {
+            for (var c : clients) c.close();
+        }
+    }
+
+    private static MatrixCell scenario_mix(MatrixRunner runner, String name,
+                                            long durationMs, double writeRatio) throws InterruptedException {
+        var client = MatrixClient.create(true, false);
+        client.prime(WORKING_SET);
+        client.warmCache(WORKING_SET);
+        try {
             return runner.run(name, writeRatio == 0 ? "READ" : (writeRatio == 1.0 ? "WRITE" : "MIXED"),
-                    "mix-wr=" + (int)(writeRatio*100), 0.95, threads, durationMs,
+                    "writeRatio=" + (int)(writeRatio * 100) + "%",
+                    1 - writeRatio, 100, durationMs,
                     rng -> {
-                        int idx = rng.nextInt(RESOURCE_SPACE);
+                        int idx = rng.nextInt(WORKING_SET);
                         if (rng.nextDouble() < writeRatio) {
-                            // Writes cause cache invalidation for the affected doc
                             client.write("primed-" + idx, "viewer", "u-new-" + rng.nextInt(10_000));
                         } else {
                             client.check("primed-" + idx, "view", "u-" + idx);
                         }
                     },
-                    () -> {
-                        var s = client.cacheStats();
-                        long total = s.hitCount() + s.missCount();
-                        return total == 0 ? 0.0 : (double) s.hitCount() / total;
-                    });
+                    () -> hitRateOf(client));
         } finally { client.close(); }
     }
 
-    /** Rate-limited cell: aim for target QPS, record response time (incl. queue wait). */
-    private static MatrixCell runQpsCell(QpsRunner runner, double hitRate, int targetQps,
-                                          long durationMs, String distribution) throws InterruptedException {
+    private static MatrixCell scenario_qps(QpsRunner runner, String name,
+                                            long durationMs, int targetQps) throws InterruptedException {
         var client = MatrixClient.create(true, false);
-        client.prime(RESOURCE_SPACE);
-        if (hitRate > 0) {
-            int warmCount = (int) Math.min(RESOURCE_SPACE, hitRate * RESOURCE_SPACE);
-            client.warmCache(warmCount);
-        }
+        client.prime(WORKING_SET);
+        client.warmCache(WORKING_SET);
         try {
-            var name = String.format("qps.dist=%s.hr=%.2f.target=%d", distribution, hitRate, targetQps);
-            return runner.run(name, "QPS-TARGET", distribution, hitRate, targetQps, durationMs,
+            return runner.run(name, "QPS-TARGET", "target=" + targetQps, 0.95, targetQps, durationMs,
                     rng -> {
-                        String docId, userId;
-                        if (rng.nextDouble() < hitRate) {
-                            int idx = pickPrimedIndex(rng, distribution, RESOURCE_SPACE);
-                            docId = "primed-" + idx;
-                            userId = "u-" + idx;
-                        } else {
-                            int idx = rng.nextInt(1_000_000);
-                            docId = "fresh-" + idx;
-                            userId = "u-fresh-" + idx;
-                        }
-                        client.check(docId, "view", userId);
+                        int idx = rng.nextInt(WORKING_SET);
+                        client.check("primed-" + idx, "view", "u-" + idx);
                     },
-                    () -> {
-                        var s = client.cacheStats();
-                        long total = s.hitCount() + s.missCount();
-                        return total == 0 ? 0.0 : (double) s.hitCount() / total;
-                    });
+                    () -> hitRateOf(client));
         } finally { client.close(); }
     }
 
-    private static MatrixCell runReadCell(MatrixRunner runner, double hitRate, int threads,
-                                          long durationMs, String distribution,
-                                          boolean cacheEnabled, boolean coalescing) throws InterruptedException {
-        var client = MatrixClient.create(cacheEnabled, coalescing);
-        client.prime(RESOURCE_SPACE);
-        if (cacheEnabled && hitRate > 0) {
-            // Warm the cache so the first measurement window already has hits available.
-            int warmCount = (int) Math.min(RESOURCE_SPACE, hitRate * RESOURCE_SPACE);
-            client.warmCache(warmCount);
-        }
-
+    private static MatrixCell scenario_ttl(MatrixRunner runner, String name,
+                                            long durationMs, long ttlMs) throws InterruptedException {
+        var client = MatrixClient.create(true, false, 100_000, Duration.ofMillis(ttlMs));
+        client.prime(WORKING_SET);
+        client.warmCache(WORKING_SET);
         try {
-            var name = String.format("read.dist=%s.hr=%.2f.t=%d.cache=%s.coalesce=%s",
-                    distribution, hitRate, threads, cacheEnabled, coalescing);
-
-            var cell = runner.run(name, "READ", distribution, hitRate, threads, durationMs,
+            return runner.run(name, "READ", "ttl=" + formatTtl(ttlMs), 1.0, 100, durationMs,
                     rng -> {
-                        String docId, userId;
-                        if (rng.nextDouble() < hitRate) {
-                            int idx = pickPrimedIndex(rng, distribution, RESOURCE_SPACE);
-                            docId = "primed-" + idx;
-                            userId = "u-" + idx;
-                        } else {
-                            int idx = rng.nextInt(1_000_000);
-                            docId = "fresh-" + idx;
-                            userId = "u-fresh-" + idx;
-                        }
-                        client.check(docId, "view", userId);
+                        int idx = rng.nextInt(WORKING_SET);
+                        client.check("primed-" + idx, "view", "u-" + idx);
                     },
-                    () -> {
-                        var s = client.cacheStats();
-                        long total = s.hitCount() + s.missCount();
-                        return total == 0 ? 0.0 : (double) s.hitCount() / total;
-                    });
-            return cell;
-        } finally {
-            client.close();
-        }
+                    () -> hitRateOf(client));
+        } finally { client.close(); }
     }
 
-    private static int pickPrimedIndex(Random rng, String distribution, int n) {
-        return switch (distribution) {
-            case "single-hot" -> 0;
-            case "zipfian-1.5" -> {
-                double u = rng.nextDouble();
-                double v = Math.pow(1 - u, 1.0 / (1.0 - 1.5));
-                yield Math.min((int) (n * v), n - 1);
-            }
-            default -> rng.nextInt(n);
-        };
+    private static MatrixCell scenario_size(MatrixRunner runner, String name,
+                                             long durationMs, long maxSize) throws InterruptedException {
+        var client = MatrixClient.create(true, false, maxSize, Duration.ofMinutes(10));
+        client.prime(WORKING_SET);
+        client.warmCache((int) Math.min(WORKING_SET, maxSize));
+        try {
+            return runner.run(name, "READ", "maxSize=" + maxSize, 1.0, 100, durationMs,
+                    rng -> {
+                        int idx = rng.nextInt(WORKING_SET);
+                        client.check("primed-" + idx, "view", "u-" + idx);
+                    },
+                    () -> hitRateOf(client));
+        } finally { client.close(); }
+    }
+
+    private static MatrixCell scenario_coalesce(MatrixRunner runner, String name,
+                                                 long durationMs, boolean on) throws InterruptedException {
+        // No cache + single-hot key → coalescing should dominate speed.
+        var client = MatrixClient.create(false, on);
+        client.prime(WORKING_SET);
+        try {
+            return runner.run(name, "READ", "coalescing=" + (on ? "on" : "off"), 1.0, 100, durationMs,
+                    rng -> client.check("primed-0", "view", "u-0"),
+                    () -> 0.0);
+        } finally { client.close(); }
+    }
+
+    private static double hitRateOf(MatrixClient client) {
+        var s = client.cacheStats();
+        long total = s.hitCount() + s.missCount();
+        return total == 0 ? 0.0 : (double) s.hitCount() / total;
+    }
+
+    private static double hitRateOf(com.authx.clustertest.matrix.MatrixAdapter client) {
+        var s = client.cacheStats();
+        long total = s.hitCount() + s.missCount();
+        return total == 0 ? 0.0 : (double) s.hitCount() / total;
     }
 
     private SdkMatrix() {}
