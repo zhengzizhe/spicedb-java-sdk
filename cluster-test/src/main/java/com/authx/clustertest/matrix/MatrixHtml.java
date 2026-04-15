@@ -90,9 +90,13 @@ final class MatrixHtml {
               r.innerHTML += renderMatrix3(d.cells);
               r.innerHTML += renderMatrix4(d.cells);
               r.innerHTML += renderQpsLadder(d.cells);
+              r.innerHTML += renderTtlMatrix(d.cells);
+              r.innerHTML += renderSizeMatrix(d.cells);
+              r.innerHTML += renderMixMatrix(d.cells);
               r.innerHTML += renderAllCells(d.cells);
               drawCharts(d);
               drawQpsChart(d);
+              drawMixChart(d);
             }
 
             function renderMeta(d){
@@ -269,6 +273,94 @@ final class MatrixHtml {
               </section>`;
             }
 
+            function renderTtlMatrix(cells){
+              const ttl = cells.filter(c => c.name.startsWith('ttl.'))
+                              .sort((a,b) => parseInt(a.name.match(/ttl=(\\d+)s/)[1]) - parseInt(b.name.match(/ttl=(\\d+)s/)[1]));
+              if(!ttl.length) return '';
+              const rows = ttl.map(c => {
+                const sec = parseInt(c.name.match(/ttl=(\\d+)s/)[1]);
+                const label = sec < 60 ? sec+' 秒' : (sec < 3600 ? (sec/60)+' 分钟' : (sec>=86400 ? '无限(1天)' : (sec/3600)+' 小时'));
+                return `<tr>
+                  <td><strong>${label}</strong></td>
+                  <td class="num">${fmtTps(c.tps)}</td>
+                  <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
+                  <td class="num">${us2ms(c.p50us)}</td>
+                  <td class="num">${us2ms(c.p99us)}</td>
+                  <td class="num">${us2ms(c.p999us)}</td>
+                  <td class="num">${us2ms(c.maxUs)}</td>
+                </tr>`;
+              }).join('');
+              return `<section><h2>矩阵 6 — 缓存 TTL 影响（uniform 100 并发，全部 primed）</h2>
+                <div class="desc">相同工作负载下改变 TTL。短 TTL 意味着缓存条目频繁过期、需要重新经过整个 transport 链，实测命中率会反映出来。</div>
+                <table>
+                  <tr><th>TTL</th><th class="num">TPS</th><th class="num">实测命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">max (ms)</th></tr>
+                  ${rows}
+                </table>
+              </section>`;
+            }
+
+            function renderSizeMatrix(cells){
+              const sz = cells.filter(c => c.name.startsWith('size.'))
+                             .sort((a,b) => parseInt(a.name.match(/max=(\\d+)/)[1]) - parseInt(b.name.match(/max=(\\d+)/)[1]));
+              if(!sz.length) return '';
+              const rows = sz.map(c => {
+                const size = parseInt(c.name.match(/max=(\\d+)/)[1]);
+                return `<tr>
+                  <td><strong>${size.toLocaleString()}</strong></td>
+                  <td class="num">${fmtTps(c.tps)}</td>
+                  <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
+                  <td class="num">${us2ms(c.p50us)}</td>
+                  <td class="num">${us2ms(c.p99us)}</td>
+                  <td class="num">${us2ms(c.p999us)}</td>
+                  <td class="num">${us2ms(c.maxUs)}</td>
+                </tr>`;
+              }).join('');
+              return `<section><h2>矩阵 7 — Cache 容量影响（uniform 100 并发，10k primed）</h2>
+                <div class="desc">数据集 10k 个资源，缓存容量从 1k（远小于数据集，大量驱逐）到 100k（完全覆盖）。容量小于数据集时会看到命中率暴跌。</div>
+                <table>
+                  <tr><th>Cache maxSize</th><th class="num">TPS</th><th class="num">实测命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">max (ms)</th></tr>
+                  ${rows}
+                </table>
+                <div class="insight">缓存容量小于工作集时，W-TinyLFU 驱逐启动，命中率显著下降 — 这个数据可以用来给生产环境挑合适的 maxSize。</div>
+              </section>`;
+            }
+
+            function renderMixMatrix(cells){
+              const mix = cells.filter(c => c.name.startsWith('mix.'))
+                              .sort((a,b) => parseFloat(a.name.match(/writeRatio=([\\d.]+)/)[1]) - parseFloat(b.name.match(/writeRatio=([\\d.]+)/)[1]));
+              if(!mix.length) return '';
+              const rows = mix.map(c => {
+                const wr = parseFloat(c.name.match(/writeRatio=([\\d.]+)/)[1]);
+                const wrPct = (wr*100).toFixed(0);
+                const rPct = ((1-wr)*100).toFixed(0);
+                const label = wr === 0 ? '纯读' : (wr === 1 ? '纯写' : `${rPct}% 读 / ${wrPct}% 写`);
+                return `<tr>
+                  <td><strong>${label}</strong></td>
+                  <td class="num">${fmtTps(c.tps)}</td>
+                  <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
+                  <td class="num">${us2ms(c.p50us)}</td>
+                  <td class="num">${us2ms(c.p99us)}</td>
+                  <td class="num">${us2ms(c.p999us)}</td>
+                  <td class="num">${us2ms(c.maxUs)}</td>
+                  <td class="num">${c.errors}</td>
+                </tr>`;
+              }).join('');
+              return `<section><h2>矩阵 8 — 读写混合比（100 并发）</h2>
+                <div class="desc">不同读写比例下的 SDK 吞吐。每次写触发对应资源的缓存失效（double-delete），所以写比例越高、有效命中率越低、TPS 越低。</div>
+                <table>
+                  <tr><th>工作负载</th><th class="num">TPS</th><th class="num">实测命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">max (ms)</th><th class="num">err</th></tr>
+                  ${rows}
+                </table>
+                <div class="chart-wrap" style="height:280px"><canvas id="chart-mix"></canvas></div>
+              </section>`;
+            }
+
             function renderAllCells(cells){
               return `<section><h2>所有单元 — 完整百分位明细</h2>
                 <div class="desc">所有 ${cells.length} 个矩阵单元的完整 HdrHistogram 数据（min/p50/p90/p99/p999/p9999/max + 错误计数）。</div>
@@ -374,6 +466,36 @@ final class MatrixHtml {
                         title:{display:true, text:'达成率 %'},
                         grid:{drawOnChartArea:false}}
                   } }
+              });
+            }
+
+            function drawMixChart(d){
+              const mix = d.cells.filter(c => c.name.startsWith('mix.'))
+                                .sort((a,b) => parseFloat(a.name.match(/writeRatio=([\\d.]+)/)[1]) - parseFloat(b.name.match(/writeRatio=([\\d.]+)/)[1]));
+              if(!mix.length) return;
+              const ctx = document.getElementById('chart-mix');
+              if(!ctx) return;
+              new Chart(ctx, {
+                type:'bar',
+                data:{
+                  labels: mix.map(c => {
+                    const wr = parseFloat(c.name.match(/writeRatio=([\\d.]+)/)[1]);
+                    return wr===0 ? '纯读' : (wr===1 ? '纯写' : ((1-wr)*100).toFixed(0)+'读/'+(wr*100).toFixed(0)+'写');
+                  }),
+                  datasets:[
+                    {label:'TPS', data: mix.map(c => c.tps),
+                     backgroundColor:'#0a5bce', yAxisID:'y'},
+                    {label:'命中率 %', data: mix.map(c => c.actualHitRate*100),
+                     backgroundColor:'#10b981', yAxisID:'y2'}
+                  ]
+                },
+                options:{ responsive:true, maintainAspectRatio:false,
+                  scales:{
+                    y:{beginAtZero:true, position:'left', title:{display:true,text:'TPS'}},
+                    y2:{beginAtZero:true, max:100, position:'right',
+                        title:{display:true,text:'命中率 %'},
+                        grid:{drawOnChartArea:false}}
+                  }}
               });
             }
 

@@ -34,12 +34,17 @@ public final class MatrixClient implements AutoCloseable {
     private final SdkMetrics metrics;
 
     public static MatrixClient create(boolean cacheEnabled, boolean coalescing) {
+        return create(cacheEnabled, coalescing, 100_000, Duration.ofMinutes(10));
+    }
+
+    public static MatrixClient create(boolean cacheEnabled, boolean coalescing,
+                                       long cacheMaxSize, Duration ttl) {
         var inner = new InMemoryTransport();
         var metrics = new SdkMetrics();
         SdkTransport chain = inner;
         CaffeineCache<CheckKey, CheckResult> cache = null;
         if (cacheEnabled) {
-            cache = new CaffeineCache<>(100_000, Duration.ofMinutes(10), CheckKey::resourceIndex);
+            cache = new CaffeineCache<>(cacheMaxSize, ttl, CheckKey::resourceIndex);
             chain = new CachedTransport(chain, cache, metrics);
         }
         if (coalescing) {
@@ -88,6 +93,15 @@ public final class MatrixClient implements AutoCloseable {
                 null);
         var result = top.check(req);
         return result != null && result.hasPermission();
+    }
+
+    /** Single grant write (exercises write invalidation path). */
+    public void write(String docId, String relation, String userId) {
+        top.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
+                SdkTransport.RelationshipUpdate.Operation.TOUCH,
+                ResourceRef.of("doc", docId),
+                Relation.of(relation),
+                SubjectRef.of("user", userId, null))));
     }
 
     public CacheStats cacheStats() {
