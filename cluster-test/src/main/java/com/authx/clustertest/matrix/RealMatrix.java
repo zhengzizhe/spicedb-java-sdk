@@ -18,7 +18,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *  - WORKING_SET documents pre-granted to WORKING_SET users
  */
 public final class RealMatrix {
-    private static final int WORKING_SET = 1_000;      // smaller than SDK matrix — real SpiceDB is slower
+    private static final int WORKING_SET = Integer.parseInt(
+            System.getenv().getOrDefault("WORKING_SET", "10000"));    // 10k default, override via env
+    private static final long CACHE_MAX_SIZE = Long.parseLong(
+            System.getenv().getOrDefault("CACHE_MAX_SIZE", "1000000")); // 1M default
     private static final String RESOURCE_TYPE = "document";
     private static final String RELATION = "viewer";
     private static final String PERMISSION = "view";
@@ -81,7 +84,7 @@ public final class RealMatrix {
     private static MatrixCell realCache(String[] targets, String key, String name,
                                          long durationMs, double hitRate,
                                          boolean cacheEnabled) throws InterruptedException {
-        var client = RealMatrixClient.create(targets, key, cacheEnabled, false, 100_000, Duration.ofMinutes(10));
+        var client = RealMatrixClient.create(targets, key, cacheEnabled, false, CACHE_MAX_SIZE, Duration.ofMinutes(30));
         try {
             // Warm cache to match target hit rate by pre-touching the primed set
             if (cacheEnabled && hitRate > 0) {
@@ -116,7 +119,7 @@ public final class RealMatrix {
 
     private static MatrixCell realQps(String[] targets, String key, String name,
                                        long durationMs, int targetQps) throws InterruptedException {
-        var client = RealMatrixClient.create(targets, key, true, false, 100_000, Duration.ofMinutes(10));
+        var client = RealMatrixClient.create(targets, key, true, false, CACHE_MAX_SIZE, Duration.ofMinutes(30));
         try {
             // Warm
             int warmupThreads = 32;
@@ -144,7 +147,7 @@ public final class RealMatrix {
 
     private static MatrixCell realMix(String[] targets, String key, String name,
                                        long durationMs, double writeRatio) throws InterruptedException {
-        var client = RealMatrixClient.create(targets, key, true, false, 100_000, Duration.ofMinutes(10));
+        var client = RealMatrixClient.create(targets, key, true, false, CACHE_MAX_SIZE, Duration.ofMinutes(30));
         try {
             // Warm
             int warmupThreads = 32;
