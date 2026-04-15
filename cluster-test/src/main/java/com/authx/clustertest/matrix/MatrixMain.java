@@ -8,29 +8,49 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 /**
- * Standalone entry point for the SDK matrix benchmark.
- * Run via: {@code java -cp build/libs/cluster-test-*.jar com.authx.clustertest.matrix.MatrixMain}
+ * Matrix entry point. Usage:
+ *   java ... MatrixMain [perCellMs] [mode]
+ *
+ * mode: "sdk" (default, uses InMemory+LatencySim) or "real" (connects to
+ *       SpiceDB at SPICEDB_TARGETS env var, default localhost:50061,62,63)
  */
 public final class MatrixMain {
 
     public static void main(String[] args) throws Exception {
         long perCellMs = args.length > 0 ? Long.parseLong(args[0]) : 5_000;
+        String mode = args.length > 1 ? args[1] : "sdk";
         String outDir = System.getenv().getOrDefault("RESULTS_DIR", "./results");
 
-        System.out.println("[Matrix] Running A-class SDK matrix (per-cell duration=" + perCellMs + "ms)");
+        List<MatrixCell> cells;
+        String reportTitle;
         long t0 = System.currentTimeMillis();
-        var cells = SdkMatrix.runAll(perCellMs);
+
+        if ("real".equals(mode)) {
+            String targetsEnv = System.getenv().getOrDefault("SPICEDB_TARGETS",
+                    "localhost:50061,localhost:50062,localhost:50063");
+            String key = System.getenv().getOrDefault("SPICEDB_PSK", "testkey");
+            String[] targets = targetsEnv.split(",");
+            System.out.println("[Matrix] REAL-mode against " + targetsEnv + " (per-cell " + perCellMs + "ms)");
+            cells = RealMatrix.runAll(targets, key, perCellMs);
+            reportTitle = "real";
+        } else {
+            System.out.println("[Matrix] SDK-mode (InMemory + 2ms LatencySim, per-cell " + perCellMs + "ms)");
+            cells = SdkMatrix.runAll(perCellMs);
+            reportTitle = "sdk";
+        }
+
         long elapsed = System.currentTimeMillis() - t0;
         System.out.println("[Matrix] Done — " + cells.size() + " cells in " + elapsed + "ms");
 
-        // Write JSON
         var mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
         Path outDirPath = Paths.get(outDir);
         Files.createDirectories(outDirPath);
-        var jsonPath = outDirPath.resolve("matrix.json");
+        var jsonPath = outDirPath.resolve("matrix-" + reportTitle + ".json");
         var meta = new LinkedHashMap<String, Object>();
+        meta.put("mode", mode);
         meta.put("perCellDurationMs", perCellMs);
         meta.put("totalCells", cells.size());
         meta.put("totalElapsedMs", elapsed);
@@ -39,11 +59,10 @@ public final class MatrixMain {
         mapper.writeValue(jsonPath.toFile(), meta);
         System.out.println("[Matrix] Wrote " + jsonPath);
 
-        // Generate HTML
         String chartJs = new String(new ClassPathResource("web/chart.min.js").getInputStream().readAllBytes());
         String json = mapper.writeValueAsString(meta);
         String html = MatrixHtml.build(chartJs, json);
-        var htmlPath = outDirPath.resolve("matrix-report.html");
+        var htmlPath = outDirPath.resolve("matrix-" + reportTitle + "-report.html");
         Files.writeString(htmlPath, html);
         System.out.println("[Matrix] Wrote " + htmlPath);
     }
