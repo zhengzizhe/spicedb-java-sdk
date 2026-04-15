@@ -65,7 +65,7 @@ final class MatrixHtml {
             """;
 
     private static final String JS = """
-            const us2ms = us => (us/1000).toFixed(2);
+            const us2ms = us => (us/1000).toFixed(us<10000?3:(us<100000?2:1));
             function fmtTps(n){ return n>=1000 ? (n/1000).toFixed(1)+'k' : n.toFixed(0); }
             function colorFor(value, min, max){
               const t = (value-min) / Math.max(max-min, 1);
@@ -89,8 +89,10 @@ final class MatrixHtml {
               r.innerHTML += renderMatrix2(d.cells);
               r.innerHTML += renderMatrix3(d.cells);
               r.innerHTML += renderMatrix4(d.cells);
+              r.innerHTML += renderQpsLadder(d.cells);
               r.innerHTML += renderAllCells(d.cells);
               drawCharts(d);
+              drawQpsChart(d);
             }
 
             function renderMeta(d){
@@ -137,7 +139,7 @@ final class MatrixHtml {
               html += `</div>
                 <div class="legend">数字 = 操作/秒，下方括号 = 实测缓存命中率</div>
 
-                <h3 style="margin-top:24px">p99 延迟热力图（μs）</h3>
+                <h3 style="margin-top:24px">p99 延迟热力图（ms）</h3>
                 <div class="heatmap" style="--cols:${ts.length}">
                   <div class="hdr">命中率 \\\\ 并发</div>`;
               ts.forEach(t => html += `<div class="hdr">${t} 线程</div>`);
@@ -147,13 +149,13 @@ final class MatrixHtml {
                   const cell = m1.find(c => c.targetHitRate===hr && c.threads===t);
                   if(cell){
                     html += `<div class="cell" style="background:${colorForLatency(cell.p99us, p99Min, p99Max)}">
-                      <span class="v">${cell.p99us.toLocaleString()}</span>
-                      <span class="s">p50=${cell.p50us}μs</span></div>`;
+                      <span class="v">${us2ms(cell.p99us)}</span>
+                      <span class="s">p50=${us2ms(cell.p50us)} ms</span></div>`;
                   } else { html += `<div class="cell">—</div>`; }
                 });
               });
               html += `</div>
-                <div class="legend">数字 = p99 微秒，下方括号 = 中位数 p50</div>
+                <div class="legend">数字 = p99 毫秒（ms），下方括号 = 中位数 p50</div>
                 <div class="chart-wrap"><canvas id="chart-m1-tps"></canvas></div>
               </section>`;
               return html;
@@ -167,16 +169,16 @@ final class MatrixHtml {
                 <div class="desc">同样 95% 目标命中率，不同请求分布对实测命中率和延迟的影响。Zipfian (α=1.5) 模拟"少数热点 + 长尾"，single-hot 模拟所有请求打同一资源。</div>
                 <table>
                   <tr><th>请求分布</th><th class="num">TPS</th><th class="num">实测命中率</th>
-                      <th class="num">p50 (μs)</th><th class="num">p99 (μs)</th>
-                      <th class="num">p999 (μs)</th><th class="num">最大 (μs)</th></tr>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">最大 (ms)</th></tr>
                   ${m2.map(c => `<tr>
                     <td>${esc(c.distribution)}</td>
                     <td class="num">${fmtTps(c.tps)}</td>
                     <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
-                    <td class="num">${c.p50us}</td>
-                    <td class="num">${c.p99us}</td>
-                    <td class="num">${c.p999us}</td>
-                    <td class="num">${c.maxUs}</td>
+                    <td class="num">${us2ms(c.p50us)}</td>
+                    <td class="num">${us2ms(c.p99us)}</td>
+                    <td class="num">${us2ms(c.p999us)}</td>
+                    <td class="num">${us2ms(c.maxUs)}</td>
                   </tr>`).join('')}
                 </table>
                 <div class="chart-wrap" style="height:280px"><canvas id="chart-m2-pct"></canvas></div>
@@ -195,9 +197,9 @@ final class MatrixHtml {
               return `<section><h2>矩阵 3 — Coalescing 效果（single-hot 100 并发，无缓存）</h2>
                 <div class="desc">所有 100 线程都打同一个资源 + 缓存关闭。Coalescing 将并发的相同请求合并成一次底层调用。</div>
                 <table>
-                  <tr><th></th><th class="num">TPS</th><th class="num">p50 (μs)</th><th class="num">p99 (μs)</th><th class="num">p999 (μs)</th></tr>
-                  <tr><td>关闭 coalescing</td><td class="num">${fmtTps(off.tps)}</td><td class="num">${off.p50us}</td><td class="num">${off.p99us}</td><td class="num">${off.p999us}</td></tr>
-                  <tr><td>开启 coalescing</td><td class="num">${fmtTps(on.tps)}</td><td class="num">${on.p50us}</td><td class="num">${on.p99us}</td><td class="num">${on.p999us}</td></tr>
+                  <tr><th></th><th class="num">TPS</th><th class="num">p50 (ms)</th><th class="num">p99 (ms)</th><th class="num">p999 (ms)</th></tr>
+                  <tr><td>关闭 coalescing</td><td class="num">${fmtTps(off.tps)}</td><td class="num">${us2ms(off.p50us)}</td><td class="num">${us2ms(off.p99us)}</td><td class="num">${us2ms(off.p999us)}</td></tr>
+                  <tr><td>开启 coalescing</td><td class="num">${fmtTps(on.tps)}</td><td class="num">${us2ms(on.p50us)}</td><td class="num">${us2ms(on.p99us)}</td><td class="num">${us2ms(on.p999us)}</td></tr>
                 </table>
                 <div class="insight">开启 coalescing 后 TPS 提升 <strong>${speedup}×</strong>，p99 下降 <strong>${p99cut.toFixed(1)}%</strong>。这个差距完全归因于 SDK 把并发的"读同一 key"请求合并成 1 次底层调用。</div>
               </section>`;
@@ -214,11 +216,56 @@ final class MatrixHtml {
               return `<section><h2>矩阵 4 — 缓存开关对比（uniform 100 并发，全部 primed）</h2>
                 <div class="desc">100% 命中率 + 缓存开/关。开启缓存后命中走 Caffeine（~微秒），关闭后每次都走 InMemoryTransport（也很快但有 ConcurrentHashMap 开销）。</div>
                 <table>
-                  <tr><th></th><th class="num">TPS</th><th class="num">p50 (μs)</th><th class="num">p99 (μs)</th><th class="num">实测命中率</th></tr>
-                  <tr><td>开启缓存</td><td class="num">${fmtTps(cacheOn.tps)}</td><td class="num">${cacheOn.p50us}</td><td class="num">${cacheOn.p99us}</td><td class="num">${(cacheOn.actualHitRate*100).toFixed(0)}%</td></tr>
-                  <tr><td>关闭缓存</td><td class="num">${fmtTps(cacheOff.tps)}</td><td class="num">${cacheOff.p50us}</td><td class="num">${cacheOff.p99us}</td><td class="num">N/A</td></tr>
+                  <tr><th></th><th class="num">TPS</th><th class="num">p50 (ms)</th><th class="num">p99 (ms)</th><th class="num">实测命中率</th></tr>
+                  <tr><td>开启缓存</td><td class="num">${fmtTps(cacheOn.tps)}</td><td class="num">${us2ms(cacheOn.p50us)}</td><td class="num">${us2ms(cacheOn.p99us)}</td><td class="num">${(cacheOn.actualHitRate*100).toFixed(0)}%</td></tr>
+                  <tr><td>关闭缓存</td><td class="num">${fmtTps(cacheOff.tps)}</td><td class="num">${us2ms(cacheOff.p50us)}</td><td class="num">${us2ms(cacheOff.p99us)}</td><td class="num">N/A</td></tr>
                 </table>
                 <div class="insight">缓存提升 TPS <strong>${speedup}×</strong>。即使 InMemoryTransport 已经很快，缓存层依然能砍掉一定开销。</div>
+              </section>`;
+            }
+
+            function renderQpsLadder(cells){
+              const qps = cells.filter(c => c.workload==='QPS-TARGET').sort((a,b)=>a.threads-b.threads);
+              if(!qps.length) return '';
+              const rows = qps.map(c => {
+                const target = c.threads;        // we encoded target QPS as threads
+                const achieved = c.tps;
+                const reached = achieved / target;
+                const cls = reached >= 0.95 ? 'pass' : (reached >= 0.5 ? 'warn' : 'fail');
+                const reachedColor = reached >= 0.95 ? '#10b981' : (reached >= 0.5 ? '#f59e0b' : '#ef4444');
+                return `<tr>
+                  <td class="num">${target.toLocaleString()}</td>
+                  <td class="num"><strong>${achieved.toFixed(0).toLocaleString()}</strong></td>
+                  <td class="num" style="color:${reachedColor}">${(reached*100).toFixed(1)}%</td>
+                  <td class="num">${us2ms(c.minUs)}</td>
+                  <td class="num">${us2ms(c.p50us)}</td>
+                  <td class="num">${us2ms(c.p99us)}</td>
+                  <td class="num">${us2ms(c.p999us)}</td>
+                  <td class="num">${us2ms(c.maxUs)}</td>
+                  <td class="num">${c.errors}</td>
+                </tr>`;
+              }).join('');
+              // Find the "knee" (highest QPS that maintained <50% degradation in p99 vs lowest)
+              const baseline = qps[0];
+              const baselineP99 = baseline.p99us;
+              let knee = baseline;
+              for (const q of qps) {
+                if (q.p99us < baselineP99 * 3) knee = q;   // p99 < 3× baseline → still healthy
+              }
+              return `<section><h2>矩阵 5 — QPS 阶梯（控制速率，看延迟拐点）</h2>
+                <div class="desc">和前面"压满"测试不同：这里指定每秒目标 QPS（uniform 95% 命中），用 wrk2 风格的 token-bucket 控速，记录响应时延（含队列等待，捕捉协调省略）。</div>
+                <table>
+                  <tr><th class="num">目标 QPS</th><th class="num">实测 QPS</th><th class="num">达成率</th>
+                      <th class="num">min (ms)</th><th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">最大 (ms)</th><th class="num">err</th></tr>
+                  ${rows}
+                </table>
+                <div class="insight">
+                  <strong>拐点（健康上限）：约 ${knee.threads.toLocaleString()} QPS</strong> —
+                  超过这个值后 p99 延迟开始 &gt;3× 基线（${us2ms(baselineP99)} ms），SDK 进入排队状态。
+                </div>
+                <div class="chart-wrap" style="height:340px"><canvas id="chart-qps-ladder"></canvas></div>
+                <div class="legend">绿色达成率=系统能跟上；橙黄=部分跟上但开始排队；红色=严重过载</div>
               </section>`;
             }
 
@@ -236,17 +283,17 @@ final class MatrixHtml {
                     <td class="num">${c.ops.toLocaleString()}</td>
                     <td class="num">${fmtTps(c.tps)}</td>
                     <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
-                    <td class="num">${c.minUs}</td>
-                    <td class="num">${c.p50us}</td>
-                    <td class="num">${c.p90us}</td>
-                    <td class="num">${c.p99us}</td>
-                    <td class="num">${c.p999us}</td>
-                    <td class="num">${c.p9999us}</td>
-                    <td class="num">${c.maxUs}</td>
+                    <td class="num">${us2ms(c.minUs)}</td>
+                    <td class="num">${us2ms(c.p50us)}</td>
+                    <td class="num">${us2ms(c.p90us)}</td>
+                    <td class="num">${us2ms(c.p99us)}</td>
+                    <td class="num">${us2ms(c.p999us)}</td>
+                    <td class="num">${us2ms(c.p9999us)}</td>
+                    <td class="num">${us2ms(c.maxUs)}</td>
                     <td class="num">${c.errors}</td>
                   </tr>`).join('')}
                 </table>
-                <div class="legend">所有延迟单位为微秒（μs）</div>
+                <div class="legend">所有延迟单位为毫秒（ms）；操作太快时可能显示 0.001 = 1μs</div>
               </section>`;
             }
 
@@ -289,13 +336,45 @@ final class MatrixHtml {
                 const ctx = document.getElementById('chart-m2-pct');
                 if(ctx) new Chart(ctx, {
                   type:'line',
-                  data:{ labels: m2[0].histogramBuckets.map(b => 'p'+(b[0]/100).toFixed(b[0]>=10000?2:0)), datasets },
+                  data:{ labels: m2[0].histogramBuckets.map(b => 'p'+(b[0]/100).toFixed(b[0]>=10000?2:0)),
+                         datasets: datasets.map(ds => ({...ds, data: ds.data.map(v => v/1000)})) },
                   options:{ responsive:true, maintainAspectRatio:false,
                     scales:{ y:{ beginAtZero:false, type:'logarithmic',
-                                 title:{display:true,text:'延迟 μs (对数)'} },
+                                 title:{display:true,text:'延迟 ms (对数)'} },
                              x:{ title:{display:true,text:'百分位'} } } }
                 });
               }
+            }
+
+            function drawQpsChart(d){
+              const qps = d.cells.filter(c => c.workload==='QPS-TARGET').sort((a,b)=>a.threads-b.threads);
+              if(!qps.length) return;
+              const ctx = document.getElementById('chart-qps-ladder');
+              if(!ctx) return;
+              new Chart(ctx, {
+                type:'line',
+                data:{
+                  labels: qps.map(c => c.threads.toLocaleString() + ' QPS'),
+                  datasets: [
+                    {label:'p50 (ms)', data: qps.map(c => c.p50us/1000),
+                     borderColor:'#10b981', backgroundColor:'#10b98120', tension:0.25, yAxisID:'y'},
+                    {label:'p99 (ms)', data: qps.map(c => c.p99us/1000),
+                     borderColor:'#f59e0b', backgroundColor:'#f59e0b20', tension:0.25, yAxisID:'y'},
+                    {label:'p999 (ms)', data: qps.map(c => c.p999us/1000),
+                     borderColor:'#ef4444', backgroundColor:'#ef444420', tension:0.25, yAxisID:'y'},
+                    {label:'达成率 %', data: qps.map(c => (c.tps/c.threads)*100),
+                     borderColor:'#0a5bce', backgroundColor:'#0a5bce20', borderDash:[5,5], tension:0.25, yAxisID:'y2'}
+                  ]
+                },
+                options:{ responsive:true, maintainAspectRatio:false,
+                  scales:{
+                    y:{beginAtZero:true, type:'logarithmic', position:'left',
+                       title:{display:true, text:'延迟 ms（对数）'}},
+                    y2:{beginAtZero:true, max:110, position:'right',
+                        title:{display:true, text:'达成率 %'},
+                        grid:{drawOnChartArea:false}}
+                  } }
+              });
             }
 
             function esc(s){

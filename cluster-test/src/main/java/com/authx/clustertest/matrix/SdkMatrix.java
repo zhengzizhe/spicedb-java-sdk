@@ -42,7 +42,49 @@ public final class SdkMatrix {
         results.add(runReadCell(runner, 1.0, 100, perCellDurationMs, "uniform", true,  false));
         results.add(runReadCell(runner, 1.0, 100, perCellDurationMs, "uniform", false, false));
 
+        // ── Matrix 5: QPS-target ladder (rate-limited, response time) ──
+        // Drives the SDK at controlled target QPS rates and measures latency.
+        // Catches "coordinated omission" so degradation under overload is visible.
+        var qpsRunner = new QpsRunner();
+        int[] qpsTargets = {1_000, 10_000, 100_000, 500_000, 1_000_000, 2_000_000};
+        for (int qps : qpsTargets) {
+            results.add(runQpsCell(qpsRunner, 0.95, qps, perCellDurationMs, "uniform"));
+        }
+
         return results;
+    }
+
+    /** Rate-limited cell: aim for target QPS, record response time (incl. queue wait). */
+    private static MatrixCell runQpsCell(QpsRunner runner, double hitRate, int targetQps,
+                                          long durationMs, String distribution) throws InterruptedException {
+        var client = MatrixClient.create(true, false);
+        client.prime(RESOURCE_SPACE);
+        if (hitRate > 0) {
+            int warmCount = (int) Math.min(RESOURCE_SPACE, hitRate * RESOURCE_SPACE);
+            client.warmCache(warmCount);
+        }
+        try {
+            var name = String.format("qps.dist=%s.hr=%.2f.target=%d", distribution, hitRate, targetQps);
+            return runner.run(name, "QPS-TARGET", distribution, hitRate, targetQps, durationMs,
+                    rng -> {
+                        String docId, userId;
+                        if (rng.nextDouble() < hitRate) {
+                            int idx = pickPrimedIndex(rng, distribution, RESOURCE_SPACE);
+                            docId = "primed-" + idx;
+                            userId = "u-" + idx;
+                        } else {
+                            int idx = rng.nextInt(1_000_000);
+                            docId = "fresh-" + idx;
+                            userId = "u-fresh-" + idx;
+                        }
+                        client.check(docId, "view", userId);
+                    },
+                    () -> {
+                        var s = client.cacheStats();
+                        long total = s.hitCount() + s.missCount();
+                        return total == 0 ? 0.0 : (double) s.hitCount() / total;
+                    });
+        } finally { client.close(); }
     }
 
     private static MatrixCell runReadCell(MatrixRunner runner, double hitRate, int threads,
