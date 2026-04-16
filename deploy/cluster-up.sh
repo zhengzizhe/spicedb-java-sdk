@@ -78,21 +78,21 @@ log_ok "$DATA_DIR"
 log_step "2/6" "启动 CockroachDB 集群 (3 节点, cache=6GB, sql-mem=6GB)"
 
 # CockroachDB v26 要求 --listen-addr (RPC) 和 --sql-addr (SQL) 使用不同端口
-#   RPC:  26257 / 26258 / 26259  (节点间通信 + join)
-#   SQL:  26357 / 26358 / 26359  (客户端 SQL 连接)
-#   HTTP: 8180  / 8181  / 8182   (Admin UI, 避开 ToDesk 占用的 8081)
+#   RPC:  26457 / 26458 / 26459  (节点间通信 + join)
+#   SQL:  26557 / 26558 / 26559  (客户端 SQL 连接)
+#   HTTP: 8280  / 8281  / 8282   (Admin UI, 避开 ToDesk 占用的 8081)
 
 for n in 1 2 3; do
-    rpc_port=$((26256 + n))
-    sql_port=$((26356 + n))
-    http_port=$((8179 + n))
+    rpc_port=$((26456 + n))
+    sql_port=$((26556 + n))
+    http_port=$((8279 + n))
     if ! $CRDB_BIN start \
         --insecure \
         --store="$DATA_DIR/crdb-$n" \
         --listen-addr="localhost:$rpc_port" \
         --sql-addr="localhost:$sql_port" \
         --http-addr="localhost:$http_port" \
-        --join=localhost:26257,localhost:26258,localhost:26259 \
+        --join=localhost:26457,localhost:26458,localhost:26459 \
         --cache=6GiB \
         --max-sql-memory=6GiB \
         --background > "$DATA_DIR/crdb-$n/startup.log" 2>&1; then
@@ -106,16 +106,16 @@ done
 # 初始化集群 (init 用 RPC 端口，需等节点 listen 后才能执行)
 log_info "等待 CockroachDB 节点就绪..."
 for attempt in $(seq 1 30); do
-    $CRDB_BIN init --insecure --host=localhost:26257 > /dev/null 2>&1 && { log_ok "集群初始化完成"; break; } || true
+    $CRDB_BIN init --insecure --host=localhost:26457 > /dev/null 2>&1 && { log_ok "集群初始化完成"; break; } || true
     # init 失败可能是「已初始化」或「未就绪」，检查 SQL 是否通
-    $CRDB_BIN sql --insecure --host=localhost:26357 -e "SELECT 1;" > /dev/null 2>&1 && { log_ok "集群已初始化 (跳过)"; break; }
+    $CRDB_BIN sql --insecure --host=localhost:26557 -e "SELECT 1;" > /dev/null 2>&1 && { log_ok "集群已初始化 (跳过)"; break; }
     sleep 2
 done
 
 # 轮询等待所有节点 SQL 可达 (最多 60 秒)
 for attempt in $(seq 1 30); do
     crdb_ok=0
-    for p in 26357 26358 26359; do
+    for p in 26557 26558 26559; do
         $CRDB_BIN sql --insecure --host=localhost:$p -e "SELECT 1;" > /dev/null 2>&1 && crdb_ok=$((crdb_ok + 1))
     done
     [ "$crdb_ok" -eq 3 ] && break
@@ -130,7 +130,7 @@ fi
 
 # ── 3. 配置 CockroachDB 生产参数 ──
 log_step "3/6" "配置 CockroachDB 生产参数"
-$CRDB_BIN sql --insecure --host=localhost:26357 --format=table -e "
+$CRDB_BIN sql --insecure --host=localhost:26557 --format=table -e "
 CREATE DATABASE IF NOT EXISTS spicedb;
 SET CLUSTER SETTING kv.rangefeed.enabled = true;
 SET CLUSTER SETTING kv.range_split.by_load.enabled = true;
@@ -153,7 +153,7 @@ log_ok "idle_in_tx_timeout=60s  store_dead=1m15s"
 log_step "4/6" "SpiceDB 数据库迁移"
 migrate_output=$($SPICEDB_BIN migrate head \
     --datastore-engine cockroachdb \
-    --datastore-conn-uri "postgresql://root@localhost:26357/spicedb?sslmode=disable" 2>&1)
+    --datastore-conn-uri "postgresql://root@localhost:26557/spicedb?sslmode=disable" 2>&1)
 
 # 解析迁移输出
 migrate_count=$(echo "$migrate_output" | grep -c '"message":"migrating"' || true)
@@ -174,7 +174,7 @@ log_step "5/6" "启动 SpiceDB (3 节点, dispatch-cache=1GiB)"
 # 公共配置 — 生产级参数
 COMMON_FLAGS=(
     --datastore-engine cockroachdb
-    --datastore-conn-uri "postgresql://root@localhost:26357,localhost:26358,localhost:26359/spicedb?sslmode=disable"
+    --datastore-conn-uri "postgresql://root@localhost:26557,localhost:26558,localhost:26559/spicedb?sslmode=disable"
     --grpc-preshared-key "$PSK"
 
     # ── 连接池 (生产级) ──
@@ -264,9 +264,9 @@ echo -e "${BOLD}║   ${GREEN}集群就绪${NC}${BOLD} — 3×CRDB + 3×SpiceDB 
 echo -e "${BOLD}╠══════════════════════════════════════════════════════════════╣${NC}"
 echo -e "${BOLD}║${NC}                                                              ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}   ${CYAN}CockroachDB${NC}                                               ${BOLD}║${NC}"
-echo -e "${BOLD}║${NC}     RPC:   localhost:26257, :26258, :26259                   ${BOLD}║${NC}"
-echo -e "${BOLD}║${NC}     SQL:   localhost:26357, :26358, :26359                   ${BOLD}║${NC}"
-echo -e "${BOLD}║${NC}     Admin: ${CYAN}http://localhost:8180${NC}                              ${BOLD}║${NC}"
+echo -e "${BOLD}║${NC}     RPC:   localhost:26457, :26458, :26459                   ${BOLD}║${NC}"
+echo -e "${BOLD}║${NC}     SQL:   localhost:26557, :26558, :26559                   ${BOLD}║${NC}"
+echo -e "${BOLD}║${NC}     Admin: ${CYAN}http://localhost:8280${NC}                              ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}     cache=6GB × 3  sql-mem=6GB × 3  gc.ttl=7200s            ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}                                                              ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}   ${CYAN}SpiceDB${NC}                                                    ${BOLD}║${NC}"
