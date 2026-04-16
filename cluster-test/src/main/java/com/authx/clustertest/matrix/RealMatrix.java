@@ -122,10 +122,17 @@ public final class RealMatrix {
         }
 
         // ═══ 8. 一致性级别成本（cache off, 直击 SpiceDB+CRDB） ═══
+        // Previous sections (B5/B7 noCache × high QPS) trip the per-resource
+        // circuit breaker. Wait long enough for breakers to fully reset before
+        // running B8 so its numbers reflect real SpiceDB cost, not degraded state.
+        // Resilience4j default waitDurationInOpenState is 60s; add slack.
+        cooldown("B8 prep", 75_000);
         results.add(realConsistency(targets, key, "B8A-minimizeLatency", perCellDurationMs,
                 com.authx.sdk.policy.ReadConsistency.minimizeLatency()));
+        cooldown("B8 inter", 15_000);
         results.add(realConsistency(targets, key, "B8B-session", perCellDurationMs,
                 com.authx.sdk.policy.ReadConsistency.session()));
+        cooldown("B8 inter", 15_000);
         results.add(realConsistency(targets, key, "B8C-strong", perCellDurationMs,
                 com.authx.sdk.policy.ReadConsistency.strong()));
 
@@ -587,6 +594,11 @@ public final class RealMatrix {
                     },
                     client);
         } finally { client.close(); }
+    }
+
+    private static void cooldown(String tag, long ms) {
+        System.out.println("[RealMatrix] " + tag + " cooldown " + ms + "ms (breaker reset window)");
+        try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
     private RealMatrix() {}
