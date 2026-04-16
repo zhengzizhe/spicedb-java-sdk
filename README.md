@@ -262,6 +262,20 @@ SdkComponents.builder()
 
 每个 pod 都有自己的 Caffeine 缓存，每个 pod 都需要清自己的缓存。N 个 pod 收到 Watch 事件时各自失效——这是正确行为，不要去优化它。
 
+### SESSION 一致性需要共享 tokenStore
+
+跨实例 SESSION 一致性要求 zedtoken 在 pod 之间共享。默认 `tokenStore=null` 时只在单 JVM 内有效（启动会有警告日志）。多实例部署接入 [`sdk-redisson`](sdk-redisson/README.md) 模块即可：
+
+```java
+RedissonClient redis = Redisson.create(redissonConfig);
+DistributedTokenStore store = new RedissonTokenStore(
+        redis, Duration.ofSeconds(60), "authx:token:");
+
+AuthxClient client = AuthxClient.builder()
+    .extend(e -> e.components(SdkComponents.builder().tokenStore(store).build()))
+    ...
+```
+
 ### Listener 副作用是**可能错的多次执行**
 
 如果你注册的 listener 会做副作用（写审计日志、发通知、调外部 API），N 个 pod 都会执行同一个事件。三种解决方式：
@@ -369,7 +383,7 @@ SDK 内部处理三种异常情况：
 |---|---|---|
 | `telemetrySink` | NOOP | 自定义 telemetry 上报（Kafka/OTLP/file） |
 | `clock` | SYSTEM | 时钟（测试用） |
-| `tokenStore` | null | 跨实例 SESSION 一致性的 zedtoken 存储（Redis 等） |
+| `tokenStore` | null | 跨实例 SESSION 一致性的 zedtoken 存储（开箱即用：[`sdk-redisson`](sdk-redisson/README.md)） |
 | `healthProbe` | `all(ChannelState, SchemaRead)` | 自定义健康探针 |
 | `watchDuplicateDetector` | `noop()` | Watch 事件去重（默认不去重） |
 | `watchListenerExecutor` | 默认单线程 + 10K 队列 | 自定义 listener 调度线程池 |
