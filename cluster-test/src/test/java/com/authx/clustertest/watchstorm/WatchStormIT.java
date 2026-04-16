@@ -75,6 +75,10 @@ class WatchStormIT {
 
     @Test
     void watchPropagationUnderLoad() throws Exception {
+        // Unique per-run prefix so repeat runs don't reuse keys (SpiceDB dispatch
+        // cache sometimes suppresses re-delivery of already-seen tuples).
+        String runId = "ws-" + System.currentTimeMillis() + "-";
+
         // Per-write timestamps keyed by resourceId; readers lookup on event arrival.
         var writeTimesNs = new ConcurrentHashMap<String, Long>();
 
@@ -98,6 +102,33 @@ class WatchStormIT {
             });
         }
 
+        // Warmup: do one probe write and wait for all readers to see it. Fails
+        // fast with a clear message if the watch pipeline isn't actually live
+        // (instead of producing 0 events at the end of a 30s test).
+        String probeId = runId + "probe";
+        writeTimesNs.put(probeId, System.nanoTime());
+        writer.on("document").grant(probeId, "viewer", "ws-probe-user");
+        long probeDeadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+        while (System.nanoTime() < probeDeadline) {
+            boolean allSaw = true;
+            for (int i = 0; i < N_READERS; i++) {
+                if (eventsSeen[i].get() == 0) { allSaw = false; break; }
+            }
+            if (allSaw) break;
+            Thread.sleep(200);
+        }
+        for (int i = 0; i < N_READERS; i++) {
+            assertThat(eventsSeen[i].get())
+                    .as("reader-%d saw probe event within 15s — watch pipeline must be live before the main test", i)
+                    .isGreaterThan(0);
+        }
+        // Reset histograms and seen counts so warmup doesn't pollute numbers.
+        for (int i = 0; i < N_READERS; i++) {
+            readerHist[i].reset();
+            eventsSeen[i].set(0);
+        }
+        writeTimesNs.clear();
+
         // Writer loop — 100/sec for RUN_FOR.
         long deadline = System.nanoTime() + RUN_FOR.toNanos();
         long intervalNs = 1_000_000_000L / WRITES_PER_SEC;
@@ -113,8 +144,8 @@ class WatchStormIT {
                 if (sleep > 1_000_000) Thread.sleep(sleep / 1_000_000, (int) (sleep % 1_000_000));
                 else while (System.nanoTime() < t) Thread.onSpinWait();
             }
-            String resId = "ws-" + writesSent.get();
-            String userId = "ws-u-" + writesSent.get();
+            String resId = runId + writesSent.get();
+            String userId = runId + "u-" + writesSent.get();
             pool.submit(() -> {
                 writeTimesNs.put(resId, System.nanoTime());
                 try {
