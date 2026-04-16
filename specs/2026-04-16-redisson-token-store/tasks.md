@@ -3,20 +3,20 @@
 Reference: [`spec.md`](spec.md), [`plan.md`](plan.md)
 
 ## Phase 0: Setup
-- [ ] T001 [SR:req-1] Scaffold `sdk-redisson/build.gradle` + add `include "sdk-redisson"` to `settings.gradle`
+- [X] T001 [SR:req-1] Scaffold `sdk-redisson/build.gradle` + add `include "sdk-redisson"` to `settings.gradle`
 
 ## Phase 1: TDD round (test before impl)
-- [ ] T002 [SR:req-8][SR:t-1..t-5] Write `RedissonTokenStoreIT` with 5 cases and confirm it fails to compile — `sdk-redisson/src/test/java/com/authx/sdk/redisson/RedissonTokenStoreIT.java`
+- [X] T002 [SR:req-8][SR:t-1..t-5] Write `RedissonTokenStoreIT` with 5 cases and confirm it fails to compile — `sdk-redisson/src/test/java/com/authx/sdk/redisson/RedissonTokenStoreIT.java`
 
 ## Phase 2: Core implementation
-- [ ] T003 [SR:req-2][SR:req-3][SR:req-4][SR:req-5][SR:req-6][SR:req-7] Implement `RedissonTokenStore`, run tests until all 5 pass, commit — `sdk-redisson/src/main/java/com/authx/sdk/redisson/RedissonTokenStore.java`
+- [X] T003 [SR:req-2][SR:req-3][SR:req-4][SR:req-5][SR:req-6][SR:req-7] Implement `RedissonTokenStore`, run tests until all 5 pass, commit — `sdk-redisson/src/main/java/com/authx/sdk/redisson/RedissonTokenStore.java`
 
 ## Phase 3: Documentation
-- [ ] T004 [SR:req-9] Write `sdk-redisson/README.md`
-- [ ] T005 Register module in root `CLAUDE.md` Project structure section
+- [X] T004 [SR:req-9] Write `sdk-redisson/README.md`
+- [X] T005 Register module in root `CLAUDE.md` Project structure section
 
 ## Phase 4: Verification
-- [ ] T006 Run main SDK tests + full suite + sdk-redisson javadoc; confirm no regression and 804 passing
+- [X] T006 Run main SDK tests + full suite + sdk-redisson javadoc; confirm no regression and 804 passing
 
 ## Dependencies
 
