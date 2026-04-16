@@ -2,6 +2,7 @@ package com.authx.sdk.telemetry;
 
 import com.authx.sdk.spi.TelemetrySink;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -18,24 +19,52 @@ public class TelemetryReporter implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(TelemetryReporter.class.getName());
 
+    /** SR:C10 — Default timeout for a single sink.send() invocation. */
+    public static final Duration DEFAULT_SINK_TIMEOUT = Duration.ofSeconds(5);
+
     private final TelemetrySink sink;
     private final int batchSize;
     private final LinkedBlockingQueue<Map<String, Object>> buffer;
     private final ScheduledExecutorService scheduler;
+    /**
+     * SR:C10 — dedicated executor for the (potentially slow) sink call so that
+     * a hung sink cannot block the scheduler thread. One thread is enough: the
+     * synchronized {@link #flush()} already serializes calls to sink.send().
+     */
+    private final ExecutorService sinkExecutor;
+    private final Duration sinkTimeout;
     private final java.util.concurrent.atomic.AtomicBoolean flushScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.LongAdder droppedEvents = new java.util.concurrent.atomic.LongAdder();
     private final java.util.concurrent.atomic.LongAdder bufferFullDrops = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder sinkTimeouts = new java.util.concurrent.atomic.LongAdder();
     private volatile int consecutiveFlushFailures = 0;
 
     public TelemetryReporter(TelemetrySink sink, int bufferCapacity, int batchSize,
                              long flushIntervalMs, boolean useVirtualThreads) {
+        this(sink, bufferCapacity, batchSize, flushIntervalMs, useVirtualThreads, DEFAULT_SINK_TIMEOUT);
+    }
+
+    /**
+     * Full-control constructor with configurable sink timeout (SR:C10).
+     * A hung {@link TelemetrySink} no longer blocks the reporter's scheduler
+     * or {@link #close()}; batches that exceed {@code sinkTimeout} count as
+     * dropped and the scheduler moves on.
+     */
+    public TelemetryReporter(TelemetrySink sink, int bufferCapacity, int batchSize,
+                             long flushIntervalMs, boolean useVirtualThreads,
+                             Duration sinkTimeout) {
         this.sink = sink != null ? sink : TelemetrySink.NOOP;
         this.batchSize = batchSize;
+        this.sinkTimeout = sinkTimeout != null ? sinkTimeout : DEFAULT_SINK_TIMEOUT;
         this.buffer = new LinkedBlockingQueue<>(bufferCapacity);
-        ThreadFactory tf = useVirtualThreads
+        ThreadFactory schedulerTf = useVirtualThreads
                 ? Thread.ofVirtual().name("authx-sdk-telemetry-", 0).factory()
                 : r -> { Thread t = new Thread(r, "authx-sdk-telemetry"); t.setDaemon(true); return t; };
-        this.scheduler = Executors.newSingleThreadScheduledExecutor(tf);
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(schedulerTf);
+        ThreadFactory sinkTf = useVirtualThreads
+                ? Thread.ofVirtual().name("authx-sdk-telemetry-sink-", 0).factory()
+                : r -> { Thread t = new Thread(r, "authx-sdk-telemetry-sink"); t.setDaemon(true); return t; };
+        this.sinkExecutor = Executors.newSingleThreadExecutor(sinkTf);
         this.scheduler.scheduleAtFixedRate(this::flush, flushIntervalMs, flushIntervalMs, TimeUnit.MILLISECONDS);
     }
 
@@ -90,15 +119,38 @@ public class TelemetryReporter implements AutoCloseable {
         buffer.drainTo(batch, batchSize * 2);
         if (batch.isEmpty()) return;
 
+        // SR:C10 — bound the sink call. Delegate to sinkExecutor so we can
+        // wait with a timeout without blocking the scheduler thread
+        // indefinitely. If the sink takes longer than sinkTimeout, the batch
+        // is counted as dropped; the orphaned sink call may eventually
+        // complete (we do not interrupt it — interrupting mid-flight I/O
+        // risks corrupting user-held state such as a Kafka producer buffer).
+        CompletableFuture<Void> inflight = CompletableFuture.runAsync(
+                () -> sink.send(batch), sinkExecutor);
         try {
-            sink.send(batch);
+            inflight.get(sinkTimeout.toMillis(), TimeUnit.MILLISECONDS);
             consecutiveFlushFailures = 0;
-        } catch (Exception e) {
+        } catch (TimeoutException te) {
+            sinkTimeouts.increment();
             droppedEvents.add(batch.size());
             consecutiveFlushFailures++;
             if (consecutiveFlushFailures <= 3) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Telemetry sink timed out after {0}ms ({1} events dropped)",
+                        sinkTimeout.toMillis(), batch.size());
+            }
+            // Let the underlying CompletableFuture keep running so the sink's
+            // I/O completes naturally — we just stopped waiting for it.
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            droppedEvents.add(batch.size());
+        } catch (ExecutionException ee) {
+            droppedEvents.add(batch.size());
+            consecutiveFlushFailures++;
+            Throwable cause = ee.getCause();
+            if (consecutiveFlushFailures <= 3) {
                 LOG.log(System.Logger.Level.WARNING, "Telemetry flush failed ({0} events dropped): {1}",
-                        batch.size(), e.getMessage());
+                        batch.size(), cause != null ? cause.getMessage() : ee.getMessage());
             } else if (consecutiveFlushFailures == 4) {
                 LOG.log(System.Logger.Level.WARNING,
                         "Telemetry sink consistently failing, suppressing further warnings (total dropped: {0})",
@@ -114,30 +166,43 @@ public class TelemetryReporter implements AutoCloseable {
     /** Events dropped because the internal buffer was full (separate from sink failures). */
     public long bufferFullDropCount() { return bufferFullDrops.sum(); }
 
+    /**
+     * Number of sink.send() invocations that exceeded {@link #DEFAULT_SINK_TIMEOUT}
+     * (or the timeout supplied to the constructor) and were abandoned. See SR:C10.
+     */
+    public long sinkTimeoutCount() { return sinkTimeouts.sum(); }
+
     @Override
     public void close() {
-        // Shutdown order (F12-3): stop accepting new scheduled work, wait for
-        // any in-flight flush to finish (its scheduler thread is still alive
-        // because shutdown() is a graceful request), then do a final flush
-        // from the calling thread. The synchronized modifier on flush() is
-        // what makes the "in-flight flush finishes before ours starts" step
-        // safe — otherwise we'd race sink.send() with a scheduled flush.
+        // Shutdown order (F12-3 + SR:C10): stop accepting new scheduled work,
+        // wait for any in-flight flush to finish (bounded by scheduler
+        // termination AND the per-sink-call timeout), do a final flush from
+        // the calling thread, then shut down the sink executor with the same
+        // timeout so a hung sink cannot pin close() indefinitely.
         scheduler.shutdown();
         try {
             if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                // Scheduled flush is taking too long — force interrupt and
-                // move on. The final flush below will deliver whatever's
-                // still in the buffer.
                 scheduler.shutdownNow();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             scheduler.shutdownNow();
         }
-        // Final drain from the calling thread. Safe to call after
-        // shutdownNow() because flush() only touches buffer + sink, not the
-        // scheduler itself.
+        // Final drain from the calling thread. flush() itself is bounded by
+        // sinkTimeout, so this returns promptly even with a hung sink.
         flush();
+
+        // SR:C10 — shut down the sink executor. Wait sinkTimeout for a
+        // currently-running send to finish, then force.
+        sinkExecutor.shutdown();
+        try {
+            if (!sinkExecutor.awaitTermination(sinkTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                sinkExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            sinkExecutor.shutdownNow();
+        }
     }
 
     public int pendingCount() { return buffer.size(); }

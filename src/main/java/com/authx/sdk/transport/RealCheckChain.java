@@ -19,6 +19,8 @@ import java.util.List;
  */
 public final class RealCheckChain implements CheckChain {
 
+    private static final System.Logger LOG = System.getLogger(RealCheckChain.class.getName());
+
     private final List<SdkInterceptor> interceptors;
     private final int index;
     private final CheckRequest request;
@@ -52,7 +54,27 @@ public final class RealCheckChain implements CheckChain {
         }
         // Create next chain with incremented index and (possibly modified) request
         var next = new RealCheckChain(interceptors, index + 1, request, transport, ctx);
-        return interceptors.get(index).interceptCheck(next);
+        // SR:C8 — isolate read-path interceptor exceptions. An interceptor that
+        // throws non-Authx (user-code bug) is logged and skipped; the chain
+        // continues with `next.proceed(request)` so downstream interceptors
+        // still run and the actual gRPC call still happens. This preserves
+        // observability (InstrumentedTransport's finally-block telemetry) even
+        // when a user-supplied read interceptor is broken.
+        //
+        // Authx SDK exceptions propagate unchanged — they represent genuine
+        // upstream failures (auth denial, rate limit, etc.) that the caller
+        // must see to handle correctly.
+        var interceptor = interceptors.get(index);
+        try {
+            return interceptor.interceptCheck(next);
+        } catch (com.authx.sdk.exception.AuthxException authx) {
+            throw authx;
+        } catch (RuntimeException bug) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Read interceptor {0} threw {1}; skipping and continuing the chain.",
+                    interceptor.getClass().getName(), bug.toString());
+            return next.proceed(request);
+        }
     }
 
     @Override

@@ -18,6 +18,8 @@ import java.util.function.Supplier;
  */
 public final class RealOperationChain<T> implements OperationChain<T> {
 
+    private static final System.Logger LOG = System.getLogger(RealOperationChain.class.getName());
+
     private final List<SdkInterceptor> interceptors;
     private final int index;
     private final Supplier<T> terminalOperation;
@@ -37,7 +39,20 @@ public final class RealOperationChain<T> implements OperationChain<T> {
             return terminalOperation.get();
         }
         var next = new RealOperationChain<>(interceptors, index + 1, terminalOperation, ctx);
-        return interceptors.get(index).interceptOperation(next);
+        // SR:C8 — isolate interceptor exceptions on generic read operations
+        // (lookup/expand/read), same contract as RealCheckChain: skip the
+        // broken interceptor, log at WARNING, continue the chain.
+        var interceptor = interceptors.get(index);
+        try {
+            return interceptor.interceptOperation(next);
+        } catch (com.authx.sdk.exception.AuthxException authx) {
+            throw authx;
+        } catch (RuntimeException bug) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Read-path interceptor {0} threw {1}; skipping and continuing the chain.",
+                    interceptor.getClass().getName(), bug.toString());
+            return next.proceed();
+        }
     }
 
     @Override

@@ -215,6 +215,25 @@ public class AuthxClientBuilder {
 
         Objects.requireNonNull(presharedKey, "presharedKey is required");
         if (target == null && targets == null) throw new IllegalArgumentException("target or targets is required");
+        // SR:C6 — target and targets are mutually exclusive. Prior to this check the
+        // builder silently preferred `target` when both were set (see buildChannel below),
+        // which masked user misconfiguration (e.g. copy-paste of both forms during
+        // staging → prod migration).
+        if (target != null && targets != null) {
+            throw new IllegalArgumentException(
+                    "target and targets are mutually exclusive — pick one");
+        }
+        // SR:C7 — watchInvalidation only takes effect when the check cache is enabled.
+        // Historically a misconfigured builder would silently no-op Watch; fail fast so
+        // the operator learns at startup, not when debugging stale authz decisions.
+        if (watchInvalidation && !cacheEnabled) {
+            throw new IllegalArgumentException(
+                    "cache.watchInvalidation(true) requires cache.enabled(true)");
+        }
+        if (!watchStrategies.isEmpty() && (!cacheEnabled || !watchInvalidation)) {
+            throw new IllegalArgumentException(
+                    "extend.watchStrategy(...) requires cache.enabled(true) and cache.watchInvalidation(true)");
+        }
 
         // Resolve the effective PolicyRegistry. Precedence:
         //   1. An explicit registry passed via .extend(e -> e.policies(...))

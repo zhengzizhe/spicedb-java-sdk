@@ -19,10 +19,13 @@ class SdkMetricsTest {
 
     @Test
     void latencyRecording_aboveMaxTrackable_clampsWithoutException() {
+        // SR:C9 — cap raised from 60s to 600s. A sample above the ceiling is
+        // clamped AND counted in latencyOverflowCount so it stays observable.
         var metrics = new SdkMetrics();
-        metrics.recordRequest(120_000_000L, false);
+        metrics.recordRequest(700_000_000L, false);  // 700s > 600s cap
         var snapshot = metrics.snapshot();
-        assertThat(snapshot.latencyP50Ms()).isCloseTo(60_000.0, org.assertj.core.data.Offset.offset(100.0));
+        assertThat(snapshot.latencyP50Ms()).isCloseTo(600_000.0, org.assertj.core.data.Offset.offset(1000.0));
+        assertThat(snapshot.latencyOverflowCount()).isEqualTo(1L);
     }
 
     @Test

@@ -46,6 +46,17 @@ public class RetryPolicy {
     }
 
     /**
+     * SR:C4 — Convenience predicate: {@code true} if the exception is on the
+     * non-retryable list. Complement to {@link #shouldRetry(Exception)} but
+     * more explicit at call sites that want to short-circuit the entire retry
+     * pipeline (e.g. skip delay computation, log differently).
+     */
+    public boolean isPermanent(Throwable t) {
+        if (!(t instanceof Exception e)) return false;
+        return nonRetryableExceptions.stream().anyMatch(cls -> cls.isInstance(e));
+    }
+
+    /**
      * Compute delay for attempt N (0-based), with jitter.
      */
     public Duration delayForAttempt(int attempt) {
@@ -72,6 +83,14 @@ public class RetryPolicy {
                 .doNotRetryOn(com.authx.sdk.exception.AuthxInvalidArgumentException.class)
                 .doNotRetryOn(com.authx.sdk.exception.AuthxUnimplementedException.class)
                 .doNotRetryOn(com.authx.sdk.exception.AuthxPreconditionException.class)
+                // SR:C4 — schema-validation errors are permanent. Previously
+                // they extended AuthxException directly and were NOT matched
+                // by any entry on the non-retryable list, so the retry budget
+                // was consumed on every attempt even though the schema was
+                // never going to change mid-call.
+                .doNotRetryOn(com.authx.sdk.exception.InvalidPermissionException.class)
+                .doNotRetryOn(com.authx.sdk.exception.InvalidRelationException.class)
+                .doNotRetryOn(com.authx.sdk.exception.InvalidResourceException.class)
                 .doNotRetryOn(io.github.resilience4j.circuitbreaker.CallNotPermittedException.class)
                 .build();
     }
