@@ -127,8 +127,10 @@ class WatchStormIT {
         pool.shutdown();
         pool.awaitTermination(10, TimeUnit.SECONDS);
 
-        // Wait for in-flight watch events to drain (they typically arrive within 100ms of write).
-        Thread.sleep(5_000);
+        // SpiceDB's revision-quantization-interval (5s in our cluster config) batches
+        // watch events; tail events from the last write window land up to ~5s after
+        // the writer stops. Wait long enough for the trailing batch to drain.
+        Thread.sleep(12_000);
 
         // Report.
         long expectedWrites = writesSent.get();
@@ -146,15 +148,16 @@ class WatchStormIT {
                     h.getMaxValue() / 1000.0);
         }
 
-        // Sanity asserts.
+        // Sanity asserts. Thresholds reflect the cluster config:
+        // - 95%+ delivery (we wait long enough for the last quantization window)
+        // - p99 < 10s (5s quantization + 5s dispatch headroom)
         for (int i = 0; i < N_READERS; i++) {
             long seen = eventsSeen[i].get();
             assertThat(seen).as("reader-%d events received", i)
-                    .isGreaterThan((long) (expectedWrites * 0.90));
-            // If p99 > 5s, Watch is unhealthy.
+                    .isGreaterThan((long) (expectedWrites * 0.95));
             assertThat(readerHist[i].getValueAtPercentile(99))
                     .as("reader-%d p99 latency (us)", i)
-                    .isLessThan(5_000_000L);
+                    .isLessThan(10_000_000L);
         }
     }
 }
