@@ -20,6 +20,14 @@ public final class RealMatrixClient implements AutoCloseable {
     public static RealMatrixClient create(String[] targets, String presharedKey,
                                            boolean cacheEnabled, boolean coalescing,
                                            long cacheMaxSize, Duration ttl) {
+        return create(targets, presharedKey, cacheEnabled, coalescing,
+                cacheMaxSize, ttl, ReadConsistency.minimizeLatency());
+    }
+
+    public static RealMatrixClient create(String[] targets, String presharedKey,
+                                           boolean cacheEnabled, boolean coalescing,
+                                           long cacheMaxSize, Duration ttl,
+                                           ReadConsistency consistency) {
         var client = AuthxClient.builder()
                 .connection(c -> c
                         .targets(targets)
@@ -36,7 +44,7 @@ public final class RealMatrixClient implements AutoCloseable {
                 .extend(e -> e.policies(PolicyRegistry.builder()
                         .defaultPolicy(ResourcePolicy.builder()
                                 .cache(cacheEnabled ? CachePolicy.of(ttl) : CachePolicy.disabled())
-                                .readConsistency(ReadConsistency.minimizeLatency())
+                                .readConsistency(consistency)
                                 .build())
                         .build()))
                 .build();
@@ -57,6 +65,11 @@ public final class RealMatrixClient implements AutoCloseable {
     /** Grant a single relation (used by write-mix scenarios). */
     public void grant(String resourceType, String resourceId, String relation, String userId) {
         client.on(resourceType).grant(resourceId, relation, userId);
+    }
+
+    /** Grant a relation to an arbitrary subject ref (e.g. "folder:fld-3", "group:g-1#member"). */
+    public void grantSubject(String resourceType, String resourceId, String relation, String subjectRef) {
+        client.on(resourceType).grantToSubjects(resourceId, relation, subjectRef);
     }
 
     public CacheStats cacheStats() {

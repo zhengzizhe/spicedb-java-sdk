@@ -69,14 +69,278 @@ final class MatrixHtml {
             function renderReport(d){
               const r = document.getElementById('root');
               r.innerHTML += renderMeta(d);
+              // SDK-mode (InMemory + LatencySim)
               r.innerHTML += renderSection1(d.cells);
               r.innerHTML += renderSection2(d.cells);
               r.innerHTML += renderSection3(d.cells);
               r.innerHTML += renderSection4(d.cells);
               r.innerHTML += renderSection5(d.cells);
               r.innerHTML += renderSection6(d.cells);
+              // Real-mode (live SpiceDB cluster)
+              r.innerHTML += renderSectionB1(d.cells);
+              r.innerHTML += renderSectionB2(d.cells);
+              r.innerHTML += renderSectionB3(d.cells);
+              r.innerHTML += renderSectionB4(d.cells);
+              r.innerHTML += renderSectionB5(d.cells);
+              r.innerHTML += renderSectionB6(d.cells);
+              r.innerHTML += renderSectionB7(d.cells);
+              r.innerHTML += renderSectionB8(d.cells);
               r.innerHTML += renderDetailTable(d.cells);
               drawAllCharts(d);
+            }
+
+            function renderSectionB8(cells){
+              const s = cells.filter(c => /^B8[A-Z]-/.test(c.name));
+              if(!s.length) return '';
+              const base = s[0];
+              return `<section><h2>B8. 真实集群 — 一致性级别成本</h2>
+                <div class="desc">同一负载，cache 关闭，三种 ReadConsistency：
+                <code>minimizeLatency</code>（默认，可读 ~5s 旧）/
+                <code>session</code>（用 tokenStore 保证读不旧于自己写）/
+                <code>strong</code>（fully-consistent，强主读）。
+                Cache 关闭，差异直接反映 SpiceDB+CRDB 一致性成本。</div>
+                <table>
+                  <tr><th>级别</th><th class="num">TPS</th>
+                      <th class="num">vs minimize</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">max (ms)</th></tr>
+                  ${s.map(c => {
+                    const ratio = (c.tps / Math.max(1, base.tps) * 100).toFixed(1);
+                    return `<tr>
+                      <td class="label">${esc(c.name)}</td>
+                      <td class="num"><strong>${fmtTps(c.tps)}</strong></td>
+                      <td class="num">${ratio}%</td>
+                      <td class="num">${us2ms(c.p50us)}</td>
+                      <td class="num">${us2ms(c.p99us)}</td>
+                      <td class="num">${us2ms(c.p999us)}</td>
+                      <td class="num">${us2ms(c.maxUs)}</td>
+                    </tr>`;
+                  }).join('')}
+                </table>
+                <div class="chart-wrap"><canvas id="chart-b8"></canvas></div>
+                <div class="insight">
+                  生产典型选 <code>minimizeLatency</code> + 缓存。
+                  写后立刻读用 <code>session</code>（需要 tokenStore，否则跨 JVM 无效）。
+                  对账 / 强一致场景才上 <code>strong</code> —— 跳过 follower read 走主，延迟显著。
+                </div>
+              </section>`;
+            }
+
+            // ═══ B-class (real SpiceDB) sections ═══
+            function renderSectionB1(cells){
+              const s = cells.filter(c => /^B1[A-E]-/.test(c.name))
+                            .sort((a,b) => b.targetHitRate - a.targetHitRate);
+              if(!s.length) return '';
+              const speedup = (s[0].tps / Math.max(1, s[s.length-1].tps)).toFixed(1);
+              return `<section><h2>B1. 真实集群 — 缓存命中 vs 未命中</h2>
+                <div class="desc">直连真实 SpiceDB+CRDB 集群。命中走 Caffeine（μs 级），未命中走 gRPC → SpiceDB → CRDB Raft（ms 级）。
+                这里看的是缓存层在生产场景中真实带来的加速比。</div>
+                <table>
+                  <tr><th>场景</th><th class="num">TPS</th><th class="num">实测命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">max (ms)</th></tr>
+                  ${s.map(c => `<tr>
+                    <td class="label">${esc(c.name)}</td>
+                    <td class="num"><strong>${fmtTps(c.tps)}</strong></td>
+                    <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
+                    <td class="num">${us2ms(c.p50us)}</td>
+                    <td class="num">${us2ms(c.p99us)}</td>
+                    <td class="num">${us2ms(c.p999us)}</td>
+                    <td class="num">${us2ms(c.maxUs)}</td>
+                  </tr>`).join('')}
+                </table>
+                <div class="chart-wrap"><canvas id="chart-b1"></canvas></div>
+                <div class="key-finding">
+                  <strong>缓存命中相对未命中加速 ${speedup}×。</strong>
+                  对比 SDK-mode 的加速比，可以看出 LatencySim 的 2ms 估算与真实 SpiceDB+CRDB RTT 的差距。
+                </div>
+              </section>`;
+            }
+
+            function renderSectionB2(cells){
+              const s = cells.filter(c => /^B2-/.test(c.name)).sort((a,b) => a.threads - b.threads);
+              if(!s.length) return '';
+              const rows = s.map(c => {
+                const target = c.threads, achieved = c.tps, ratio = achieved/target;
+                const color = ratio>=0.95 ? 'var(--good)' : (ratio>=0.5?'var(--warn)':'var(--bad)');
+                return `<tr>
+                  <td class="label">${esc(c.name)}</td>
+                  <td class="num">${fmtN(target)}</td>
+                  <td class="num"><strong>${fmtN(Math.round(achieved))}</strong></td>
+                  <td class="num" style="color:${color}"><strong>${(ratio*100).toFixed(1)}%</strong></td>
+                  <td class="num">${us2ms(c.p50us)}</td>
+                  <td class="num">${us2ms(c.p99us)}</td>
+                  <td class="num">${us2ms(c.p999us)}</td>
+                </tr>`;
+              }).join('');
+              return `<section><h2>B2. 真实集群 — QPS 阶梯</h2>
+                <div class="desc">按目标 QPS 匀速发送（wrk2 风格 token bucket）到真实集群。
+                超过 SpiceDB 处理能力时 SDK 排队，p99 显著上扬。</div>
+                <table>
+                  <tr><th>场景</th><th class="num">目标 QPS</th><th class="num">实测 QPS</th>
+                      <th class="num">达成率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th><th class="num">p999 (ms)</th></tr>
+                  ${rows}
+                </table>
+                <div class="chart-wrap"><canvas id="chart-b2"></canvas></div>
+              </section>`;
+            }
+
+            function renderSectionB3(cells){
+              const s = cells.filter(c => /^B3-write/.test(c.name))
+                            .sort((a,b) => parseInt(a.name.match(/write(\\d+)/)[1]) -
+                                           parseInt(b.name.match(/write(\\d+)/)[1]));
+              if(!s.length) return '';
+              return `<section><h2>B3. 真实集群 — 读写比例</h2>
+                <div class="desc">写操作走真实 SpiceDB WriteRelationships，并触发 double-delete 失效本地缓存。
+                写比例越高，缓存被破坏越频繁，TPS 下降越明显。</div>
+                <table>
+                  <tr><th>场景</th><th class="num">TPS</th><th class="num">实测命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th><th class="num">p999 (ms)</th></tr>
+                  ${s.map(c => `<tr>
+                    <td class="label">${esc(c.name)}</td>
+                    <td class="num"><strong>${fmtTps(c.tps)}</strong></td>
+                    <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
+                    <td class="num">${us2ms(c.p50us)}</td>
+                    <td class="num">${us2ms(c.p99us)}</td>
+                    <td class="num">${us2ms(c.p999us)}</td>
+                  </tr>`).join('')}
+                </table>
+                <div class="chart-wrap"><canvas id="chart-b3"></canvas></div>
+              </section>`;
+            }
+
+            function renderSectionB4(cells){
+              const s = cells.filter(c => /^B4[AB]-/.test(c.name));
+              if(!s.length) return '';
+              const off = s.find(c => /关闭/.test(c.name)) || s[0];
+              const on  = s.find(c => /开启/.test(c.name)) || s[1];
+              const speedup = on && off ? (on.tps / Math.max(1, off.tps)).toFixed(1) : '?';
+              return `<section><h2>B4. 真实集群 — Cache 开/关对比</h2>
+                <div class="desc">同一负载（纯命中工作集），分别在 cache 关闭和开启下运行。这是回答"上 Caffeine 缓存到底值不值"最直接的对比。</div>
+                <table>
+                  <tr><th>场景</th><th class="num">TPS</th><th class="num">命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th><th class="num">p999 (ms)</th></tr>
+                  ${s.map(c => `<tr>
+                    <td class="label">${esc(c.name)}</td>
+                    <td class="num"><strong>${fmtTps(c.tps)}</strong></td>
+                    <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
+                    <td class="num">${us2ms(c.p50us)}</td>
+                    <td class="num">${us2ms(c.p99us)}</td>
+                    <td class="num">${us2ms(c.p999us)}</td>
+                  </tr>`).join('')}
+                </table>
+                <div class="key-finding"><strong>开启 Caffeine 后吞吐 ${speedup}× 提升</strong>，p99 同时大幅下降。
+                  这是 SDK 引入本地缓存的核心价值证明。</div>
+              </section>`;
+            }
+
+            function renderSectionB5(cells){
+              const all = cells.filter(c => /^B5-/.test(c.name));
+              if(!all.length) return '';
+              const cached = all.filter(c => !/noCache/.test(c.name))
+                              .sort((a,b) => parseInt(a.name.match(/depth(\\d+)/)[1]) -
+                                             parseInt(b.name.match(/depth(\\d+)/)[1]));
+              const noCache = all.filter(c => /noCache/.test(c.name))
+                              .sort((a,b) => parseInt(a.name.match(/depth?(\\d+)/)[1]) -
+                                             parseInt(b.name.match(/depth?(\\d+)/)[1]));
+              const row = c => `<tr>
+                    <td class="label">${esc(c.name)}</td>
+                    <td class="num"><strong>${fmtTps(c.tps)}</strong></td>
+                    <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
+                    <td class="num">${us2ms(c.p50us)}</td>
+                    <td class="num">${us2ms(c.p99us)}</td>
+                    <td class="num">${us2ms(c.p999us)}</td>
+                    <td class="num">${us2ms(c.maxUs)}</td>
+                  </tr>`;
+              return `<section><h2>B5. 真实集群 — 文件夹祖先继承深度</h2>
+                <div class="desc">使用 schema-v2.zed 的 <code>folder.ancestor</code> 平展模型。
+                每个 chain 把 doc 放在叶子 folder（depth 层），用户被授权在 root folder。
+                Check <code>document#view</code> 时 SpiceDB 会沿 ancestor 链 fan-out 并行 dispatch 到所有祖先节点。
+                理论上 ancestor 平展模型让"深度"几乎不增加延迟（vs 旧的 parent 递归）。</div>
+                <h3 style="margin-top:16px;color:var(--ink)">B5a — Cache 开启（生产典型）</h3>
+                <table>
+                  <tr><th>场景</th><th class="num">TPS</th><th class="num">命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">max (ms)</th></tr>
+                  ${cached.map(row).join('')}
+                </table>
+                <div class="chart-wrap"><canvas id="chart-b5a"></canvas></div>
+                <h3 style="margin-top:24px;color:var(--ink)">B5b — Cache 关闭（每次都打 SpiceDB）</h3>
+                <table>
+                  <tr><th>场景</th><th class="num">TPS</th><th class="num">命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">max (ms)</th></tr>
+                  ${noCache.map(row).join('')}
+                </table>
+                <div class="chart-wrap"><canvas id="chart-b5b"></canvas></div>
+                <div class="insight">对比两组：cache 开启时深度对 TPS 几乎无影响（缓存命中绕开 dispatch 链）；
+                cache 关闭时延迟随深度上升 — 这就是 ancestor 模型 vs parent 模型在真实集群上的实际差异。</div>
+              </section>`;
+            }
+
+            function renderSectionB6(cells){
+              const s = cells.filter(c => /^B6[A-Z]-/.test(c.name));
+              if(!s.length) return '';
+              return `<section><h2>B6. 真实集群 — 协作者路径</h2>
+                <div class="desc">同一文档，授权方式不同：直接 viewer / via group / via space / via department→group / 完整链路（user→dept→group→space→folder→doc）。
+                SpiceDB 必须沿不同关系路径解析，dispatch fan-out 不同。</div>
+                <table>
+                  <tr><th>路径</th><th class="num">TPS</th><th class="num">命中率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th>
+                      <th class="num">p999 (ms)</th><th class="num">max (ms)</th></tr>
+                  ${s.map(c => `<tr>
+                    <td class="label">${esc(c.name)}</td>
+                    <td class="num"><strong>${fmtTps(c.tps)}</strong></td>
+                    <td class="num">${(c.actualHitRate*100).toFixed(1)}%</td>
+                    <td class="num">${us2ms(c.p50us)}</td>
+                    <td class="num">${us2ms(c.p99us)}</td>
+                    <td class="num">${us2ms(c.p999us)}</td>
+                    <td class="num">${us2ms(c.maxUs)}</td>
+                  </tr>`).join('')}
+                </table>
+                <div class="chart-wrap"><canvas id="chart-b6"></canvas></div>
+                <div class="insight">direct 是基线（最快）。via group / via space 只多 1 跳。
+                via dept 增加 department.all_members 的递归。
+                full-chain 把所有跳数串起来 — 真实复杂权限的最坏情况。</div>
+              </section>`;
+            }
+
+            function renderSectionB7(cells){
+              const s = cells.filter(c => /^B7-/.test(c.name));
+              if(!s.length) return '';
+              // Group by depth, then sort by qps within
+              const byDepth = {};
+              s.forEach(c => {
+                const d = c.name.match(/d(\\d+)/)[1];
+                (byDepth[d] = byDepth[d]||[]).push(c);
+              });
+              Object.values(byDepth).forEach(arr => arr.sort((a,b)=>a.threads-b.threads));
+              const depths = Object.keys(byDepth).sort((a,b)=>+a-+b);
+              const allRows = depths.flatMap(d => byDepth[d].map(c => {
+                const ratio = c.tps / c.threads;
+                const color = ratio>=0.95 ? 'var(--good)' : (ratio>=0.5?'var(--warn)':'var(--bad)');
+                return `<tr>
+                  <td class="label">depth=${d}</td>
+                  <td class="num">${fmtN(c.threads)}</td>
+                  <td class="num"><strong>${fmtN(Math.round(c.tps))}</strong></td>
+                  <td class="num" style="color:${color}"><strong>${(ratio*100).toFixed(1)}%</strong></td>
+                  <td class="num">${us2ms(c.p50us)}</td>
+                  <td class="num">${us2ms(c.p99us)}</td>
+                  <td class="num">${us2ms(c.p999us)}</td>
+                </tr>`;
+              })).join('');
+              return `<section><h2>B7. 真实集群 — QPS × 深度交叉</h2>
+                <div class="desc">同一深度下扫多档 QPS。比较 depth=0 / 5 / 20 在 1k / 5k / 10k 目标 QPS 下的达成率与延迟，
+                看深度对 SpiceDB 处理能力的真实影响（缓存预热后稳态）。</div>
+                <table>
+                  <tr><th>深度</th><th class="num">目标 QPS</th><th class="num">实测 QPS</th>
+                      <th class="num">达成率</th>
+                      <th class="num">p50 (ms)</th><th class="num">p99 (ms)</th><th class="num">p999 (ms)</th></tr>
+                  ${allRows}
+                </table>
+                <div class="chart-wrap"><canvas id="chart-b7"></canvas></div>
+              </section>`;
             }
 
             function renderMeta(d){
@@ -359,6 +623,57 @@ final class MatrixHtml {
                       c => c.actualHitRate * 100, '命中率 %');
               // S5 — QPS ladder (log y for latency, linear for pct)
               drawQps(d.cells);
+              // B-class charts
+              drawBar(d.cells, 'chart-b1', /^B1[A-E]-/,
+                      c => c.name, c => c.tps, 'TPS', 'TPS', true);
+              drawBarWithLine(d.cells, 'chart-b2', /^B2-/,
+                      c => fmtN(c.threads)+' QPS', c => c.tps, '实测 TPS',
+                      c => c.p99us/1000, 'p99 ms');
+              drawBarWithLine(d.cells, 'chart-b3', /^B3-write/,
+                      c => c.name.replace('B3-',''), c => c.tps, 'TPS',
+                      c => c.actualHitRate*100, '命中率 %');
+              drawBarWithLine(d.cells, 'chart-b5a', /^B5-folder-depth\\d+$/,
+                      c => c.name.replace('B5-folder-',''), c => c.tps, 'TPS',
+                      c => c.p99us/1000, 'p99 ms');
+              drawBarWithLine(d.cells, 'chart-b5b', /^B5-depth\\d+-noCache/,
+                      c => c.name.replace('B5-','').replace('-noCache',''), c => c.tps, 'TPS',
+                      c => c.p99us/1000, 'p99 ms');
+              drawBarWithLine(d.cells, 'chart-b6', /^B6[A-Z]-/,
+                      c => c.name.replace(/^B6.-/,''), c => c.tps, 'TPS',
+                      c => c.p99us/1000, 'p99 ms');
+              drawB7(d.cells);
+              drawBarWithLine(d.cells, 'chart-b8', /^B8[A-Z]-/,
+                      c => c.name.replace(/^B8.-/,''), c => c.tps, 'TPS',
+                      c => c.p99us/1000, 'p99 ms');
+            }
+
+            function drawB7(cells){
+              const s = cells.filter(c => /^B7-/.test(c.name));
+              if(!s.length) return;
+              const ctx = document.getElementById('chart-b7');
+              if(!ctx) return;
+              // group by depth → one line per depth, x = qps target
+              const byDepth = {};
+              s.forEach(c => {
+                const d = c.name.match(/d(\\d+)/)[1];
+                (byDepth[d] = byDepth[d]||[]).push(c);
+              });
+              Object.values(byDepth).forEach(arr => arr.sort((a,b)=>a.threads-b.threads));
+              const depths = Object.keys(byDepth).sort((a,b)=>+a-+b);
+              const colors = ['#10b981','#f59e0b','#ef4444','#8b5cf6'];
+              const qpsLabels = byDepth[depths[0]].map(c => fmtN(c.threads)+' QPS');
+              const datasets = depths.map((d, i) => ({
+                label: 'depth='+d+' p99(ms)',
+                data: byDepth[d].map(c => c.p99us/1000),
+                borderColor: colors[i % colors.length],
+                tension: 0.25
+              }));
+              new Chart(ctx, {
+                type:'line',
+                data:{ labels: qpsLabels, datasets },
+                options:{ responsive:true, maintainAspectRatio:false,
+                  scales:{ y:{type:'logarithmic',title:{display:true,text:'p99 ms (log)'}}}}
+              });
             }
 
             function drawBar(cells, canvasId, pattern, labelFn, valueFn, seriesLabel, yLabel, logScale){
