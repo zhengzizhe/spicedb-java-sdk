@@ -73,16 +73,37 @@ public class CoalescingTransport extends ForwardingTransport {
             }
         }
 
-        // We are the owner — execute the call, share result with all waiters
+        // We are the owner — execute the call, share result with all waiters.
+        //
+        // SR:C3 — Eviction ordering:
+        //
+        //   Success path: complete future FIRST (so waiters already at
+        //   existing.get() get the result), then remove from inflight in
+        //   finally. A new arrival between complete() and finally's remove()
+        //   finds our completed future via putIfAbsent and gets the result
+        //   immediately — safe reuse.
+        //
+        //   Failure path: MUST evict BEFORE publishing the exception. If we
+        //   evict-after, a new arrival between completeExceptionally() and
+        //   remove() would find our failed future via putIfAbsent and receive
+        //   our exception for a call it did not participate in — ghost failure
+        //   propagation. Evicting first means the new arrival gets null from
+        //   putIfAbsent and starts its own call, which is correct semantics.
         try {
             var result = delegate.check(request);
             myFuture.complete(result);
             return result;
         } catch (Exception e) {
+            // SR:C3 — evict before publishing (see comment above).
+            inflight.remove(key, myFuture);
             myFuture.completeExceptionally(e);
             throw e;
         } finally {
-            inflight.remove(key, myFuture); // only remove if still ours
+            // Success path cleanup. On the failure path this is a no-op because
+            // the catch block already removed. remove(key, value) is safe to
+            // call twice — the second call finds no matching value and returns
+            // false without error.
+            inflight.remove(key, myFuture);
         }
     }
 
