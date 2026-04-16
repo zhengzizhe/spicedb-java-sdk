@@ -9,7 +9,6 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.time.Duration;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Redisson-backed {@link DistributedTokenStore} for cross-JVM SESSION consistency.
@@ -39,24 +38,31 @@ public final class RedissonTokenStore implements DistributedTokenStore {
     private static final Logger LOG = System.getLogger(RedissonTokenStore.class.getName());
 
     private final RedissonClient client;
-    private final long ttlMs;
+    private final Duration ttl;
     private final String prefix;
 
+    /**
+     * Build a token store backed by the given Redisson client.
+     *
+     * @param client     Redisson client (caller-owned lifecycle)
+     * @param ttl        per-token TTL; reset on every {@link #set}
+     * @param keyPrefix  prefix prepended to every Redis key (e.g. {@code "authx:token:"})
+     * @throws IllegalArgumentException if {@code ttl} is zero or negative
+     */
     public RedissonTokenStore(RedissonClient client, Duration ttl, String keyPrefix) {
         this.client = Objects.requireNonNull(client, "client");
         Objects.requireNonNull(ttl, "ttl");
-        if (ttl.toMillis() <= 0) {
+        if (ttl.isZero() || ttl.isNegative()) {
             throw new IllegalArgumentException("ttl must be positive, got " + ttl);
         }
-        this.ttlMs = ttl.toMillis();
+        this.ttl = ttl;
         this.prefix = Objects.requireNonNull(keyPrefix, "keyPrefix");
     }
 
     @Override
     public void set(String key, String token) {
         try {
-            client.<String>getBucket(prefix + key, StringCodec.INSTANCE)
-                  .set(token, ttlMs, TimeUnit.MILLISECONDS);
+            client.<String>getBucket(prefix + key, StringCodec.INSTANCE).set(token, ttl);
         } catch (Exception e) {
             LOG.log(Level.WARNING,
                     () -> "RedissonTokenStore set failed for key " + key, e);
