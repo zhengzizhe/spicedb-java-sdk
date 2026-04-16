@@ -19,6 +19,14 @@
 
 **What to do instead:** When briefing an agent that *might* discover a missing API, explicitly say: "If you find the SDK is missing a method, STOP and report it — don't add it yourself." Then either expand the agent's scope explicitly or split the SDK enabler into its own task before retrying.
 
+### Code-review agent findings are claims, not facts — verify before planning
+
+**What went wrong:** In the 2026-04-16 review round, one agent claimed cache invalidation happened AFTER listener dispatch in `WatchCacheInvalidator.processResponse` (citing lines 610-624). The plan's SR:C2 required flipping the order. During execution, reading those exact lines showed the code already invalidates at 617-621 BEFORE enqueuing at 624 — the finding was simply wrong. The same agent also named two non-existent classes (`AuthxSchemaException`, `AuthxConstraintViolationException`) that looked plausible but weren't in the hierarchy.
+
+**Why it's wrong:** Review agents hallucinate specifics — off-by-N line numbers, non-existent types, misread sequential code as concurrent. Acting on the narrative without opening the file produces plans that either fix a non-bug or can't compile.
+
+**What to do instead:** Before writing a spec entry from a review finding, Read the cited file+lines. Grep for any claimed class name. If the claim doesn't survive verification, either reclassify the SR (current code already satisfies the invariant → regression test only, no impl) or drop it entirely. Never let a plan task reach execution with an unverified premise.
+
 ### Testing "Redis is down" with bad-from-start config
 
 **What went wrong:** To test that `RedissonTokenStore.set/get` swallow errors when Redis is unreachable, the first attempt built a `RedissonClient` pointed at `127.0.0.1:1` with `retryAttempts=0`. `Redisson.create()` itself threw `RedisConnectionException` before any test code ran.
