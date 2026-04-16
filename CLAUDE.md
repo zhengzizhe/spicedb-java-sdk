@@ -32,6 +32,8 @@ src/main/java/com/authx/sdk/
 test-app/                      # Demo Spring Boot app
 cluster-test/                  # Production cluster stress test harness
                                # (3 SpringBoot instances + Toxiproxy + HTML report)
+sdk-redisson/                  # Optional Redisson-backed DistributedTokenStore
+                               # (multi-JVM SESSION consistency)
 ```
 
 ## Build commands
