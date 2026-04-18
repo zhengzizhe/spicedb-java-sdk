@@ -1,7 +1,6 @@
 package com.authx.clustertest.config;
 
 import com.authx.sdk.AuthxClient;
-import com.authx.sdk.policy.CachePolicy;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.policy.ReadConsistency;
 import com.authx.sdk.policy.ResourcePolicy;
@@ -21,17 +20,12 @@ public class SdkConfig {
                         .targets(addrs)
                         .presharedKey(props.spicedb().presharedKey())
                         .requestTimeout(Duration.ofSeconds(30)))
-                .cache(c -> c
-                        .enabled(true)
-                        .maxSize(200_000)
-                        .watchInvalidation(true))
                 .features(f -> f
                         .virtualThreads(true)
                         .telemetry(true)
                         .shutdownHook(false))
                 .extend(e -> e.policies(PolicyRegistry.builder()
                         .defaultPolicy(ResourcePolicy.builder()
-                                .cache(CachePolicy.of(Duration.ofSeconds(30)))
                                 .readConsistency(ReadConsistency.session())
                                 .build())
                         .build()))

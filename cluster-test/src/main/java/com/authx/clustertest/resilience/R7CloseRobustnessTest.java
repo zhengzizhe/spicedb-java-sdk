@@ -33,7 +33,6 @@ public class R7CloseRobustnessTest {
                         .targets(addrs)
                         .presharedKey(props.spicedb().presharedKey())
                         .requestTimeout(Duration.ofSeconds(10)))
-                .cache(c -> c.enabled(false))
                 .features(f -> f
                         .virtualThreads(true)
                         .shutdownHook(false))

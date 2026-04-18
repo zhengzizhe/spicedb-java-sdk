@@ -1,14 +1,15 @@
 package com.authx.clustertest.soak;
 
 import com.authx.sdk.AuthxClient;
-import com.authx.sdk.cache.CacheStats;
 import org.springframework.stereotype.Component;
 
 import java.lang.management.ManagementFactory;
 
 /**
  * Periodic snapshot of runtime resource usage during soak tests:
- * heap, thread count, cache size, cache hit rate, watch reconnects.
+ * heap, thread count. Cache-related fields (cacheSize, hitRate,
+ * watchReconnects) are reported as constants since the SDK removed
+ * client-side decision caching (ADR 2026-04-18).
  */
 @Component
 public class ResourceSampler {
@@ -26,20 +27,8 @@ public class ResourceSampler {
         long heapMB = (rt.totalMemory() - rt.freeMemory()) / 1024 / 1024;
         int threads = ManagementFactory.getThreadMXBean().getThreadCount();
 
-        long cacheSize = 0;
-        double hitRate = 0.0;
-        if (client.cache() != null) {
-            cacheSize = client.cache().size();
-            CacheStats stats = client.cache().stats();
-            if (stats != null && stats.requestCount() > 0) {
-                hitRate = (double) stats.hitCount() / stats.requestCount();
-            }
-        }
-
-        // best-effort: watch reconnect metrics would require reaching into SdkMetrics;
-        // left as 0 until/unless exposed via a public counter.
-        long watchReconnects = 0L;
-
-        return new Sample(ts, heapMB, threads, cacheSize, hitRate, watchReconnects);
+        // Cache is gone — report zeros to keep the sample record shape
+        // stable for downstream HTML/JSON report consumers.
+        return new Sample(ts, heapMB, threads, 0L, 0.0, 0L);
     }
 }

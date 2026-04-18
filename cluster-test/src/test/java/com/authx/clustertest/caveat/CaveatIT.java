@@ -95,7 +95,6 @@ class CaveatIT {
         client = AuthxClient.builder()
                 .connection(c -> c.targets(TARGETS).presharedKey(PSK)
                         .requestTimeout(Duration.ofSeconds(15)))
-                .cache(c -> c.enabled(false))
                 .features(f -> f.shutdownHook(false))
                 .build();
     }
