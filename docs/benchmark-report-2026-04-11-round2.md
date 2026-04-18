@@ -2,8 +2,8 @@
 
 Follow-up benchmark after a deeper code audit that found **11 additional bugs
 (F11-1 through F11-8 and F12-1 through F12-3)**. This report documents the
-second run after fixing all of them, and compares the numbers to the first
-run in `benchmark-report-2026-04-11.md`.
+second run after fixing all of them (baseline numbers from the pre-fix run
+are inlined in the "Before / After" tables below).
 
 ## Summary
 
