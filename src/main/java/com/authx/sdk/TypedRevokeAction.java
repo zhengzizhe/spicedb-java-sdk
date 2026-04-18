@@ -1,7 +1,9 @@
 package com.authx.sdk;
 
+import com.authx.sdk.action.RevokeCompletion;
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.RevokeResult;
 import com.authx.sdk.model.SubjectRef;
 
 import java.util.Collection;
@@ -38,71 +40,79 @@ public class TypedRevokeAction<R extends Relation.Named> {
     //  Common subject-type shortcuts (validated against schema)
     // ════════════════════════════════════════════════════════════════
 
-    public void fromUser(String... userIds) {
-        writeTypedSubjects("user", null, userIds);
+    public RevokeCompletion fromUser(String... userIds) {
+        return writeTypedSubjects("user", null, userIds);
     }
 
-    public void fromUser(Collection<String> userIds) {
-        fromUser(userIds.toArray(String[]::new));
+    public RevokeCompletion fromUser(Collection<String> userIds) {
+        return fromUser(userIds.toArray(String[]::new));
     }
 
-    public void fromGroupMember(String... groupIds) {
-        writeTypedSubjects("group", "member", groupIds);
+    public RevokeCompletion fromGroupMember(String... groupIds) {
+        return writeTypedSubjects("group", "member", groupIds);
     }
 
-    public void fromGroupMember(Collection<String> groupIds) {
-        fromGroupMember(groupIds.toArray(String[]::new));
+    public RevokeCompletion fromGroupMember(Collection<String> groupIds) {
+        return fromGroupMember(groupIds.toArray(String[]::new));
     }
 
-    public void fromUserAll() {
-        write(new String[]{"user:*"});
+    public RevokeCompletion fromUserAll() {
+        return write(new String[]{"user:*"});
     }
 
     // ════════════════════════════════════════════════════════════════
     //  Generic subject entry — supports any subject type in the schema
     // ════════════════════════════════════════════════════════════════
 
-    public void from(SubjectRef... subjects) {
-        if (subjects == null || subjects.length == 0) return;
+    public RevokeCompletion from(SubjectRef... subjects) {
+        if (subjects == null || subjects.length == 0) {
+            return RevokeCompletion.of(new RevokeResult(null, 0));
+        }
         String[] refs = new String[subjects.length];
         for (int i = 0; i < subjects.length; i++) {
             refs[i] = subjects[i].toRefString();
         }
-        write(refs);
+        return write(refs);
     }
 
-    public void from(Collection<SubjectRef> subjects) {
-        from(subjects.toArray(SubjectRef[]::new));
+    public RevokeCompletion from(Collection<SubjectRef> subjects) {
+        return from(subjects.toArray(SubjectRef[]::new));
     }
 
     /** Raw-string escape hatch — still validated against schema at runtime. */
-    public void fromSubjectRefs(String... subjectRefs) {
-        if (subjectRefs == null || subjectRefs.length == 0) return;
-        write(subjectRefs);
+    public RevokeCompletion fromSubjectRefs(String... subjectRefs) {
+        if (subjectRefs == null || subjectRefs.length == 0) {
+            return RevokeCompletion.of(new RevokeResult(null, 0));
+        }
+        return write(subjectRefs);
     }
 
     /** Collection overload for {@link #fromSubjectRefs(String...)}. */
-    public void fromSubjectRefs(Collection<String> subjectRefs) {
-        if (subjectRefs == null || subjectRefs.isEmpty()) return;
-        write(subjectRefs.toArray(String[]::new));
+    public RevokeCompletion fromSubjectRefs(Collection<String> subjectRefs) {
+        if (subjectRefs == null || subjectRefs.isEmpty()) {
+            return RevokeCompletion.of(new RevokeResult(null, 0));
+        }
+        return write(subjectRefs.toArray(String[]::new));
     }
 
     // ════════════════════════════════════════════════════════════════
     //  Internals
     // ════════════════════════════════════════════════════════════════
 
-    private void writeTypedSubjects(String type, String subRelation, String[] ids) {
-        if (ids == null || ids.length == 0) return;
+    private RevokeCompletion writeTypedSubjects(String type, String subRelation, String[] ids) {
+        if (ids == null || ids.length == 0) {
+            return RevokeCompletion.of(new RevokeResult(null, 0));
+        }
         String[] refs = new String[ids.length];
         for (int i = 0; i < ids.length; i++) {
             refs[i] = (subRelation == null || subRelation.isEmpty())
                     ? type + ":" + ids[i]
                     : type + ":" + ids[i] + "#" + subRelation;
         }
-        write(refs);
+        return write(refs);
     }
 
-    private void write(String[] refs) {
+    private RevokeCompletion write(String[] refs) {
         SchemaCache schema = factory.schemaCache();
         if (schema != null) {
             String resourceType = factory.resourceType();
@@ -113,10 +123,16 @@ public class TypedRevokeAction<R extends Relation.Named> {
                 }
             }
         }
+        // Aggregate per-RPC RevokeResults into a single result (SR:req-6).
+        String lastToken = null;
+        int totalCount = 0;
         for (String id : ids) {
             for (R rel : relations) {
-                factory.revokeFromSubjects(id, rel.relationName(), refs);
+                RevokeResult r = factory.revokeFromSubjects(id, rel.relationName(), refs);
+                if (r.zedToken() != null) lastToken = r.zedToken();
+                totalCount += r.count();
             }
         }
+        return RevokeCompletion.of(new RevokeResult(lastToken, totalCount));
     }
 }
