@@ -10,25 +10,24 @@ Legend: `[P]` parallelizable within phase — `[SR:C#]` spec requirement.
 
 - [X] T001 Verify branch and green baseline
 
-## Phase 1: Cache & Watch (SR:C2, SR:C5) — DEFERRED
+## Phase 1: Cache & Watch (SR:C2, SR:C5)
 
-Discovery during execution:
+Landed in PR#1 (merge commit `b7c1a03`, 2026-04-18):
 
-- **SR:C2** — On inspection the ordering is already correct in the current
-  code. `processResponse` invalidates the cache on the gRPC callback thread
-  BEFORE enqueuing listener dispatch
-  (`src/main/java/com/authx/sdk/transport/WatchCacheInvalidator.java:617-624`).
-  The review agent that flagged C2 was reading lines 610-624 out of order.
-  Deferring the regression test (writing a reliable 1000-concurrent test is
-  its own design exercise); real invariant holds today.
-- **SR:C5** — drop handler SPI + backpressure policy is a larger wiring
-  change crossing `SdkComponents`, `AuthxClientBuilder`, `WatchCacheInvalidator`
-  and requires new public types. Defers to a dedicated follow-up plan so it
-  can be reviewed independently of the critical-correctness batch.
+- **SR:C2** — Javadoc + inline comments now spell out the happens-before
+  invariant at `WatchCacheInvalidator#processResponse`; regression test in
+  `WatchCacheInvalidatorOrderingTest` exercises 1000 single-update responses
+  and asserts zero ordering violations.
+- **SR:C5** — `DroppedListenerEvent` + `QueueFullPolicy` SPIs added;
+  `SdkComponents.Builder#watchListenerDropHandler(...)` surfaces drops,
+  `CacheConfig#listenerQueueOnFull(...)` opts into
+  `BLOCK_WITH_BACKPRESSURE`. Two tests in `WatchListenerQueuePolicyTest`
+  cover the DROP handler payload and the no-drop invariant under
+  backpressure.
 
-- [ ] T002 [SR:C2] DEFERRED — current code already satisfies the invariant
-- [ ] T003 [SR:C2] DEFERRED — see above
-- [ ] T004–T009 [SR:C5] DEFERRED — split into a follow-up plan
+- [X] T002 [SR:C2] Ordering Javadoc + inline documentation
+- [X] T003 [SR:C2] Concurrency regression test
+- [X] T004–T009 [SR:C5] DroppedListenerEvent SPI + QueueFullPolicy + handler + backpressure
 
 ## Phase 2: Transport chain (SR:C3, SR:C4, SR:C8)
 
@@ -55,15 +54,20 @@ Discovery during execution:
 - [X] T024 [SR:C10] Sink-timeout test written
 - [X] T025 [SR:C10] Bounded flush + close by sink timeout
 
-## Phase 5: Context propagation (SR:C1) — DEFERRED
+## Phase 5: Context propagation (SR:C1)
 
-Writing a deterministic test requires standing up an in-process gRPC server
-that blocks predictably; the implementation itself is also subtle (must
-preserve `CancellableContext` across `CloseableGrpcIterator` lazy iteration
-without breaking existing iterator semantics). Scoped to a dedicated
-follow-up plan.
+Landed in PR#1 (merge commit `b7c1a03`, 2026-04-18):
 
-- [ ] T026–T028 [SR:C1] DEFERRED — follow-up plan
+- `GrpcTransport#newCallContext()` builds a `CancellableContext` whose
+  deadline is `min(Context.current().getDeadline(), now + policyTimeout)`;
+  every unary call now runs under this context and every iterator call is
+  handed one via the new `CloseableGrpcIterator.from(supplier, ctx)`
+  overload. The iterator re-attaches `ctx` inside `hasNext` / `next` so
+  Context-sensitive operations during lazy iteration see the same context.
+  Two tests in `GrpcTransportContextTest` cover upstream cancellation
+  propagation (≤250 ms) and tighter-upstream-deadline wins.
+
+- [X] T026–T028 [SR:C1] CancellableContext wrapping + iterator preservation + tests
 
 ## Phase 6: Verification
 
