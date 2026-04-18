@@ -13,6 +13,9 @@ import java.util.function.Consumer;
  */
 final class RevokeCompletionImpl implements RevokeCompletion {
 
+    private static final System.Logger LOG =
+            System.getLogger("com.authx.sdk.action.RevokeCompletion");
+
     private final RevokeResult result;
 
     RevokeCompletionImpl(RevokeResult result) {
@@ -33,7 +36,17 @@ final class RevokeCompletionImpl implements RevokeCompletion {
 
     @Override
     public RevokeCompletion listenerAsync(Consumer<RevokeResult> callback, Executor executor) {
-        // Filled in by T006.
-        throw new UnsupportedOperationException("listenerAsync — implemented in T006");
+        Objects.requireNonNull(callback, "callback");
+        Objects.requireNonNull(executor, "executor");
+        executor.execute(() -> {
+            try {
+                callback.accept(result);
+            } catch (Throwable t) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Async revoke listener threw (source={0}): {1}",
+                        callback.getClass().getName(), t.toString());
+            }
+        });
+        return this;
     }
 }
