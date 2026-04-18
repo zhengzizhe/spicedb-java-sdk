@@ -138,35 +138,20 @@ client.close();  // 实现了 AutoCloseable
 
 ## 进阶用法
 
-### 缓存配置
-
-```java
-AuthxClient client = AuthxClient.builder()
-    .connection(c -> c.target("localhost:50051").presharedKey("my-key"))
-    .cache(c -> c
-        .enabled(true)            // 启用 L1 内存缓存
-        .maxSize(50_000)          // 最多缓存条目数
-        .watchInvalidation(true)) // 订阅 Watch 流，关系变更时自动失效
-    .build();
-
-// 手动失效
-client.cache().invalidateResource("document", "doc-1");
-```
-
 ### 策略分层（per-resource-type）
 
 ```java
 PolicyRegistry policies = PolicyRegistry.builder()
     .defaultPolicy(ResourcePolicy.builder()
-        .cache(CachePolicy.of(Duration.ofMinutes(5)))
         .retry(RetryPolicy.defaults())
+        .readConsistency(ReadConsistency.session())
         .build())
     .forResource("document", ResourcePolicy.builder()
-        .cache(CachePolicy.of(Duration.ofSeconds(30)))   // 文档权限缓存 30s
         .circuitBreaker(CircuitBreakerPolicy.defaults())
+        .readConsistency(ReadConsistency.strong())
         .build())
     .forResource("folder", ResourcePolicy.builder()
-        .cache(CachePolicy.of(Duration.ofMinutes(10)))   // 目录权限缓存更久
+        .retry(RetryPolicy.disabled())
         .build())
     .build();
 
@@ -176,24 +161,9 @@ AuthxClient client = AuthxClient.builder()
     .build();
 ```
 
-### Watch 实时变更监听
-
-```java
-// 需要先开启 cache + watchInvalidation
-client.onRelationshipChange(change -> {
-    System.out.println(change.resourceType() + ":" + change.resourceId()
-        + " " + change.operation() + " " + change.relation()
-        + " -> " + change.subjectType() + ":" + change.subjectId());
-
-    // 审计场景：transaction metadata 由写入方注入，自动透传给监听器
-    String actor = change.transactionMetadata().get("actor");
-    String traceId = change.transactionMetadata().get("trace_id");
-
-    // 临时权限：可以读 caveat 名称和过期时间
-    String caveat = change.caveatName();          // null 如果没有 caveat
-    Instant expiresAt = change.expiresAt();       // null 如果没有过期时间
-});
-```
+> 本地决策缓存已于 2026-04-18 移除（见 [ADR](docs/adr/2026-04-18-remove-l1-cache.md)）。
+> 如需低延迟读，使用 `Consistency.minimizeLatency()` 命中 SpiceDB 服务端的
+> schema-aware dispatch cache。
 
 ---
 
@@ -252,54 +222,11 @@ SdkComponents.builder()
 
 `SchemaReadHealthProbe` 默认 500ms 超时（适配 K8s liveness probe），把 `NOT_FOUND` 也视为 healthy（"SpiceDB 在线但没写 schema" 不算故障）。
 
-### `DuplicateDetector` —— Watch 重连去重
-
-SpiceDB 的 Watch 流在重连时可能在 cursor 边界附近**重放**事件。默认情况下 SDK 不去重（向后兼容），如果你的 listener 有副作用且无法接受重复，开启 LRU 去重：
-
-```java
-SdkComponents.builder()
-    .watchDuplicateDetector(
-        DuplicateDetector.lru(10_000, Duration.ofMinutes(5)))  // 需要 Caffeine
-    .build();
-```
-
-去重 key 是 `zedToken`（SpiceDB 单调递增的事务标识符），自然唯一。
-
-**重要**：dedup 只挡 listener，**不挡缓存失效**——每个 pod 的本地缓存仍然会被每次事件清掉，这是设计目标。
-
-如果 Caffeine 不在 classpath，会自动 fallback 到 noop 并打 WARNING（同 `CachedTransport` 的行为），不会崩溃。
-
-### `watchListenerExecutor` —— 自定义 listener dispatch 线程池
-
-默认：单线程 + 10 000 队列 + 满时丢弃（计入 `droppedListenerEvents` 指标）。
-适用：低频 listener、要求严格顺序、不想引入新线程池。
-
-如果你的 listener 慢或者要并行处理，自己提供 executor：
-
-```java
-import java.util.concurrent.Executors;
-
-ExecutorService myExecutor = Executors.newFixedThreadPool(8);
-// 或者 JDK 21+ 虚拟线程：
-ExecutorService myExecutor = Executors.newVirtualThreadPerTaskExecutor();
-
-SdkComponents.builder()
-    .watchListenerExecutor(myExecutor)
-    .build();
-
-// 注意：你提供的 executor 由你管理生命周期。
-// SDK 在 close() 时不会关掉它。
-```
-
 ---
 
 ## 多实例部署指南
 
 如果你的服务跑多个实例（K8s deployment > 1 副本），重要事情：
-
-### 缓存失效是**正确的多次执行**
-
-每个 pod 都有自己的 Caffeine 缓存，每个 pod 都需要清自己的缓存。N 个 pod 收到 Watch 事件时各自失效——这是正确行为，不要去优化它。
 
 ### SESSION 一致性需要共享 tokenStore
 
@@ -315,85 +242,6 @@ AuthxClient client = AuthxClient.builder()
     ...
 ```
 
-### Listener 副作用是**可能错的多次执行**
-
-如果你注册的 listener 会做副作用（写审计日志、发通知、调外部 API），N 个 pod 都会执行同一个事件。三种解决方式：
-
-#### 方式 1: 让下游目的地自己幂等（推荐）
-
-`zedToken` 是 SpiceDB 全局唯一的事务 ID，所有 pod 收到的同一个事件 zedToken 一样。利用这一点：
-
-```java
-// Elasticsearch: 用 zedToken 当文档 ID
-client.onRelationshipChange(change -> {
-    es.put("audit-index", change.zedToken(), toJson(change));
-});
-
-// PostgreSQL: 加 UNIQUE 约束 + ON CONFLICT DO NOTHING
-jdbc.update(
-    "INSERT INTO audit(zed_token, resource, action, actor) " +
-    "VALUES (?, ?, ?, ?) ON CONFLICT (zed_token) DO NOTHING",
-    change.zedToken(), ..., change.transactionMetadata().get("actor"));
-
-// Kafka: enable.idempotence=true + message key = zedToken
-kafka.send("events", change.zedToken(), serialize(change));
-```
-
-3 个 pod 各发一次写入，下游的去重机制保证最终只有 1 条记录。
-
-#### 方式 2: 走消息总线 + consumer group
-
-更解耦的方案：app 实例只把 Watch 事件 publish 到 Kafka，独立的 consumer service 通过 consumer group 保证 exactly-once 处理：
-
-```
-App pods (N) → Watch → publish 到 Kafka → 独立 consumer → 真正的副作用
-```
-
-Kafka consumer group 天然保证每条消息只被组内一个 consumer 处理。
-
-#### 方式 3: 用 Watch 事件 zedToken 的 LRU dedup（仅同 pod 内）
-
-```java
-SdkComponents.builder()
-    .watchDuplicateDetector(DuplicateDetector.lru(10_000, Duration.ofMinutes(5)))
-    .build();
-```
-
-**注意**：这只挡**同一 pod 内**的重复（如 Watch 流重连补发时的重放），**不挡跨 pod 的重复**。跨 pod 还得靠方式 1 或 2。
-
----
-
-## Watch 流的可观测性
-
-```java
-// 当前 Watch 连接状态
-client.cache().watchInvalidator().state();
-//   NOT_STARTED / CONNECTING / CONNECTED / RECONNECTING / STOPPED
-
-// 累计重连次数（监控异常断开）
-client.metrics().snapshot().watchReconnects();
-
-// listener 队列丢弃的事件数（监控背压）
-client.cache().watchInvalidator().droppedListenerEvents();
-```
-
-`CONNECTED` 状态触发条件（任一）：
-1. SpiceDB 通过 gRPC HEADERS 帧明确响应
-2. 底层 gRPC channel 是 READY 状态
-
-所以即使是纯读系统（SpiceDB 没有事件推送），只要 channel 健康，state 也会显示 CONNECTED。
-
-### Watch 自动恢复
-
-SDK 内部处理三种异常情况：
-
-| 情况 | 处理 |
-|---|---|
-| 临时网络断开 | 指数退避重试（1s → 2s → 4s → … → 30s 上限），保留 cursor 续传 |
-| `--grpc-max-conn-age` 触发的连接轮换 | 自动重连，完全透明 |
-| **Cursor 过期**（断连超过 SpiceDB `--datastore-gc-window`） | 自动检测 → 重置 cursor → 从 HEAD 重新订阅，**这段时间的事件会丢失**（不可恢复） |
-| 永久错误（UNIMPLEMENTED / UNAUTHENTICATED / PERMISSION_DENIED） | 停止重试，缓存失效降级到纯 TTL 过期 |
-
 ---
 
 ## 配置参考
@@ -407,9 +255,6 @@ SDK 内部处理三种异常情况：
 | `loadBalancing` | `round_robin` | gRPC 负载均衡策略 |
 | `keepAliveTime` | `30s` | keepalive 探测间隔 |
 | `requestTimeout` | `5s` | 单次 gRPC 请求超时 |
-| `cacheEnabled` | `false` | 是否启用 L1 内存缓存 |
-| `cacheMaxSize` | `100000` | L1 缓存最大条目数 |
-| `watchInvalidation` | `false` | 是否通过 Watch 流实时失效缓存 |
 | `coalescingEnabled` | `true` | 是否合并并发重复请求 |
 | `useVirtualThreads` | `false` | 是否使用 Java 21 虚拟线程 |
 | `registerShutdownHook` | `false` | JVM 退出时自动调用 `close()` |
@@ -424,8 +269,6 @@ SDK 内部处理三种异常情况：
 | `clock` | SYSTEM | 时钟（测试用） |
 | `tokenStore` | null | 跨实例 SESSION 一致性的 zedtoken 存储（开箱即用：[`sdk-redisson`](sdk-redisson/README.md)） |
 | `healthProbe` | `all(ChannelState, SchemaRead)` | 自定义健康探针 |
-| `watchDuplicateDetector` | `noop()` | Watch 事件去重（默认不去重） |
-| `watchListenerExecutor` | 默认单线程 + 10K 队列 | 自定义 listener 调度线程池 |
 
 ---
 
@@ -438,13 +281,35 @@ SDK 内部处理三种异常情况：
 | `io.github.resilience4j:*` | 2.4.0 | 熔断 / 重试 / 限流 / 隔仓 |
 | `org.hdrhistogram:HdrHistogram` | 2.2.2 | 延迟百分位追踪 |
 | `io.opentelemetry:opentelemetry-api` | 1.40.0 | 可观测性 API（无 SDK 时为 no-op） |
-| `com.github.ben-manes.caffeine:caffeine` | 3.1.8 | L1 缓存（**可选**，缺失时自动 fallback noop） |
 
 > **要求**：Java 21+
 >
 > **不附属于 Authzed 公司**。这是一个独立的 Java SDK，依赖 SpiceDB 官方的 `authzed-api` protobuf 定义。
 
 ## Changelog
+
+### 未发布 — 移除 L1 本地缓存 + Watch 基础设施 (2026-04-18, BREAKING)
+
+根据 [ADR 2026-04-18](docs/adr/2026-04-18-remove-l1-cache.md) 移除 SDK 所有客户端决策缓存。
+
+**破坏性变更** —— 以下 API 已删除，升级需调整调用：
+
+- `AuthxClientBuilder#cache(...)` / `CacheConfig` 整块配置
+- `AuthxClient#cache()` / `CacheHandle`
+- `AuthxClient#schema()` / `SchemaClient`
+- `AuthxClient#onRelationshipChange(...)` / `offRelationshipChange(...)`
+- `SdkComponents.Builder#watchListenerExecutor(...)` / `watchListenerDropHandler(...)` / `watchDuplicateDetector(...)`
+- `ExtendConfig#addWatchStrategy(...)`
+- 整个 `com.authx.sdk.cache`、`com.authx.sdk.watch`、`com.authx.sdk.dedup` 包
+- `CachePolicy`、`SchemaCache`、`SchemaLoader`、`CacheHandle`、`SdkCaching`、`SchemaClient`、`AuthxCodegen`
+- SPI：`DuplicateDetector`、`DroppedListenerEvent`、`QueueFullPolicy`
+- `ResourcePolicy#cache(...)`、`PolicyRegistry#resolveCacheTtl(...)` / `isCacheEnabled(...)`
+- `SdkMetrics` 中的 `cacheHits/Misses/Evictions/Size`、`watchReconnects`、`recordCache*`、`updateCacheSize`、`setCacheStatsSource`
+- `SdkTypedEvent` 中的 Cache 和 Watch 相关 record
+
+**保留**：`CoalescingTransport`（in-flight 去重）、`DistributedTokenStore`（跨 JVM SESSION 一致性）、全部 resilience 机制、typed chain、write-completion listener、所有 resilience/异常/lifecycle/非 Watch SPI。
+
+**性能影响**：`check()` p50 从 ~3μs（缓存命中）变为 ~1-5ms（SpiceDB RTT）。业务可选 `Consistency.minimizeLatency()` 命中 SpiceDB 服务端 dispatch cache（schema-aware，无继承失效问题）。**SpiceDB 集群 QPS 会放大 ~20x，需确认集群容量**。
 
 ### 未发布 — Write Listener API (2026-04-18)
 
