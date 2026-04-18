@@ -41,17 +41,4 @@ class SdkMetricsTest {
         assertThat(metrics.circuitBreakerState()).isEqualTo("OPEN");
     }
 
-    @Test
-    void cacheHitRate_zeroDivision() {
-        var metrics = new SdkMetrics();
-        assertThat(metrics.cacheHitRate()).isEqualTo(0.0);
-    }
-
-    @Test
-    void cacheHitRate_computed() {
-        var metrics = new SdkMetrics();
-        for (int i = 0; i < 80; i++) metrics.recordCacheHit();
-        for (int i = 0; i < 20; i++) metrics.recordCacheMiss();
-        assertThat(metrics.cacheHitRate()).isCloseTo(0.8, org.assertj.core.data.Offset.offset(0.01));
-    }
 }

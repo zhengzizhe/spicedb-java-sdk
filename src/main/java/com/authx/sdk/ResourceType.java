@@ -8,8 +8,8 @@ import java.util.Objects;
 /**
  * Typed descriptor for a SpiceDB resource type, carrying the canonical
  * type name plus the {@link Relation.Named} and {@link Permission.Named}
- * enum classes declared on that type. Generated on a per-type basis by
- * {@link AuthxCodegen} and exposed as {@code Xxx.TYPE}:
+ * enum classes declared on that type. Declared (hand-written or from
+ * external codegen) per-type and exposed as {@code Xxx.TYPE}:
  *
  * <pre>
  * public static final ResourceType&lt;Document.Rel, Document.Perm&gt; TYPE =

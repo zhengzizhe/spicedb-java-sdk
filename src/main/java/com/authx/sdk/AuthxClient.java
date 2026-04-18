@@ -3,16 +3,11 @@ package com.authx.sdk;
 import com.authx.sdk.event.DefaultTypedEventBus;
 import com.authx.sdk.event.SdkTypedEvent;
 import com.authx.sdk.event.TypedEventBus;
-import com.authx.sdk.internal.SchemaClient;
-import com.authx.sdk.internal.SdkCaching;
 import com.authx.sdk.internal.SdkConfig;
 import com.authx.sdk.internal.SdkInfrastructure;
 import com.authx.sdk.internal.SdkObservability;
 import com.authx.sdk.lifecycle.LifecycleManager;
 import com.authx.sdk.metrics.SdkMetrics;
-import com.authx.sdk.model.Consistency;
-import com.authx.sdk.model.RelationshipChange;
-import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.spi.HealthProbe;
 import com.authx.sdk.transport.InMemoryTransport;
@@ -22,7 +17,6 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
 /**
  * AuthX SDK — Java client for SpiceDB permission management.
@@ -31,7 +25,6 @@ import java.util.function.Consumer;
  * <pre>
  * var client = AuthxClient.builder()
  *     .connection(c -> c.target("dns:///spicedb.prod:50051").presharedKey("my-key"))
- *     .cache(c -> c.enabled(true))
  *     .build();
  * </pre>
  */
@@ -40,30 +33,20 @@ public class AuthxClient implements AutoCloseable {
     private final SdkTransport transport;
     private final SdkInfrastructure infra;
     private final SdkObservability observability;
-    private final SdkCaching caching;
     private final SdkConfig config;
     private final HealthProbe healthProbe;
-    private final SchemaClient schemaClient;
     private final ConcurrentHashMap<String, ResourceFactory> factories = new ConcurrentHashMap<>();
 
     AuthxClient(SdkTransport transport,
                    SdkInfrastructure infra,
                    SdkObservability observability,
-                   SdkCaching caching,
                    SdkConfig config,
                    HealthProbe healthProbe) {
         this.transport = Objects.requireNonNull(transport);
         this.infra = Objects.requireNonNull(infra);
         this.observability = Objects.requireNonNull(observability);
-        this.caching = Objects.requireNonNull(caching);
         this.config = Objects.requireNonNull(config);
         this.healthProbe = Objects.requireNonNull(healthProbe, "healthProbe");
-        this.schemaClient = new SchemaClient(caching.schemaCache());
-
-        // Wire dispatcher into Watch stream
-        if (caching.watchInvalidator() != null && caching.watchDispatcher() != null) {
-            caching.watchInvalidator().addListener(caching.watchDispatcher());
-        }
     }
 
     /** Create a new builder for configuring and constructing an {@link AuthxClient}. */
@@ -78,9 +61,8 @@ public class AuthxClient implements AutoCloseable {
         lm.begin(); lm.complete();
         var infra = new SdkInfrastructure(null, null, Runnable::run, lm);
         var observability = new SdkObservability(new SdkMetrics(), bus, null);
-        var caching = new SdkCaching(null, null, null, null);
         var config = new SdkConfig("user", PolicyRegistry.withDefaults(), false, false);
-        return new AuthxClient(new InMemoryTransport(), infra, observability, caching, config, HealthProbe.up());
+        return new AuthxClient(new InMemoryTransport(), infra, observability, config, HealthProbe.up());
     }
 
     // ---- Business API ----
@@ -103,11 +85,9 @@ public class AuthxClient implements AutoCloseable {
      * </pre>
      */
     public ResourceFactory on(String resourceType) {
-        return factories.computeIfAbsent(resourceType, type -> {
-            if (caching.schemaCache() != null) caching.schemaCache().validateResourceType(type);
-            return new ResourceFactory(type, transport, config.defaultSubjectType(),
-                    infra.asyncExecutor(), caching.schemaCache());
-        });
+        return factories.computeIfAbsent(resourceType, type ->
+                new ResourceFactory(type, transport, config.defaultSubjectType(),
+                        infra.asyncExecutor()));
     }
 
     /**
@@ -152,13 +132,12 @@ public class AuthxClient implements AutoCloseable {
             throw new IllegalArgumentException(clazz.getSimpleName() + " must be annotated with @PermissionResource");
         }
         String resourceType = annotation.value();
-        if (caching.schemaCache() != null) caching.schemaCache().validateResourceType(resourceType);
         try {
             var constructor = clazz.getDeclaredConstructor();
             constructor.setAccessible(true);
             T instance = constructor.newInstance();
             instance.init(resourceType, transport, config.defaultSubjectType(),
-                    infra.asyncExecutor(), caching.schemaCache());
+                    infra.asyncExecutor());
             return instance;
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to create " + clazz.getSimpleName() + ": " + e.getMessage(), e);
@@ -167,7 +146,6 @@ public class AuthxClient implements AutoCloseable {
 
     /** Create a one-off resource handle for the given type and id. */
     public ResourceHandle resource(String type, String id) {
-        if (caching.schemaCache() != null) caching.schemaCache().validateResourceType(type);
         return new ResourceHandle(type, id, transport, config.defaultSubjectType(), infra.asyncExecutor());
     }
 
@@ -196,36 +174,12 @@ public class AuthxClient implements AutoCloseable {
         return new BatchCheckBuilder(transport);
     }
 
-    // ---- Watch (real-time relationship change events) ----
-
-    /**
-     * Subscribe to ALL relationship changes (cross-cutting: audit, logging).
-     * For per-type handling, use {@link WatchStrategy} instead.
-     *
-     * @throws IllegalStateException if Watch is not enabled
-     */
-    public void onRelationshipChange(Consumer<RelationshipChange> listener) {
-        if (caching.watchDispatcher() == null) {
-            throw new IllegalStateException(
-                    "Watch not enabled. Use .cache(c -> c.enabled(true).watchInvalidation(true)) in Builder.");
-        }
-        caching.watchDispatcher().addGlobalListener(listener);
-    }
-
-    /** Unsubscribe a previously registered relationship change listener. */
-    public void offRelationshipChange(Consumer<RelationshipChange> listener) {
-        if (caching.watchDispatcher() != null) {
-            caching.watchDispatcher().removeGlobalListener(listener);
-        }
-    }
-
     // ---- Observability ----
 
     /** Package-private: used by TypedResourceFactory to access the transport chain. */
     SdkTransport transport() { return transport; }
     String defaultSubjectType() { return config.defaultSubjectType(); }
     java.util.concurrent.Executor asyncExecutor() { return infra.asyncExecutor(); }
-    com.authx.sdk.cache.SchemaCache internalSchemaCache() { return caching.schemaCache(); }
 
     /** Return the SDK metrics collector. */
     public SdkMetrics metrics() { return observability.metrics(); }
@@ -235,12 +189,6 @@ public class AuthxClient implements AutoCloseable {
 
     /** Return the lifecycle manager for inspecting SDK initialization state. */
     public LifecycleManager lifecycle() { return infra.lifecycle(); }
-
-    /** Return the schema client for reading and writing SpiceDB schemas. */
-    public SchemaClient schema() { return schemaClient; }
-
-    /** Return the cache handle for manual cache operations (invalidation, stats). */
-    public CacheHandle cache() { return caching.handle(); }
 
     /**
      * Run the configured {@link HealthProbe} and return its result.
@@ -265,16 +213,14 @@ public class AuthxClient implements AutoCloseable {
         if (!infra.markClosed()) return; // prevent double-close
         // Partial-failure resilience (F11-7): a throw from any one sub-close
         // must NOT skip the remaining sub-closes. We wrap each step in its
-        // own try/catch so that e.g. a hung watch invalidator can't leak the
-        // gRPC channel. Failures are logged at WARN; we don't re-throw because
-        // close() is typically called from a shutdown hook or try-with-resources
-        // where the caller has no meaningful recovery path.
+        // own try/catch so that failures are logged at WARN and close()
+        // keeps going. close() is typically called from a shutdown hook
+        // or try-with-resources where the caller has no meaningful recovery.
         safeClose("eventBus.publish(ClientStopping)",
                 () -> observability.eventBus().publish(new SdkTypedEvent.ClientStopping(Instant.now())));
         safeClose("lifecycle.stopping", () -> infra.lifecycle().stopping());
 
-        // Shutdown order: scheduler → watch → telemetry flush → transport → channel → hook
-        // Close scheduler first (stops periodic tasks), but keep channel alive for watch/transport
+        // Shutdown order: scheduler → telemetry flush → transport → channel → hook
         if (infra.scheduler() != null) {
             safeClose("scheduler.shutdown", () -> {
                 infra.scheduler().shutdown();
@@ -287,9 +233,6 @@ public class AuthxClient implements AutoCloseable {
                     infra.scheduler().shutdownNow();
                 }
             });
-        }
-        if (caching.watchInvalidator() != null) {
-            safeClose("watchInvalidator.close", caching.watchInvalidator()::close);
         }
         if (observability.telemetry() != null) {
             safeClose("telemetry.close", observability.telemetry()::close);
