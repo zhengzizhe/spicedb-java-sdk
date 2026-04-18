@@ -1,7 +1,6 @@
 package com.authx.sdk;
 
 import com.authx.sdk.event.DefaultTypedEventBus;
-import com.authx.sdk.internal.SdkCaching;
 import com.authx.sdk.internal.SdkConfig;
 import com.authx.sdk.internal.SdkInfrastructure;
 import com.authx.sdk.internal.SdkObservability;
@@ -72,9 +71,8 @@ class VirtualThreadCompatibilityTest {
 
         var infra = new SdkInfrastructure(null, null, vtExecutor, lm);
         var observability = new SdkObservability(new SdkMetrics(), bus, null);
-        var caching = new SdkCaching(null, null, null, null);
         var config = new SdkConfig("user", PolicyRegistry.withDefaults(), false, true);
-        client = new AuthxClient(new InMemoryTransport(), infra, observability, caching, config, HealthProbe.up());
+        client = new AuthxClient(new InMemoryTransport(), infra, observability, config, HealthProbe.up());
     }
 
     @AfterEach

@@ -8,24 +8,6 @@ import static org.assertj.core.api.Assertions.*;
 
 class SpiAdditionalTest {
 
-    // ---- DuplicateDetector ----
-    @Nested class DuplicateDetectorTest {
-        @Test void noopAlwaysReturnsTrue() {
-            var detector = DuplicateDetector.<String>noop();
-            assertThat(detector.tryProcess("key1")).isTrue();
-            assertThat(detector.tryProcess("key1")).isTrue(); // same key still true
-            assertThat(detector.tryProcess(null)).isTrue();
-        }
-
-        @Test void lruCreatesWorkingDetector() {
-            // Caffeine should be on classpath in this project
-            var detector = DuplicateDetector.<String>lru(100, java.time.Duration.ofMinutes(1));
-            assertThat(detector.tryProcess("key1")).isTrue();
-            assertThat(detector.tryProcess("key1")).isFalse(); // duplicate
-            assertThat(detector.tryProcess("key2")).isTrue();
-        }
-    }
-
     // ---- SdkClock ----
     @Nested class SdkClockTest {
         @Test void systemClockReturnsReasonableValues() {

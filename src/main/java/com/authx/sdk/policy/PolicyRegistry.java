@@ -1,15 +1,13 @@
 package com.authx.sdk.policy;
 
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Hierarchical policy registry. Resolves effective policy for a given (resourceType, permission).
+ * Hierarchical policy registry. Resolves effective policy for a given resource type.
  *
  * Resolution order (most specific wins):
  * <ol>
- *   <li>Per-permission TTL override (in CachePolicy)</li>
  *   <li>Per-resource-type policy</li>
  *   <li>Global default policy</li>
  * </ol>
@@ -17,27 +15,20 @@ import java.util.Map;
  * <pre>
  * PolicyRegistry.builder()
  *     .defaultPolicy(ResourcePolicy.builder()
- *         .cache(CachePolicy.of(Duration.ofSeconds(5)))
  *         .readConsistency(ReadConsistency.session())
  *         .build())
  *     .forResourceType("document", ResourcePolicy.builder()
- *         .cache(CachePolicy.builder()
- *             .ttl(Duration.ofSeconds(3))
- *             .forPermission("view", Duration.ofSeconds(10))
- *             .forPermission("delete", Duration.ofMillis(500))
- *             .build())
  *         .readConsistency(ReadConsistency.strong())
  *         .build())
- *     .forResourceType("folder", ResourcePolicy.builder()
- *         .cache(CachePolicy.of(Duration.ofSeconds(30)))
- *         .build())
  *     .forResourceType("group", ResourcePolicy.builder()
- *         .cache(CachePolicy.disabled())
  *         .readConsistency(ReadConsistency.strong())
  *         .retry(RetryPolicy.disabled())
  *         .build())
  *     .build()
  * </pre>
+ *
+ * <p>Note: cache sub-policy was removed with the client-side cache
+ * subsystem in ADR 2026-04-18.
  */
 public class PolicyRegistry {
 
@@ -66,24 +57,6 @@ public class PolicyRegistry {
     public ResourcePolicy resolve(String resourceType) {
         ResourcePolicy resolved = resolvedPolicies.get(resourceType);
         return resolved != null ? resolved : defaultPolicy;
-    }
-
-    /**
-     * Resolve the effective cache TTL for a (resourceType, permission) pair.
-     */
-    public Duration resolveCacheTtl(String resourceType, String permission) {
-        ResourcePolicy effective = resolve(resourceType);
-        CachePolicy cache = effective.cache();
-        if (cache == null || !cache.enabled()) return Duration.ZERO;
-        return cache.resolveTtl(permission);
-    }
-
-    /**
-     * Resolve whether cache is enabled for a resource type.
-     */
-    public boolean isCacheEnabled(String resourceType) {
-        ResourcePolicy effective = resolve(resourceType);
-        return effective.cache() != null && effective.cache().enabled();
     }
 
     /**

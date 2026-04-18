@@ -147,8 +147,9 @@ public class DocumentSharingService {
 
     /**
      * 把文档挂到文件夹下 —— 建立 document.folder 跨类型关系。
-     * subject 是 folder 不是 user，用 to(SubjectRef). SchemaCache 会在运行时
-     * 校验 subject 类型，写错会本地 fast-fail, 不发 RPC.
+     * subject 是 folder 不是 user，用 to(SubjectRef). 写错 subject 类型会由
+     * SpiceDB 服务端以 INVALID_ARGUMENT 拒绝并映射为
+     * AuthxInvalidArgumentException.
      */
     public void moveIntoFolder(String docId, String folderId) {
         client.on(Document.TYPE)

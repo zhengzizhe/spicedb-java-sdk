@@ -272,7 +272,6 @@ public class PermissionController {
     @GetMapping("/metrics/sdk")
     public Map<String, Object> sdkMetrics() {
         var m = client.metrics().snapshot();
-        var cache = client.cache();
-        return Map.of("metrics", m.toString(), "cacheSize", cache != null ? cache.size() : 0);
+        return Map.of("metrics", m.toString());
     }
 }

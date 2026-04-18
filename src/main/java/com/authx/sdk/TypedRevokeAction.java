@@ -1,7 +1,6 @@
 package com.authx.sdk;
 
 import com.authx.sdk.action.RevokeCompletion;
-import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.RevokeResult;
 import com.authx.sdk.model.SubjectRef;
@@ -113,16 +112,10 @@ public class TypedRevokeAction<R extends Relation.Named> {
     }
 
     private RevokeCompletion write(String[] refs) {
-        SchemaCache schema = factory.schemaCache();
-        if (schema != null) {
-            String resourceType = factory.resourceType();
-            for (R rel : relations) {
-                String relName = rel.relationName();
-                for (String ref : refs) {
-                    schema.validateSubject(resourceType, relName, ref);
-                }
-            }
-        }
+        // Client-side schema validation was removed with the SchemaCache in
+        // ADR 2026-04-18. Invalid subject types now fail at the SpiceDB
+        // boundary as AuthxInvalidArgumentException.
+        //
         // Aggregate per-RPC RevokeResults into a single result (SR:req-6).
         String lastToken = null;
         int totalCount = 0;

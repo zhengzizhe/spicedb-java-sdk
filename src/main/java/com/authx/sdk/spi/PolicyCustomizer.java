@@ -6,15 +6,14 @@ import com.authx.sdk.policy.PolicyRegistry;
  * Business-facing SPI for customizing the per-resource-type
  * {@link com.authx.sdk.policy.PolicyRegistry} at client build time.
  *
- * <p>The SDK ships a generic default (enabled L1 cache, 5 s TTL, 3 retries,
- * CircuitBreaker on). Production deployments almost always need to tune
- * these: shorter TTL for fast-changing data, SESSION consistency for
- * write-after-read workflows, circuit breaker thresholds calibrated to
- * the actual p99 latency of the SpiceDB cluster. Those decisions belong
- * to the <em>business team</em>, not to the infrastructure team that wires
- * the SDK — but before this SPI they had to live inside the same Spring
- * {@code @Configuration} class as the gRPC target and preshared key, mixing
- * concerns.
+ * <p>The SDK ships generic defaults (3 retries, CircuitBreaker on,
+ * SESSION consistency). Production deployments almost always need to
+ * tune these: tighter consistency for write-after-read workflows, circuit
+ * breaker thresholds calibrated to the actual p99 latency of the SpiceDB
+ * cluster, etc. Those decisions belong to the <em>business team</em>, not
+ * to the infrastructure team that wires the SDK — but before this SPI
+ * they had to live inside the same Spring {@code @Configuration} class
+ * as the gRPC target and preshared key, mixing concerns.
  *
  * <p>A {@code PolicyCustomizer} is a pure function from a freshly-constructed
  * {@link PolicyRegistry.Builder} to a tuned one. The infrastructure-layer
@@ -34,11 +33,11 @@ import com.authx.sdk.policy.PolicyRegistry;
  *     &#64;Override
  *     public void customize(PolicyRegistry.Builder policies) {
  *         policies.defaultPolicy(ResourcePolicy.builder()
- *                 .cache(CachePolicy.of(Duration.ofSeconds(30)))
  *                 .readConsistency(ReadConsistency.session())
+ *                 .retry(RetryPolicy.defaults())
  *                 .build())
  *             .forResourceType("invoice", ResourcePolicy.builder()
- *                 .cache(CachePolicy.of(Duration.ofSeconds(5)))
+ *                 .readConsistency(ReadConsistency.strong())
  *                 .build());
  *     }
  * }
@@ -54,7 +53,6 @@ import com.authx.sdk.policy.PolicyRegistry;
  *                                    List&lt;PolicyCustomizer&gt; policyCustomizers) {
  *         var builder = AuthxClient.builder()
  *             .connection(c -&gt; c.targets(props.targets()).presharedKey(props.key()))
- *             .cache(c -&gt; c.enabled(true).watchInvalidation(true))
  *             .features(f -&gt; f.telemetry(true).shutdownHook(true));
  *         policyCustomizers.forEach(builder::customize);
  *         return builder.build();

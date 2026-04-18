@@ -8,7 +8,7 @@ Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired auth
 
 - **Java 21**, Gradle, gRPC (Netty-shaded)
 - **Resilience**: Resilience4j (circuit breaker, retry, rate limiter, bulkhead)
-- **Cache**: Caffeine (optional, single-tier L1) with Watch-based invalidation
+- **Decision cache**: none in SDK — SpiceDB's server-side dispatch cache handles it (ADR 2026-04-18)
 - **Observability**: OpenTelemetry API, Micrometer (optional), HdrHistogram
 - **Testing**: JUnit 5, AssertJ, Mockito
 
@@ -17,26 +17,22 @@ Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired auth
 ```
 src/main/java/com/authx/sdk/
 ├── AuthxClient.java          # Main entry point
-├── AuthxClientBuilder.java   # Client builder (connection/cache/feature/extend)
+├── AuthxClientBuilder.java   # Client builder (connection/feature/extend)
 ├── ResourceFactory/Handle/Type.java   # Resource navigation (typed chain uses these)
 ├── Typed*.java               # Typed fluent chain (tightly coupled with
 │                              #   ResourceFactory package-private internals — stays here)
-├── internal/                  # Internal plumbing: SdkCaching, SdkConfig,
-│                              #   SdkInfrastructure, SdkObservability, SchemaClient.
-│                              #   Not public API — do not depend on.
+├── internal/                  # Internal plumbing: SdkConfig, SdkInfrastructure,
+│                              #   SdkObservability. Not public API — do not depend on.
 ├── action/                    # Untyped fluent chain actions: Grant/Revoke/Check/
 │                              #   Batch + GrantCompletion/RevokeCompletion
-├── transport/                 # Transport chain: gRPC → resilient → cached → instrumented
-├── cache/                     # Cache<K,V>, Caffeine, tiered, schema cache
+├── transport/                 # Transport chain: gRPC → resilient → coalescing → instrumented
 ├── model/                     # Value objects, requests, results, enums
 ├── exception/                 # Exception hierarchy (maps gRPC status codes)
-├── policy/                    # Retry, circuit breaker, cache, consistency policies
+├── policy/                    # Retry, circuit breaker, consistency policies
 ├── builtin/                   # Built-in interceptors (validation, debug, resilience4j)
-├── spi/                       # Extension points (interceptor, clock, telemetry sink)
+├── spi/                       # Extension points (interceptor, clock, telemetry sink, tokenStore)
 ├── lifecycle/                 # SDK lifecycle state machine
 ├── event/                     # Typed event bus
-├── watch/                     # Watch dispatcher, strategies
-├── dedup/                     # Watch cursor-replay duplicate detector
 ├── health/                    # HealthProbe implementations
 ├── trace/                     # TraceParent propagation
 ├── metrics/                   # SDK metrics
