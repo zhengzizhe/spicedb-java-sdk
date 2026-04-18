@@ -3,6 +3,7 @@ package com.authx.sdk.spi;
 import org.jspecify.annotations.Nullable;
 
 import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 /**
  * Registry for pluggable SDK components.
@@ -29,10 +30,11 @@ public record SdkComponents(
         @Nullable DistributedTokenStore tokenStore,
         @Nullable HealthProbe healthProbe,
         @Nullable DuplicateDetector<String> watchDuplicateDetector,
-        @Nullable ExecutorService watchListenerExecutor
+        @Nullable ExecutorService watchListenerExecutor,
+        @Nullable Consumer<DroppedListenerEvent> watchListenerDropHandler
 ) {
     public static SdkComponents defaults() {
-        return new SdkComponents(TelemetrySink.NOOP, SdkClock.SYSTEM, null, null, null, null);
+        return new SdkComponents(TelemetrySink.NOOP, SdkClock.SYSTEM, null, null, null, null, null);
     }
 
     public static Builder builder() { return new Builder(); }
@@ -44,6 +46,7 @@ public record SdkComponents(
         private HealthProbe healthProbe;
         private DuplicateDetector<String> watchDuplicateDetector;
         private ExecutorService watchListenerExecutor;
+        private Consumer<DroppedListenerEvent> watchListenerDropHandler;
 
         /** Telemetry export sink (Kafka, OTLP, file). Default: noop. */
         public Builder telemetrySink(TelemetrySink sink) { this.telemetrySink = sink; return this; }
@@ -109,9 +112,29 @@ public record SdkComponents(
             this.watchListenerExecutor = executor; return this;
         }
 
+        /**
+         * Handler invoked whenever the SDK-owned Watch listener executor drops
+         * a dispatch due to a full queue under
+         * {@link QueueFullPolicy#DROP}. The handler runs on the gRPC callback
+         * thread and MUST NOT block — do audit writes / alerting asynchronously.
+         *
+         * <p>Default ({@code null}): drops are counted in
+         * {@code WatchCacheInvalidator.droppedListenerEvents()} but no
+         * structured event is surfaced — downstream audit sinks lose the
+         * event with no in-process signal.
+         *
+         * <p>Has no effect when
+         * {@link #watchListenerExecutor(ExecutorService) a user executor} is
+         * provided — in that case the user's own rejection handler is in
+         * charge of observing drops.
+         */
+        public Builder watchListenerDropHandler(Consumer<DroppedListenerEvent> handler) {
+            this.watchListenerDropHandler = handler; return this;
+        }
+
         public SdkComponents build() {
             return new SdkComponents(telemetrySink, clock, tokenStore, healthProbe,
-                    watchDuplicateDetector, watchListenerExecutor);
+                    watchDuplicateDetector, watchListenerExecutor, watchListenerDropHandler);
         }
     }
 }
