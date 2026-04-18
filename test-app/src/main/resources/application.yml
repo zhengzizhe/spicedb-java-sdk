@@ -44,8 +44,4 @@ otel:
 spicedb:
   targets: "${SPICEDB_TARGETS:127.0.0.1:50051,127.0.0.1:50052,127.0.0.1:50053}"
   preshared-key: "${SPICEDB_PRESHARED_KEY:testkey}"
-  cache:
-    enabled: true
-    max-size: ${SPICEDB_CACHE_MAX_SIZE:100000}
-  watch-invalidation: ${SPICEDB_WATCH:true}
   virtual-threads: true
