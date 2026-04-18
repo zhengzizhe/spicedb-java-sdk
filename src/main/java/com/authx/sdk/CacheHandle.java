@@ -19,7 +19,7 @@ public class CacheHandle {
 
     private final Cache<CheckKey, CheckResult> cache;
 
-    CacheHandle(Cache<CheckKey, CheckResult> cache) {
+    public CacheHandle(Cache<CheckKey, CheckResult> cache) {
         this.cache = cache;
     }
 

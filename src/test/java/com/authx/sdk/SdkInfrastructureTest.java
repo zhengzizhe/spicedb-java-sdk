@@ -1,5 +1,6 @@
 package com.authx.sdk;
 
+import com.authx.sdk.internal.SdkInfrastructure;
 import com.authx.sdk.lifecycle.LifecycleManager;
 import io.grpc.ManagedChannel;
 import io.grpc.inprocess.InProcessChannelBuilder;

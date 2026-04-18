@@ -1,4 +1,4 @@
-package com.authx.sdk;
+package com.authx.sdk.internal;
 
 import com.authx.sdk.cache.SchemaCache;
 
@@ -21,7 +21,7 @@ public class SchemaClient {
 
     private final SchemaCache schemaCache;
 
-    SchemaClient(SchemaCache schemaCache) {
+    public SchemaClient(SchemaCache schemaCache) {
         this.schemaCache = schemaCache;
     }
 
