@@ -69,6 +69,28 @@ public class TypedCheckAction {
         return this;
     }
 
+    /** Caveat context from alternating key-value pairs, e.g. {@code withContext(IpAllowlist.CLIENT_IP, "10.0.0.5")}. */
+    public TypedCheckAction withContext(Object... keyValues) {
+        if (keyValues.length % 2 != 0) {
+            throw new IllegalArgumentException("keyValues must have even length");
+        }
+        var map = new java.util.LinkedHashMap<String, Object>();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            if (!(keyValues[i] instanceof String key)) {
+                throw new IllegalArgumentException("Key at index " + i + " must be a String");
+            }
+            map.put(key, keyValues[i + 1]);
+        }
+        this.context = map;
+        return this;
+    }
+
+    /** Alias for {@link #withContext(Map)} — reads as "check access given ...". */
+    public TypedCheckAction given(Map<String, Object> context) { return withContext(context); }
+
+    /** Alias for {@link #withContext(Object...)} — reads as "check access given CLIENT_IP, ip". */
+    public TypedCheckAction given(Object... keyValues) { return withContext(keyValues); }
+
     // ────────────────────────────────────────────────────────────────
     //  Simple path: single (id × perm) → boolean
     // ────────────────────────────────────────────────────────────────

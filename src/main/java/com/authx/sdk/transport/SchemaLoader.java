@@ -10,6 +10,7 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.MetadataUtils;
 
 import java.util.*;
+import java.util.LinkedHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -63,7 +64,20 @@ public class SchemaLoader {
                         new SchemaCache.DefinitionCache(relations, permissions, relSubjectTypes));
             }
             schemaCache.updateFromMap(definitions);
-            LOG.log(System.Logger.Level.INFO, "Schema loaded: {0} definitions", definitions.size());
+
+            // ── Extract caveats ──
+            Map<String, SchemaCache.CaveatDef> caveats = new HashMap<>();
+            for (var cav : response.getCaveatsList()) {
+                Map<String, String> params = new LinkedHashMap<>();
+                for (var p : cav.getParametersList()) {
+                    params.put(p.getName(), p.getType());
+                }
+                caveats.put(cav.getName(), new SchemaCache.CaveatDef(
+                        cav.getName(), params, cav.getExpression(), cav.getComment()));
+            }
+            schemaCache.updateCaveats(caveats);
+            LOG.log(System.Logger.Level.INFO, "Schema loaded: {0} definitions, {1} caveats",
+                    definitions.size(), caveats.size());
             return true;
         } catch (StatusRuntimeException e) {
             if (e.getStatus().getCode() == Status.Code.UNIMPLEMENTED) {

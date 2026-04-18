@@ -656,6 +656,193 @@ class WatchCacheInvalidatorTest {
         server.shutdownNow();
     }
 
+    @Test
+    void cursorExpired_invalidatesCacheAndPublishesEvent() throws Exception {
+        // Verifies the K8s-informer-style data-loss recovery:
+        //   - cache.invalidateAll() is called
+        //   - WatchCursorExpired event is published with the expired token
+        // Server triggers the same call sequence as cursorExpired_resetsToken...
+        // but we also wire a real Caffeine cache + capturing event bus.
+
+        AtomicInteger callCount = new AtomicInteger(0);
+        CountDownLatch thirdCallReceived = new CountDownLatch(1);
+
+        String serverName = InProcessServerBuilder.generateName();
+        var server = InProcessServerBuilder.forName(serverName)
+                .directExecutor()
+                .addService(new WatchServiceGrpc.WatchServiceImplBase() {
+                    @Override
+                    public void watch(WatchRequest request, StreamObserver<WatchResponse> responseObserver) {
+                        int call = callCount.incrementAndGet();
+                        if (call == 1) {
+                            responseObserver.onNext(WatchResponse.newBuilder()
+                                    .addUpdates(RelationshipUpdate.newBuilder()
+                                            .setOperation(RelationshipUpdate.Operation.OPERATION_TOUCH)
+                                            .setRelationship(simpleRel("doc", "1", "v", "user", "a")))
+                                    .setChangesThrough(ZedToken.newBuilder().setToken("tok-good"))
+                                    .build());
+                            responseObserver.onError(Status.UNAVAILABLE.asRuntimeException());
+                        } else if (call == 2) {
+                            responseObserver.onError(Status.FAILED_PRECONDITION
+                                    .withDescription("specified start cursor is too old, revision has been garbage collected")
+                                    .asRuntimeException());
+                        } else {
+                            thirdCallReceived.countDown();
+                        }
+                    }
+                })
+                .build().start();
+
+        var channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
+        Cache<CheckKey, CheckResult> cache = new CaffeineCache<>(100L, Duration.ofMinutes(5), CheckKey::resourceIndex);
+        // Pre-populate cache so we can verify it gets cleared
+        var key = new CheckKey(
+                ResourceRef.of("doc", "1"),
+                Permission.of("view"),
+                SubjectRef.user("alice"));
+        cache.put(key, CheckResult.allowed("seed-token"));
+        assertThat(cache.size()).isEqualTo(1);
+
+        // Capture published events
+        var bus = new com.authx.sdk.event.DefaultTypedEventBus(Runnable::run);
+        AtomicReference<com.authx.sdk.event.SdkTypedEvent.WatchCursorExpired> capturedEvent = new AtomicReference<>();
+        bus.subscribe(com.authx.sdk.event.SdkTypedEvent.WatchCursorExpired.class, capturedEvent::set);
+
+        var invalidator = new WatchCacheInvalidator(channel, "test-key", cache, new SdkMetrics());
+        invalidator.setEventBus(bus);
+        invalidator.start();
+
+        // Wait until the third Watch call (proves cursor expiry was processed)
+        assertThat(thirdCallReceived.await(15, TimeUnit.SECONDS))
+                .as("SDK should resubscribe after cursor expiry").isTrue();
+
+        // Cache must be empty — Debezium-style full invalidation
+        assertThat(cache.size())
+                .as("cache must be fully invalidated on cursor expiry")
+                .isEqualTo(0);
+
+        // Event must have been published
+        assertThat(capturedEvent.get())
+                .as("WatchCursorExpired event must be published")
+                .isNotNull();
+        assertThat(capturedEvent.get().expiredCursor()).isEqualTo("tok-good");
+        assertThat(capturedEvent.get().consecutiveOccurrences()).isEqualTo(1);
+
+        invalidator.close();
+        server.shutdownNow();
+    }
+
+    // ─── B3: Application-layer stall detection ───────────────────────────
+
+    @Test
+    void streamStalled_publishesEventAndForcesReconnect() throws Exception {
+        // Server holds the stream open without sending anything (TCP and gRPC
+        // keepalive look fine — only the application layer is silent).
+        // SDK should detect this via the staleStreamThreshold timeout and
+        // force a new Watch call.
+        AtomicInteger callCount = new AtomicInteger(0);
+        CountDownLatch firstCallStarted = new CountDownLatch(1);
+        CountDownLatch secondCallStarted = new CountDownLatch(1);
+
+        String serverName = InProcessServerBuilder.generateName();
+        var server = InProcessServerBuilder.forName(serverName)
+                .directExecutor()
+                .addService(new WatchServiceGrpc.WatchServiceImplBase() {
+                    @Override
+                    public void watch(WatchRequest request, StreamObserver<WatchResponse> responseObserver) {
+                        int call = callCount.incrementAndGet();
+                        if (call == 1) {
+                            firstCallStarted.countDown();
+                            // Hold open, send nothing — simulates app-layer stall.
+                        } else {
+                            // SDK must have forced reconnect to reach this branch.
+                            secondCallStarted.countDown();
+                        }
+                    }
+                })
+                .build().start();
+
+        var channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
+        var bus = new com.authx.sdk.event.DefaultTypedEventBus(Runnable::run);
+        AtomicReference<com.authx.sdk.event.SdkTypedEvent.WatchStreamStale> capturedEvent = new AtomicReference<>();
+        bus.subscribe(com.authx.sdk.event.SdkTypedEvent.WatchStreamStale.class, capturedEvent::set);
+
+        var invalidator = new WatchCacheInvalidator(channel, "test-key", Cache.noop(), new SdkMetrics());
+        invalidator.setEventBus(bus);
+        // Tight threshold so the test finishes quickly.
+        invalidator.setStaleStreamThreshold(Duration.ofMillis(500));
+        invalidator.start();
+
+        assertThat(firstCallStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+        // Wait for SDK to detect stall and reconnect.
+        assertThat(secondCallStarted.await(15, TimeUnit.SECONDS))
+                .as("SDK should reconnect after stall threshold elapses").isTrue();
+
+        // Event must have been published.
+        assertThat(capturedEvent.get())
+                .as("WatchStreamStale event must be published")
+                .isNotNull();
+        assertThat(capturedEvent.get().threshold()).isEqualTo(Duration.ofMillis(500));
+        assertThat(capturedEvent.get().idleFor()).isGreaterThanOrEqualTo(Duration.ofMillis(500));
+
+        invalidator.close();
+        server.shutdownNow();
+    }
+
+    @Test
+    void streamReceivingMessages_doesNotTriggerStall() throws Exception {
+        // Healthy stream that sends a message every 100ms — must NOT trigger
+        // the stall detector even with a 300ms threshold.
+        AtomicInteger callCount = new AtomicInteger(0);
+        CountDownLatch firstCallStarted = new CountDownLatch(1);
+        AtomicReference<StreamObserver<WatchResponse>> obs = new AtomicReference<>();
+
+        String serverName = InProcessServerBuilder.generateName();
+        var server = InProcessServerBuilder.forName(serverName)
+                .directExecutor()
+                .addService(new WatchServiceGrpc.WatchServiceImplBase() {
+                    @Override
+                    public void watch(WatchRequest request, StreamObserver<WatchResponse> responseObserver) {
+                        callCount.incrementAndGet();
+                        obs.set(responseObserver);
+                        firstCallStarted.countDown();
+                    }
+                })
+                .build().start();
+
+        var channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
+        var bus = new com.authx.sdk.event.DefaultTypedEventBus(Runnable::run);
+        AtomicInteger staleEvents = new AtomicInteger(0);
+        bus.subscribe(com.authx.sdk.event.SdkTypedEvent.WatchStreamStale.class, e -> staleEvents.incrementAndGet());
+
+        var invalidator = new WatchCacheInvalidator(channel, "test-key", Cache.noop(), new SdkMetrics());
+        invalidator.setEventBus(bus);
+        invalidator.setStaleStreamThreshold(Duration.ofMillis(300));
+        invalidator.start();
+
+        assertThat(firstCallStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+        // Pump checkpoints faster than the stall threshold for ~1 second.
+        long deadline = System.currentTimeMillis() + 1000;
+        while (System.currentTimeMillis() < deadline) {
+            obs.get().onNext(WatchResponse.newBuilder()
+                    .setChangesThrough(ZedToken.newBuilder().setToken("tok-" + System.nanoTime()))
+                    .build());
+            Thread.sleep(100);
+        }
+
+        assertThat(callCount.get())
+                .as("only one Watch call should exist — no false-positive reconnect")
+                .isEqualTo(1);
+        assertThat(staleEvents.get())
+                .as("no WatchStreamStale event on healthy stream")
+                .isEqualTo(0);
+
+        invalidator.close();
+        server.shutdownNow();
+    }
+
     // ─── B1: Accurate connection detection via onHeaders ─────────────────
 
     @Test

@@ -24,6 +24,10 @@ public sealed interface SdkTypedEvent permits
         SdkTypedEvent.TransportCall,
         SdkTypedEvent.WatchConnected,
         SdkTypedEvent.WatchDisconnected,
+        SdkTypedEvent.WatchCursorExpired,
+        SdkTypedEvent.WatchStreamStale,
+        SdkTypedEvent.TokenStoreUnavailable,
+        SdkTypedEvent.TokenStoreRecovered,
         SdkTypedEvent.SchemaRefreshed,
         SdkTypedEvent.SchemaLoadFailed,
         SdkTypedEvent.RateLimited,
@@ -53,6 +57,58 @@ public sealed interface SdkTypedEvent permits
     // ---- Watch ----
     record WatchConnected(Instant timestamp) implements SdkTypedEvent {}
     record WatchDisconnected(Instant timestamp, String reason) implements SdkTypedEvent {}
+
+    /**
+     * Watch cursor became too old (SpiceDB GC window elapsed during disconnect).
+     * The L1 cache has been fully invalidated because events between the last
+     * cursor and now are LOST — any cached entries could be stale. The Watch
+     * stream is resubscribing from HEAD; after this point fresh events flow
+     * normally again.
+     *
+     * <p>Subscribe to this event to alert on data-loss windows in production.
+     *
+     * @param expiredCursor the cursor token that SpiceDB rejected (may be null
+     *                      if the original token wasn't captured)
+     * @param consecutiveOccurrences how many cursor-expiry events have happened
+     *                               in a row without any successful data receive
+     *                               in between — &gt; 1 indicates a chronic issue
+     */
+    record WatchCursorExpired(Instant timestamp, String expiredCursor,
+                              int consecutiveOccurrences) implements SdkTypedEvent {}
+
+    /**
+     * Detected an application-layer stall on the Watch stream — TCP and gRPC
+     * keepalive look fine, but no business message (data or checkpoint) has
+     * arrived for longer than the configured threshold. The current session
+     * has been forcibly cancelled to trigger reconnection logic.
+     *
+     * <p>Healthy SpiceDB sends a checkpoint every few seconds even when there
+     * are no relationship changes, so prolonged silence almost always means
+     * SpiceDB is stuck (deadlocked datastore replica, GC pause, internal bug)
+     * or a middlebox dropped the stream while keeping the TCP connection alive.
+     *
+     * <p>Subscribe to alert on Watch staleness — without this signal the SDK
+     * could sit "connected but blind" indefinitely.
+     *
+     * @param idleFor how long we waited without receiving any message
+     * @param threshold the configured threshold that was exceeded
+     */
+    record WatchStreamStale(Instant timestamp, Duration idleFor,
+                            Duration threshold) implements SdkTypedEvent {}
+
+    /**
+     * The configured {@code DistributedTokenStore} (e.g. Redis) became
+     * unavailable. SESSION consistency for cross-instance reads has degraded
+     * to local-only — instance B cannot see instance A's writes through
+     * SESSION. Subscribe to alert that "cross-instance SESSION is broken".
+     *
+     * @param reason short error message from the underlying store
+     */
+    record TokenStoreUnavailable(Instant timestamp, String reason) implements SdkTypedEvent {}
+
+    /** The previously-unavailable {@code DistributedTokenStore} accepted an
+     *  operation again — cross-instance SESSION consistency restored. */
+    record TokenStoreRecovered(Instant timestamp) implements SdkTypedEvent {}
 
     // ---- Schema ----
     record SchemaRefreshed(Instant timestamp, int definitionCount) implements SdkTypedEvent {}

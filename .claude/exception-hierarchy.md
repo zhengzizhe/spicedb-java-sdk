@@ -65,6 +65,13 @@ These exceptions bypass retry (immediate failure):
 - AuthxInvalidArgumentException
 - AuthxUnimplementedException
 - AuthxPreconditionException
+- InvalidPermissionException (SR:C4 — schema-validation, permanent)
+- InvalidRelationException   (SR:C4 — schema-validation, permanent)
+- InvalidResourceException   (SR:C4 — schema-validation, permanent)
+
+Companion predicate: `RetryPolicy.isPermanent(Throwable)` returns `true` iff the
+exception matches the deny list. Use when you want to short-circuit the retry
+pipeline explicitly at a call site.
 
 ### Circuit Breaker — Ignored Exceptions
 
@@ -94,6 +101,7 @@ Note: These only have `(String message)` constructors — no cause wrapping. Thi
 ### gRPC Layer
 - [ ] Every `StatusRuntimeException` goes through `mapGrpcException()` — never caught and rethrown raw
 - [ ] Streaming RPCs (Watch, LookupResources, LookupSubjects, ReadRelationships) handle `StatusRuntimeException` in their iteration loops
+- [ ] Streaming RPC iterators are wrapped in `CloseableGrpcIterator` and consumed inside try-with-resources, so early break / loop exception sends `RST_STREAM` to SpiceDB instead of leaking the HTTP/2 stream
 - [ ] New gRPC methods added to SpiceDB get an explicit case in the mapping, not just the default
 
 ### Resilience Layer
@@ -105,6 +113,15 @@ Note: These only have `(String message)` constructors — no cause wrapping. Thi
 - [ ] No `catch (Exception e) { /* swallow */ }` anywhere in the transport chain
 - [ ] `CompletionException` is unwrapped before propagation (CoalescingTransport)
 - [ ] `InterruptedException` re-interrupts the thread after catching
+- [ ] **Interceptor chain exception isolation (SR:C8)** — read chains
+  (RealCheckChain, RealOperationChain) skip a broken user interceptor and
+  continue via `next.proceed(...)`; write chain (RealWriteChain) aborts
+  fail-closed and wraps the cause in `AuthxException`. `AuthxException`
+  subclasses propagate unchanged on all three paths.
+- [ ] **Coalescing failure eviction (SR:C3)** — on the leader's failure path,
+  `inflight.remove(key, myFuture)` must run BEFORE
+  `myFuture.completeExceptionally(e)` to prevent newcomers from inheriting
+  ghost failures via `putIfAbsent`.
 
 ### Public API Boundary
 - [ ] No `StatusRuntimeException` escapes past `GrpcTransport`
@@ -115,6 +132,11 @@ Note: These only have `(String message)` constructors — no cause wrapping. Thi
 ### Background Tasks
 - [ ] `WatchCacheInvalidator` catches exceptions and logs, never crashes the watch loop
 - [ ] `TelemetryReporter` catches exceptions and logs, never crashes the reporting loop
+- [ ] **Sink calls bounded by timeout (SR:C10)** — `TelemetryReporter.flush()`
+  runs `sink.send()` on a dedicated single-thread `sinkExecutor` and waits
+  at most `sinkTimeout` (default 5 s); on timeout the batch counts as dropped
+  and `sinkTimeoutCount()` increments, the scheduler continues. `close()` is
+  also bounded — total upper bound ≈ 5 s (scheduler) + `sinkTimeout`.
 - [ ] Event bus listener exceptions are isolated — one bad listener doesn't break others
 
 ## Explore: Potential Gaps to Investigate

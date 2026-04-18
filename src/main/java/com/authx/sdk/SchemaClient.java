@@ -58,6 +58,16 @@ public class SchemaClient {
         return schemaCache != null ? schemaCache.getAllSubjectTypes(resourceType) : Map.of();
     }
 
+    /** All known caveat names. */
+    public Set<String> getCaveatNames() {
+        return schemaCache != null ? schemaCache.getCaveatNames() : Set.of();
+    }
+
+    /** Get a caveat definition by name. */
+    public SchemaCache.CaveatDef getCaveat(String name) {
+        return schemaCache != null ? schemaCache.getCaveat(name) : null;
+    }
+
     /** Check if schema has been loaded. */
     public boolean isLoaded() {
         return schemaCache != null && schemaCache.hasSchema();

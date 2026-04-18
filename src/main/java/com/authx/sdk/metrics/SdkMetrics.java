@@ -36,6 +36,15 @@ public class SdkMetrics {
     // ---- Watch ----
     private final LongAdder watchReconnects = new LongAdder();
 
+    // ---- Latency overflow (SR:C9) ----
+    // Count of recordRequest() samples that exceeded MAX_TRACKABLE_MICROS and
+    // were clamped. Without this counter, extremely slow requests are silently
+    // indistinguishable from requests that happened to clock at exactly the
+    // clamp value — the tail of the percentile distribution is hidden. The
+    // counter surfaces the event so operators can alert on it; the clamp
+    // itself stays to bound HdrHistogram memory.
+    private final LongAdder latencyOverflow = new LongAdder();
+
     // ---- Latency (HdrHistogram dual-buffer, microseconds) ----
     //
     // Two distinct histograms here, with carefully-separated roles:
@@ -57,7 +66,12 @@ public class SdkMetrics {
     // see p50=p99=0 because the published window had been drained by their
     // own snapshot() call before they could read it. Keeping the drain
     // exclusively on rotateHistogram() fixes this.
-    private static final long MAX_TRACKABLE_MICROS = 60_000_000L;
+    // SR:C9 — raised from 60s to 600s (10 minutes). HdrHistogram memory cost
+    // grows logarithmically in the trackable range at a fixed precision, so
+    // moving the ceiling 10× adds only ~10KB while covering all realistic
+    // request timeouts. Samples above this ceiling still clamp (bounding
+    // memory) but also increment {@link #latencyOverflow} so they're visible.
+    private static final long MAX_TRACKABLE_MICROS = 600_000_000L;
     private final Recorder recorder = new Recorder(MAX_TRACKABLE_MICROS, 3);
     private Histogram recycleBuffer;             // guarded by `this`
     private volatile Histogram publishedInterval;
@@ -85,7 +99,17 @@ public class SdkMetrics {
     public void recordRequest(long latencyMicros, boolean error) {
         totalRequests.increment();
         if (error) totalErrors.increment();
-        recorder.recordValue(Math.min(latencyMicros, MAX_TRACKABLE_MICROS));
+        // SR:C9 — count clamps separately so operators can alert on them.
+        // A sample above MAX_TRACKABLE_MICROS indicates either a request that
+        // genuinely took > 10 minutes (stuck thread, network black hole) or a
+        // misuse of recordRequest with a bogus latency unit; either way it
+        // deserves visibility distinct from "everything was ≤ 10min".
+        if (latencyMicros > MAX_TRACKABLE_MICROS) {
+            latencyOverflow.increment();
+            recorder.recordValue(MAX_TRACKABLE_MICROS);
+        } else {
+            recorder.recordValue(latencyMicros);
+        }
     }
 
     public void recordCoalesced() { coalescedRequests.increment(); }
@@ -128,6 +152,16 @@ public class SdkMetrics {
     public long totalErrors() { return totalErrors.sum(); }
     public long coalescedRequests() { return coalescedRequests.sum(); }
     public long watchReconnects() { return watchReconnects.sum(); }
+
+    /**
+     * Number of {@link #recordRequest} samples that exceeded the internal
+     * latency clamp (≈ 10 minutes) and were therefore capped in the
+     * percentile distribution. A non-zero value indicates requests that either
+     * ran for an extremely long time (stuck thread, network black hole) or
+     * were recorded with a bogus latency; alert on it to catch both cases.
+     * See SR:C9.
+     */
+    public long latencyOverflowCount() { return latencyOverflow.sum(); }
 
     public double errorRate() {
         long total = totalRequests.sum();
@@ -198,14 +232,14 @@ public class SdkMetrics {
                 cacheHitRate(), cacheHits(), cacheMisses(), cacheEvictions(), cacheSize(),
                 totalRequests(), totalErrors(), errorRate(), coalescedRequests(),
                 p50, p95, p99, avg,
-                circuitBreakerState(), watchReconnects());
+                circuitBreakerState(), watchReconnects(), latencyOverflowCount());
     }
 
     public record Snapshot(
             double cacheHitRate, long cacheHits, long cacheMisses, long cacheEvictions, long cacheSize,
             long totalRequests, long totalErrors, double errorRate, long coalescedRequests,
             double latencyP50Ms, double latencyP95Ms, double latencyP99Ms, double latencyAvgMs,
-            String circuitBreakerState, long watchReconnects
+            String circuitBreakerState, long watchReconnects, long latencyOverflowCount
     ) {
         /** True iff the current rotation window contains no request samples. */
         public boolean latencyWindowEmpty() {
@@ -219,13 +253,19 @@ public class SdkMetrics {
                     : String.format(
                             "latency=[p50=%.2fms p95=%.2fms p99=%.2fms avg=%.2fms]",
                             latencyP50Ms, latencyP95Ms, latencyP99Ms, latencyAvgMs);
+            // SR:C9 — surface clamp count only when non-zero to avoid noise on
+            // healthy deployments; a visible field signals "something unusual
+            // happened in this window".
+            String overflowStr = latencyOverflowCount > 0
+                    ? String.format(", overflow=%d", latencyOverflowCount)
+                    : "";
             return String.format(
                     "SdkMetrics{cache=%.1f%% (%d/%d), size=%d, evictions=%d, " +
                     "requests=%d, errors=%d (%.2f%%), coalesced=%d, " +
-                    "%s, cb=%s, watchReconnects=%d}",
+                    "%s, cb=%s, watchReconnects=%d%s}",
                     cacheHitRate * 100, cacheHits, cacheHits + cacheMisses, cacheSize, cacheEvictions,
                     totalRequests, totalErrors, errorRate * 100, coalescedRequests,
-                    latencyStr, circuitBreakerState, watchReconnects);
+                    latencyStr, circuitBreakerState, watchReconnects, overflowStr);
         }
     }
 

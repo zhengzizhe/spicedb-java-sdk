@@ -79,28 +79,6 @@ class CacheTest {
         assertThat(noop.size()).isZero();
     }
 
-    @Test void tieredCache_promotesToL1() {
-        var l1 = createCache();
-        var l2 = createCache();
-        var tiered = new TieredCache<>(l1, l2);
-        // Put only in L2
-        l2.put(KEY1, ALLOWED);
-        // Get from tiered — should find in L2 and promote to L1
-        assertThat(tiered.getIfPresent(KEY1)).isEqualTo(ALLOWED);
-        // Now L1 should have it
-        assertThat(l1.getIfPresent(KEY1)).isEqualTo(ALLOWED);
-    }
-
-    @Test void tieredCache_invalidatesBoth() {
-        var l1 = createCache();
-        var l2 = createCache();
-        var tiered = new TieredCache<>(l1, l2);
-        tiered.put(KEY1, ALLOWED);
-        tiered.invalidate(KEY1);
-        assertThat(l1.getIfPresent(KEY1)).isNull();
-        assertThat(l2.getIfPresent(KEY1)).isNull();
-    }
-
     @Test void cacheStats_hitRate_emptyCache() {
         assertThat(CacheStats.EMPTY.hitRate()).isEqualTo(1.0);
     }

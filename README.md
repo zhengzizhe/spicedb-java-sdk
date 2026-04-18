@@ -262,6 +262,20 @@ SdkComponents.builder()
 
 每个 pod 都有自己的 Caffeine 缓存，每个 pod 都需要清自己的缓存。N 个 pod 收到 Watch 事件时各自失效——这是正确行为，不要去优化它。
 
+### SESSION 一致性需要共享 tokenStore
+
+跨实例 SESSION 一致性要求 zedtoken 在 pod 之间共享。默认 `tokenStore=null` 时只在单 JVM 内有效（启动会有警告日志）。多实例部署接入 [`sdk-redisson`](sdk-redisson/README.md) 模块即可：
+
+```java
+RedissonClient redis = Redisson.create(redissonConfig);
+DistributedTokenStore store = new RedissonTokenStore(
+        redis, Duration.ofSeconds(60), "authx:token:");
+
+AuthxClient client = AuthxClient.builder()
+    .extend(e -> e.components(SdkComponents.builder().tokenStore(store).build()))
+    ...
+```
+
 ### Listener 副作用是**可能错的多次执行**
 
 如果你注册的 listener 会做副作用（写审计日志、发通知、调外部 API），N 个 pod 都会执行同一个事件。三种解决方式：
@@ -369,7 +383,7 @@ SDK 内部处理三种异常情况：
 |---|---|---|
 | `telemetrySink` | NOOP | 自定义 telemetry 上报（Kafka/OTLP/file） |
 | `clock` | SYSTEM | 时钟（测试用） |
-| `tokenStore` | null | 跨实例 SESSION 一致性的 zedtoken 存储（Redis 等） |
+| `tokenStore` | null | 跨实例 SESSION 一致性的 zedtoken 存储（开箱即用：[`sdk-redisson`](sdk-redisson/README.md)） |
 | `healthProbe` | `all(ChannelState, SchemaRead)` | 自定义健康探针 |
 | `watchDuplicateDetector` | `noop()` | Watch 事件去重（默认不去重） |
 | `watchListenerExecutor` | 默认单线程 + 10K 队列 | 自定义 listener 调度线程池 |
@@ -390,3 +404,19 @@ SDK 内部处理三种异常情况：
 > **要求**：Java 21+
 >
 > **不附属于 Authzed 公司**。这是一个独立的 Java SDK，依赖 SpiceDB 官方的 `authzed-api` protobuf 定义。
+
+## Changelog
+
+### 未发布 — Critical Fixes (2026-04)
+
+代码审查批次 `SR:C3, C4, C6, C7, C8, C9, C10`，无公共 API 破坏。详见
+[`specs/2026-04-16-sdk-review-critical-fixes/`](specs/2026-04-16-sdk-review-critical-fixes/)。
+
+- **`CoalescingTransport`** — leader 失败后先从 inflight 摘除再 publish 异常，避免 post-failure 的 newcomer 拿到 ghost 异常 (`SR:C3`)。
+- **`RetryPolicy.defaults()`** — `InvalidPermission/Relation/ResourceException` 加入非重试清单；新增 `isPermanent(Throwable)` 便捷谓词 (`SR:C4`)。
+- **`AuthxClientBuilder`** — `target` 与 `targets` 互斥；`cache.watchInvalidation(true)` 强制要求 `cache.enabled(true)`；`extend.addWatchStrategy(...)` 同理 (`SR:C6, SR:C7`)。
+- **Interceptor chain** — 读路径（`RealCheckChain` / `RealOperationChain`）隔离用户 interceptor 异常并跳过继续执行；写路径（`RealWriteChain`）fail-closed，非 Authx 异常包装为 `AuthxException` 中止写入 (`SR:C8`)。
+- **`SdkMetrics`** — HdrHistogram 上限从 60s 提升到 600s；新增 `latencyOverflowCount()` 和 `Snapshot.latencyOverflowCount()` 计数截断样本；`toString()` 非零时打印 `overflow=N` (`SR:C9`)。
+- **`TelemetryReporter`** — `sink.send()` 现在跑在独立 `sinkExecutor` 上并有默认 5s 超时；`close()` 时间上界 ≈ 调度器 5s + sinkTimeout；新增 `sinkTimeoutCount()` (`SR:C10`)。
+
+**已识别但推迟到下一轮**：`SR:C1` (gRPC `Context` 截止时间传播) 和 `SR:C5` (Watch listener drop SPI + 背压策略) — 需要更大的设计变更，单独成计划处理。`SR:C2` 核查发现当前代码已满足约束，无需修改。

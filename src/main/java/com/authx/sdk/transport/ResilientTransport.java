@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
@@ -41,8 +42,24 @@ public class ResilientTransport extends ForwardingTransport {
     private final SdkTransport delegate;
     private final PolicyRegistry policyRegistry;
     private final TypedEventBus eventBus;
-    private final ConcurrentHashMap<String, CircuitBreaker> breakers = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Retry> retries = new ConcurrentHashMap<>();
+    /**
+     * Per-resource-type circuit breakers. Backed by Caffeine's W-TinyLFU
+     * eviction (true LRU + frequency tracking) — replaces the old
+     * ConcurrentHashMap+random-eviction scheme that could evict an OPEN
+     * breaker for a still-failing resource type, resetting protection.
+     *
+     * <p>W-TinyLFU keeps high-traffic types (whether failing or succeeding)
+     * and naturally evicts one-shot/low-traffic types, so a SaaS workload
+     * with 100 active tenants and 1000 dormant-tenant resource types stays
+     * correctly protected.
+     */
+    private final ConcurrentMap<String, CircuitBreaker> breakers;
+    /**
+     * Per-resource-type Retry instances. Same eviction semantics as
+     * {@link #breakers}; the removal listener on the breakers cache also
+     * evicts the corresponding retry to keep the two maps in sync.
+     */
+    private final ConcurrentMap<String, Retry> retries;
     private final CircuitBreaker defaultBreaker;
     private final Retry defaultRetry;
 
@@ -59,6 +76,24 @@ public class ResilientTransport extends ForwardingTransport {
         this.policyRegistry = policyRegistry;
         this.eventBus = eventBus != null ? eventBus : new DefaultTypedEventBus();
         this.sdkMetrics = sdkMetrics;
+        // Caffeine-backed concurrent maps: W-TinyLFU eviction (true LRU + frequency)
+        // bounded at MAX_INSTANCES. The retries cache is the source of truth for
+        // sync — the breakers removal listener evicts the matching retry entry
+        // so the two maps never drift.
+        this.retries = com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
+                .maximumSize(MAX_INSTANCES)
+                .<String, Retry>build()
+                .asMap();
+        this.breakers = com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
+                .maximumSize(MAX_INSTANCES)
+                .<String, CircuitBreaker>removalListener((key, value, cause) -> {
+                    if (cause.wasEvicted() && value != null) {
+                        value.reset();
+                        if (key != null) retries.remove(key);
+                    }
+                })
+                .<String, CircuitBreaker>build()
+                .asMap();
         this.defaultBreaker = createBreaker("__default__");
         this.defaultRetry = createRetry("__default__");
     }
@@ -188,18 +223,10 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private CircuitBreaker resolveBreaker(String resourceType) {
-        var existing = breakers.get(resourceType);
-        if (existing != null) return existing;
-        if (breakers.size() >= MAX_INSTANCES) {
-            // Evict an arbitrary entry to make room (approximates LRU)
-            var it = breakers.entrySet().iterator();
-            if (it.hasNext()) {
-                var evicted = it.next();
-                it.remove();
-                evicted.getValue().reset();
-                retries.remove(evicted.getKey()); // keep breaker+retry maps in sync
-            }
-        }
+        // Caffeine-backed map: W-TinyLFU handles eviction automatically when
+        // size exceeds MAX_INSTANCES, with proper LRU + frequency tracking.
+        // The removal listener reset()s the evicted breaker and drops the
+        // matching retry entry so the two maps stay in sync.
         return breakers.computeIfAbsent(resourceType, this::createBreaker);
     }
 

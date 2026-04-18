@@ -29,7 +29,7 @@ set -euo pipefail
 #    total:          ~13,000,000 (超出部分在 target 处截断)
 # ═══════════════════════════════════════════════════════════════
 
-CRDB_HOST="127.0.0.1:26357"
+CRDB_HOST="127.0.0.1:26557"
 CRDB_BIN="cockroach"
 DATA_DIR="$HOME/spicedb-cluster/import"
 TARGET_COUNT=${1:-10000000}

@@ -219,6 +219,53 @@ class ResilientTransportTest {
         transport.close(); // should not throw
     }
 
+    @Test
+    void highCardinality_breakersMapStaysBounded() throws Exception {
+        // Multi-tenant regression: the previous implementation used
+        // ConcurrentHashMap with no eviction strategy beyond
+        // "iterator().next()" — under high cardinality the map could
+        // grow unbounded and eviction was random (see audit risk #6).
+        //
+        // Caffeine-backed map enforces MAX_INSTANCES with W-TinyLFU,
+        // and recently-accessed keys win admission against one-shot keys.
+        var noopDelegate = new InMemoryTransport();
+        var transport = new ResilientTransport(
+                noopDelegate, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
+
+        // Push 5000 distinct resource types — well above the 1000 cap.
+        for (int i = 0; i < 5000; i++) {
+            transport.check(CheckRequest.of(
+                    "type_" + i, "x", "view", "user", "a", Consistency.minimizeLatency()));
+        }
+
+        // Touch one "hot" type many times so it has a strong recency+frequency signal.
+        for (int i = 0; i < 100; i++) {
+            transport.check(CheckRequest.of(
+                    "hot_type", "x", "view", "user", "a", Consistency.minimizeLatency()));
+        }
+
+        // Allow Caffeine's async maintenance to settle.
+        Thread.sleep(200);
+
+        var field = ResilientTransport.class.getDeclaredField("breakers");
+        field.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        var map = (java.util.concurrent.ConcurrentMap<String, ?>) field.get(transport);
+
+        // Property 1: bounded size (was unbounded with the old code if
+        // the eviction loop hit a race).
+        assertThat(map.size())
+                .as("breakers map must respect MAX_INSTANCES bound")
+                .isLessThanOrEqualTo(1100);   // small slack for Caffeine async eviction
+
+        // Property 2: the most recently / heavily accessed type survives.
+        // This is the property that was broken in the old implementation —
+        // hot keys could be evicted at random while cold keys stayed.
+        assertThat(map.containsKey("hot_type"))
+                .as("hot type with high recent activity must survive eviction")
+                .isTrue();
+    }
+
     // ---- Helpers ----
 
     private SdkTransport failingDelegate(AtomicInteger callCount, int failCount, CheckResult successResult) {

@@ -79,6 +79,8 @@ public class AuthxClientBuilder {
     private boolean cacheEnabled = false;
     private long cacheMaxSize = 100_000;
     private boolean watchInvalidation = false;
+    private com.authx.sdk.spi.QueueFullPolicy listenerQueueOnFull =
+            com.authx.sdk.spi.QueueFullPolicy.DROP;
 
     // Features
     private boolean coalescingEnabled = true;
@@ -174,6 +176,25 @@ public class AuthxClientBuilder {
         public CacheConfig enabled(boolean e) { AuthxClientBuilder.this.cacheEnabled = e; return this; }
         public CacheConfig maxSize(long s) { AuthxClientBuilder.this.cacheMaxSize = s; return this; }
         public CacheConfig watchInvalidation(boolean e) { AuthxClientBuilder.this.watchInvalidation = e; return this; }
+        /**
+         * Policy for the SDK-owned Watch listener executor when its dispatch
+         * queue fills up (SR:C5). Default:
+         * {@link com.authx.sdk.spi.QueueFullPolicy#DROP} — matches pre-SR:C5
+         * behavior.
+         *
+         * <p>Switch to {@link com.authx.sdk.spi.QueueFullPolicy#BLOCK_WITH_BACKPRESSURE}
+         * when listener event loss is unacceptable and you want the Watch
+         * stream (and upstream SpiceDB, via HTTP/2 flow control) to slow
+         * down to match listener throughput.
+         *
+         * <p>Has no effect when a user-supplied {@code watchListenerExecutor}
+         * is provided via {@code extend.components(...)}.
+         */
+        public CacheConfig listenerQueueOnFull(com.authx.sdk.spi.QueueFullPolicy policy) {
+            AuthxClientBuilder.this.listenerQueueOnFull = policy != null
+                    ? policy : com.authx.sdk.spi.QueueFullPolicy.DROP;
+            return this;
+        }
     }
 
     public class FeatureConfig {
@@ -215,6 +236,25 @@ public class AuthxClientBuilder {
 
         Objects.requireNonNull(presharedKey, "presharedKey is required");
         if (target == null && targets == null) throw new IllegalArgumentException("target or targets is required");
+        // SR:C6 — target and targets are mutually exclusive. Prior to this check the
+        // builder silently preferred `target` when both were set (see buildChannel below),
+        // which masked user misconfiguration (e.g. copy-paste of both forms during
+        // staging → prod migration).
+        if (target != null && targets != null) {
+            throw new IllegalArgumentException(
+                    "target and targets are mutually exclusive — pick one");
+        }
+        // SR:C7 — watchInvalidation only takes effect when the check cache is enabled.
+        // Historically a misconfigured builder would silently no-op Watch; fail fast so
+        // the operator learns at startup, not when debugging stale authz decisions.
+        if (watchInvalidation && !cacheEnabled) {
+            throw new IllegalArgumentException(
+                    "cache.watchInvalidation(true) requires cache.enabled(true)");
+        }
+        if (!watchStrategies.isEmpty() && (!cacheEnabled || !watchInvalidation)) {
+            throw new IllegalArgumentException(
+                    "extend.watchStrategy(...) requires cache.enabled(true) and cache.watchInvalidation(true)");
+        }
 
         // Resolve the effective PolicyRegistry. Precedence:
         //   1. An explicit registry passed via .extend(e -> e.policies(...))
@@ -244,6 +284,11 @@ public class AuthxClientBuilder {
         var schemaCache = new SchemaCache();
         var schemaLoader = new SchemaLoader();
         var tokenTracker = new TokenTracker(spi.tokenStore());
+        // Wire the event bus so cross-instance SESSION degradation/recovery
+        // become observable. Must use the resolved `bus` (not the nullable
+        // `eventBus` field) so subscribers on AuthxClient.eventBus() receive
+        // events even when the user didn't explicitly configure a bus.
+        tokenTracker.setEventBus(bus);
 
         // Build the effective interceptor list locally — MUST NOT mutate the
         // builder's own field, otherwise calling build() twice on the same
@@ -290,7 +335,7 @@ public class AuthxClientBuilder {
 
             // Phase: WATCH
             lm.phase(SdkPhase.WATCH, () ->
-                    buildWatch(grpcChannel, sdkMetrics, spi, ctx));
+                    buildWatch(grpcChannel, sdkMetrics, spi, ctx, bus));
 
             // Phase: SCHEDULER
             lm.phase(SdkPhase.SCHEDULER, () ->
@@ -453,7 +498,7 @@ public class AuthxClientBuilder {
     }
 
     private void buildWatch(ManagedChannel grpcChannel, SdkMetrics sdkMetrics,
-                             SdkComponents spi, BuildContext ctx) {
+                             SdkComponents spi, BuildContext ctx, TypedEventBus bus) {
         if (cacheEnabled && watchInvalidation && ctx.checkCache != null) {
             // Resolve the duplicate detector: user-provided via SdkComponents wins,
             // otherwise fall back to noop (backwards-compatible behavior — no dedup).
@@ -467,9 +512,17 @@ public class AuthxClientBuilder {
             }
             // listenerExecutor: null means "use SDK default (owned)", non-null means
             // "user manages lifecycle (NOT owned)". See WatchCacheInvalidator constructor.
+            // dropHandler + queueFullPolicy (SR:C5) only affect the SDK-owned default
+            // executor; when the user supplies their own executor, their rejection
+            // handler is in charge.
             ctx.watchInvalidator = new WatchCacheInvalidator(
                     grpcChannel, presharedKey, ctx.checkCache, sdkMetrics,
-                    dedup, spi.watchListenerExecutor());
+                    dedup, spi.watchListenerExecutor(),
+                    spi.watchListenerDropHandler(), listenerQueueOnFull);
+            // Wire the typed event bus so cursor-expiry data-loss windows
+            // become observable. Use the resolved `bus` (not the field) so
+            // events flow even when the user didn't set an explicit bus.
+            ctx.watchInvalidator.setEventBus(bus);
             ctx.watchInvalidator.start();
         }
     }

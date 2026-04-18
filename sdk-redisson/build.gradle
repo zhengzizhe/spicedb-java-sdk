@@ -1,0 +1,44 @@
+plugins {
+    id "java-library"
+}
+
+group = "io.github.authxkit"
+version = rootProject.findProperty("sdkVersion") ?: "1.0.0"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.compilerArgs += ["-Xlint:deprecation"]
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // SPI (DistributedTokenStore) lives in the main SDK
+    implementation(rootProject)
+
+    // Redisson — Java Redis client used to back the SPI
+    implementation("org.redisson:redisson:3.27.2")
+
+    // Null-safety annotations
+    implementation("org.jspecify:jspecify:1.0.0")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("org.assertj:assertj-core:3.27.7")
+    testImplementation("org.testcontainers:testcontainers:1.21.1")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.1")
+    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.12")
+}
+
+test {
+    useJUnitPlatform()
+    // docker-java (used by Testcontainers) defaults to API version 1.32, but Docker
+    // Desktop 29+ requires minimum 1.40. Override to 1.43 for compatibility.
+    systemProperty "api.version", "1.43"
+}

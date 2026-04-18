@@ -18,6 +18,8 @@ import java.util.List;
  */
 public final class RealWriteChain implements WriteChain {
 
+    private static final System.Logger LOG = System.getLogger(RealWriteChain.class.getName());
+
     private final List<SdkInterceptor> interceptors;
     private final int index;
     private final WriteRequest request;
@@ -51,7 +53,30 @@ public final class RealWriteChain implements WriteChain {
         }
         // Create next chain with incremented index and (possibly modified) request
         var next = new RealWriteChain(interceptors, index + 1, request, transport, ctx);
-        return interceptors.get(index).interceptWrite(next);
+        // SR:C8 — WRITE path is asymmetric to read paths: an interceptor that
+        // throws must NOT be silently skipped. Write interceptors are often
+        // doing policy enforcement (audit hooks, mandatory caveat injection,
+        // forbidden-relationship guards); skipping a broken one and proceeding
+        // to commit the write is a fail-open behavior that can violate
+        // compliance requirements.
+        //
+        // Fail-closed policy: any non-Authx exception from a write interceptor
+        // aborts the chain and surfaces as an AuthxException so callers see a
+        // typed, retryable-classified error.
+        var interceptor = interceptors.get(index);
+        try {
+            return interceptor.interceptWrite(next);
+        } catch (com.authx.sdk.exception.AuthxException authx) {
+            throw authx;
+        } catch (RuntimeException bug) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Write interceptor {0} threw {1}; aborting write (fail-closed).",
+                    interceptor.getClass().getName(), bug.toString());
+            throw new com.authx.sdk.exception.AuthxException(
+                    "Write interceptor " + interceptor.getClass().getName()
+                            + " rejected the request: " + bug.getMessage(),
+                    bug);
+        }
     }
 
     @Override

@@ -32,10 +32,13 @@ import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.MetadataUtils;
 
+import com.google.protobuf.ListValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -46,7 +49,21 @@ public class GrpcTransport implements SdkTransport {
 
     private static final System.Logger LOG = System.getLogger(GrpcTransport.class.getName());
     private static final int MAX_BATCH_SIZE = 500;
-    private static final int MAX_STREAM_RESULTS = 10_000;
+
+    /**
+     * Shared scheduler used by {@link io.grpc.Context#withDeadline(io.grpc.Deadline,
+     * ScheduledExecutorService)} to fire automatic cancellation when the
+     * per-call effective deadline elapses. Single-threaded daemon pool — the
+     * scheduler only fires late-timeout tasks, so one thread is plenty.
+     * Shared JVM-wide (static) because the tasks it runs are trivial and
+     * creating one per-instance would leak if clients are short-lived.
+     */
+    private static final ScheduledExecutorService DEADLINE_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "authx-grpc-deadline");
+                t.setDaemon(true);
+                return t;
+            });
 
     private final ManagedChannel channel;
     private final Metadata authMetadata;
@@ -204,16 +221,10 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(consistency));
         var request = requestBuilder.build();
 
-        try {
+        try (var iterator = CloseableGrpcIterator.from(
+                () -> stub().readRelationships(request), newCallContext())) {
             List<Tuple> tuples = new ArrayList<>();
-            var iterator = stub().readRelationships(request);
             while (iterator.hasNext()) {
-                if (tuples.size() >= MAX_STREAM_RESULTS) {
-                    LOG.log(System.Logger.Level.WARNING,
-                            "readRelationships truncated at {0} results for {1}:{2}",
-                            MAX_STREAM_RESULTS, resource.type(), resource.id());
-                    break;
-                }
                 var resp = iterator.next();
                 var rel = resp.getRelationship();
                 String subRel = rel.getSubject().getOptionalRelation();
@@ -246,11 +257,10 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(request.consistency()));
 
         int limit = request.limit();
-        try {
+        try (var iterator = CloseableGrpcIterator.from(
+                () -> stub().lookupSubjects(builder.build()), newCallContext())) {
             List<SubjectRef> subjects = new ArrayList<>();
-            var iterator = stub().lookupSubjects(builder.build());
-            int effectiveLimit = limit > 0 ? Math.min(limit, MAX_STREAM_RESULTS) : MAX_STREAM_RESULTS;
-            while (iterator.hasNext() && subjects.size() < effectiveLimit) {
+            while (iterator.hasNext() && (limit <= 0 || subjects.size() < limit)) {
                 var resp = iterator.next();
                 subjects.add(SubjectRef.of(request.subjectType(), resp.getSubject().getSubjectObjectId(), null));
             }
@@ -270,11 +280,10 @@ public class GrpcTransport implements SdkTransport {
         if (request.limit() > 0) builder.setOptionalLimit(request.limit());
 
         int rlimit = request.limit();
-        try {
+        try (var iterator = CloseableGrpcIterator.from(
+                () -> stub().lookupResources(builder.build()), newCallContext())) {
             List<ResourceRef> resources = new ArrayList<>();
-            var iterator = stub().lookupResources(builder.build());
-            int effectiveLimit = rlimit > 0 ? Math.min(rlimit, MAX_STREAM_RESULTS) : MAX_STREAM_RESULTS;
-            while (iterator.hasNext() && resources.size() < effectiveLimit) {
+            while (iterator.hasNext() && (rlimit <= 0 || resources.size() < rlimit)) {
                 var resp = iterator.next();
                 resources.add(ResourceRef.of(request.resourceType(), resp.getResourceObjectId()));
             }
@@ -416,11 +425,22 @@ public class GrpcTransport implements SdkTransport {
     private static Struct toStruct(Map<String, Object> map) {
         var builder = Struct.newBuilder();
         for (var entry : map.entrySet()) {
-            builder.putFields(entry.getKey(), toValue(entry.getValue()));
+            String key = entry.getKey();
+            if (key == null || key.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Caveat context map keys must be non-null and non-empty");
+            }
+            try {
+                builder.putFields(key, toValue(entry.getValue()));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(
+                        "Failed to convert caveat context field '" + key + "': " + e.getMessage(), e);
+            }
         }
         return builder.build();
     }
 
+    @SuppressWarnings("unchecked")
     private static Value toValue(Object obj) {
         if (obj == null) {
             return Value.newBuilder().setNullValueValue(0).build();
@@ -430,9 +450,19 @@ public class GrpcTransport implements SdkTransport {
             return Value.newBuilder().setNumberValue(n.doubleValue()).build();
         } else if (obj instanceof Boolean b) {
             return Value.newBuilder().setBoolValue(b).build();
+        } else if (obj instanceof Map<?, ?> m) {
+            return Value.newBuilder()
+                    .setStructValue(toStruct((Map<String, Object>) m))
+                    .build();
+        } else if (obj instanceof List<?> list) {
+            var listBuilder = ListValue.newBuilder();
+            for (Object element : list) {
+                listBuilder.addValues(toValue(element));
+            }
+            return Value.newBuilder().setListValue(listBuilder).build();
         } else {
-            // Fallback: convert to string
-            return Value.newBuilder().setStringValue(obj.toString()).build();
+            throw new IllegalArgumentException(
+                    "Unsupported caveat context value type: " + obj.getClass().getName());
         }
     }
 
@@ -453,10 +483,50 @@ public class GrpcTransport implements SdkTransport {
     }
 
     private <T> T withErrorHandling(java.util.function.Supplier<T> call) {
+        io.grpc.Context.CancellableContext ctx = newCallContext();
+        io.grpc.Context prev = ctx.attach();
         try {
             return call.get();
         } catch (StatusRuntimeException e) {
             throw mapGrpcException(e);
+        } finally {
+            ctx.detach(prev);
+            // Cancel eagerly to release any Context listeners gRPC attached for
+            // deadline / cancellation propagation. The underlying unary call has
+            // already returned (or thrown) by now, so cancelling the context is
+            // a no-op on the RPC itself — it just frees the listener slot.
+            ctx.cancel(null);
         }
+    }
+
+    /**
+     * Build the {@link io.grpc.Context.CancellableContext} used for ONE gRPC
+     * call (unary or streaming). The context:
+     *
+     * <ul>
+     *   <li>Inherits from {@link io.grpc.Context#current()} so upstream
+     *       cancellation (e.g. from an HTTP handler thread whose context was
+     *       cancelled by the servlet container) propagates transitively.</li>
+     *   <li>Applies an effective deadline of
+     *       {@code min(Context.current().getDeadline(), now + policyTimeout)}.
+     *       If the caller already carried a tighter deadline (e.g. the HTTP
+     *       request had a 100ms SLA) we respect it — the gRPC call will fail
+     *       with {@code DEADLINE_EXCEEDED} at the upstream deadline, not the
+     *       (looser) SDK policy timeout.</li>
+     *   <li>Is cancellable, so {@link io.grpc.Context.CancellableContext#cancel}
+     *       or any upstream cancellation propagates to the bound ClientCall.</li>
+     * </ul>
+     *
+     * <p>Gives {@link GrpcTransport} the explicit Context handling the
+     * per-call stub deadline alone does not provide (SR:C1).
+     */
+    io.grpc.Context.CancellableContext newCallContext() {
+        io.grpc.Deadline upstream = io.grpc.Context.current().getDeadline();
+        io.grpc.Deadline policy = io.grpc.Deadline.after(deadlineMs, TimeUnit.MILLISECONDS);
+        io.grpc.Deadline effective =
+                (upstream != null && upstream.isBefore(policy)) ? upstream : policy;
+        return io.grpc.Context.current()
+                .withDeadline(effective, DEADLINE_SCHEDULER)
+                .withCancellation();
     }
 }

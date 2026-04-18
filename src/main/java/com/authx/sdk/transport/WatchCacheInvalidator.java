@@ -6,7 +6,9 @@ import com.authx.sdk.metrics.SdkMetrics;
 import com.authx.sdk.model.CheckKey;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.RelationshipChange;
+import com.authx.sdk.spi.DroppedListenerEvent;
 import com.authx.sdk.spi.DuplicateDetector;
+import com.authx.sdk.spi.QueueFullPolicy;
 import com.authzed.api.v1.*;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -29,7 +31,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -101,6 +103,31 @@ public class WatchCacheInvalidator implements AutoCloseable {
      */
     private final ExecutorService listenerExecutor;
     private final boolean ownsListenerExecutor;
+    /**
+     * User-registered handler invoked on every listener-dispatch drop (SR:C5).
+     * Never null — defaults to a no-op consumer. Only invoked for drops from
+     * the SDK-owned executor; user-supplied executors own their own rejection
+     * policy.
+     */
+    private final Consumer<DroppedListenerEvent> dropHandler;
+    /**
+     * Queue-full policy for the SDK-owned default executor (SR:C5). Ignored
+     * when a user-supplied executor is in use — only {@link QueueFullPolicy#DROP}
+     * is meaningful there (the SDK does not second-guess a user executor).
+     */
+    private final QueueFullPolicy queueFullPolicy;
+
+    /**
+     * Optional event bus for publishing watch lifecycle events
+     * (e.g. {@code WatchCursorExpired}). Set via {@link #setEventBus} after
+     * construction by the builder. Null = events not published.
+     */
+    private volatile com.authx.sdk.event.TypedEventBus eventBus;
+
+    /** Allow the builder to wire an event bus after construction. */
+    public void setEventBus(com.authx.sdk.event.TypedEventBus bus) {
+        this.eventBus = bus;
+    }
 
     /** Register a listener for relationship changes. */
     public void addListener(Consumer<RelationshipChange> listener) {
@@ -118,7 +145,7 @@ public class WatchCacheInvalidator implements AutoCloseable {
      */
     public WatchCacheInvalidator(ManagedChannel channel, String presharedKey,
                                   Cache<CheckKey, CheckResult> cache, SdkMetrics metrics) {
-        this(channel, presharedKey, cache, metrics, DuplicateDetector.noop(), null);
+        this(channel, presharedKey, cache, metrics, DuplicateDetector.noop(), null, null, null);
     }
 
     /**
@@ -128,26 +155,52 @@ public class WatchCacheInvalidator implements AutoCloseable {
     public WatchCacheInvalidator(ManagedChannel channel, String presharedKey,
                                   Cache<CheckKey, CheckResult> cache, SdkMetrics metrics,
                                   DuplicateDetector<String> dedup) {
-        this(channel, presharedKey, cache, metrics, dedup, null);
+        this(channel, presharedKey, cache, metrics, dedup, null, null, null);
     }
 
     /**
-     * Full-control constructor — supply your own dedup detector AND listener executor.
+     * Backward-compatible pre-SR:C5 constructor — no drop handler, no
+     * queue-full policy override (defaults to {@link QueueFullPolicy#DROP}).
+     */
+    public WatchCacheInvalidator(ManagedChannel channel, String presharedKey,
+                                  Cache<CheckKey, CheckResult> cache, SdkMetrics metrics,
+                                  DuplicateDetector<String> dedup,
+                                  ExecutorService listenerExecutor) {
+        this(channel, presharedKey, cache, metrics, dedup, listenerExecutor, null, null);
+    }
+
+    /**
+     * Full-control constructor — supply dedup detector, listener executor,
+     * drop handler, and queue-full policy.
      *
      * @param listenerExecutor optional executor for invoking user listeners. When
      *                         {@code null} the SDK creates and owns a default
      *                         single-threaded bounded executor (drop-on-full).
      *                         When non-null the SDK does NOT shut it down on
      *                         {@link #close()} — the caller owns its lifecycle.
+     * @param dropHandler      optional handler invoked for every SDK-owned
+     *                         executor drop (ignored when the caller supplied
+     *                         their own executor). {@code null} = no-op.
+     * @param queueFullPolicy  policy for the SDK-owned default executor. When
+     *                         {@link QueueFullPolicy#BLOCK_WITH_BACKPRESSURE},
+     *                         a full queue blocks the gRPC callback thread,
+     *                         propagating HTTP/2 window exhaustion upstream
+     *                         and applying implicit flow control. Ignored
+     *                         when the caller supplied their own executor.
+     *                         {@code null} = {@link QueueFullPolicy#DROP}.
      */
     public WatchCacheInvalidator(ManagedChannel channel, String presharedKey,
                                   Cache<CheckKey, CheckResult> cache, SdkMetrics metrics,
                                   DuplicateDetector<String> dedup,
-                                  ExecutorService listenerExecutor) {
+                                  ExecutorService listenerExecutor,
+                                  Consumer<DroppedListenerEvent> dropHandler,
+                                  QueueFullPolicy queueFullPolicy) {
         this.cache = cache;
         this.metrics = metrics;
         this.channel = channel;
         this.dedup = dedup != null ? dedup : DuplicateDetector.noop();
+        this.dropHandler = dropHandler != null ? dropHandler : e -> {};
+        this.queueFullPolicy = queueFullPolicy != null ? queueFullPolicy : QueueFullPolicy.DROP;
         if (listenerExecutor != null) {
             this.listenerExecutor = listenerExecutor;
             this.ownsListenerExecutor = false;
@@ -167,19 +220,91 @@ public class WatchCacheInvalidator implements AutoCloseable {
     }
 
     /**
-     * Construct the default listener executor: 1 thread, bounded queue (10k),
-     * drop-on-full policy where drops increment {@link #droppedListenerEvents}.
+     * Construct the default listener executor: 1 thread, bounded queue (10k).
+     * Rejection handling depends on {@link #queueFullPolicy}:
+     *
+     * <ul>
+     *   <li>{@link QueueFullPolicy#DROP} — increment {@link #droppedListenerEvents},
+     *       invoke {@link #dropHandler} with a {@link DroppedListenerEvent}, then
+     *       swallow (task is not executed).</li>
+     *   <li>{@link QueueFullPolicy#BLOCK_WITH_BACKPRESSURE} — block the gRPC
+     *       callback thread on {@code queue.put(r)}. The watch thread drives
+     *       demand via {@code ClientCall.request(1)} only after draining a
+     *       message, so this blocks SpiceDB upstream via HTTP/2 flow control.
+     *       No drops occur unless the submitter thread is interrupted.</li>
+     * </ul>
      *
      * <p>The single thread guarantees in-order delivery to listeners — listeners
      * see events in the order SpiceDB delivered them. If you need parallel
      * dispatch, supply your own multi-threaded executor (which loses ordering).
      */
     private ExecutorService defaultListenerExecutor() {
+        RejectedExecutionHandler handler = switch (queueFullPolicy) {
+            case DROP -> (r, exec) -> {
+                droppedListenerEvents.increment();
+                int depth = exec.getQueue().size();
+                if (r instanceof DispatchTask dt) {
+                    try {
+                        dropHandler.accept(new DroppedListenerEvent(
+                                dt.change().zedToken(),
+                                dt.change().resourceType(),
+                                dt.change().resourceId(),
+                                depth,
+                                Instant.now()));
+                    } catch (Throwable t) {
+                        LOG.log(System.Logger.Level.WARNING,
+                                "watchListenerDropHandler threw: {0}", t.toString());
+                    }
+                }
+            };
+            case BLOCK_WITH_BACKPRESSURE -> (r, exec) -> {
+                // Applies SpiceDB-facing backpressure via HTTP/2 window
+                // exhaustion: while this call blocks, the watch thread won't
+                // drain its own queue and won't call request(1), so gRPC
+                // stops granting delivery credit upstream.
+                try {
+                    exec.getQueue().put(r);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    // Submitter interrupted — count as a drop so the operator
+                    // can see that a shutdown/cancel lost the event.
+                    droppedListenerEvents.increment();
+                }
+            };
+        };
         return new ThreadPoolExecutor(
                 1, 1, 0L, TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(10_000),
                 r -> { Thread t = new Thread(r, "authx-sdk-watch-dispatch"); t.setDaemon(true); return t; },
-                (r, executor) -> droppedListenerEvents.increment());
+                handler);
+    }
+
+    /**
+     * Specialised {@link Runnable} that carries the associated
+     * {@link RelationshipChange} so the rejection handler can surface which
+     * event was dropped via {@link DroppedListenerEvent} — Java's standard
+     * RejectedExecutionHandler receives only the opaque Runnable.
+     */
+    private final class DispatchTask implements Runnable {
+        private final RelationshipChange change;
+
+        DispatchTask(RelationshipChange change) {
+            this.change = change;
+        }
+
+        RelationshipChange change() { return change; }
+
+        @Override
+        public void run() {
+            for (var listener : listeners) {
+                try {
+                    listener.accept(change);
+                } catch (Exception e) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Watch listener error: {0}", e.getMessage());
+                }
+            }
+        }
     }
 
     /**
@@ -234,6 +359,36 @@ public class WatchCacheInvalidator implements AutoCloseable {
      */
     private static final int CURSOR_EXPIRY_BACKOFF_THRESHOLD = 3;
 
+    /**
+     * Default threshold for application-layer stall detection. SpiceDB sends
+     * checkpoints every few seconds even on idle streams, so silence longer
+     * than this almost always means SpiceDB is stuck (deadlocked datastore
+     * replica, internal bug) or a middlebox dropped the stream while keeping
+     * TCP alive. Forces a reconnect via {@link WatchStreamSession#close()}.
+     *
+     * <p>Set generously vs. SpiceDB's checkpoint cadence so healthy streams
+     * never trigger false positives. Override via
+     * {@link #setStaleStreamThreshold(Duration)} if your SpiceDB has an
+     * unusually long quantization window.
+     */
+    private static final Duration DEFAULT_STALE_STREAM_THRESHOLD = Duration.ofSeconds(60);
+
+    private volatile Duration staleStreamThreshold = DEFAULT_STALE_STREAM_THRESHOLD;
+    /**
+     * Wall-clock instant of the last received message (data or checkpoint).
+     * Updated on every WatchResponse — see {@link #processResponse}. Read in
+     * the watch loop to detect application-layer stalls.
+     */
+    private volatile java.time.Instant lastMessageAt = java.time.Instant.now();
+
+    /** Override the application-layer stall threshold. Must be &gt; 0. */
+    public void setStaleStreamThreshold(Duration threshold) {
+        if (threshold == null || threshold.isZero() || threshold.isNegative()) {
+            throw new IllegalArgumentException("staleStreamThreshold must be positive");
+        }
+        this.staleStreamThreshold = threshold;
+    }
+
     private void watchLoop() {
         // Outer try/finally guarantees the state field always transitions to
         // STOPPED when the watch thread exits — even if the catch block itself
@@ -265,6 +420,9 @@ public class WatchCacheInvalidator implements AutoCloseable {
                 session = new WatchStreamSession(channel, authMetadata, requestBuilder.build());
                 currentSession.set(session);
                 session.start();
+                // Reset the staleness clock for the new session — a previous
+                // session's silence shouldn't trigger a stall on the new one.
+                lastMessageAt = java.time.Instant.now();
 
                 // Drain events from the session's queue until it closes.
                 //
@@ -341,6 +499,37 @@ public class WatchCacheInvalidator implements AutoCloseable {
                     // if we'd checked before polling we could drop a concurrently-delivered
                     // message that arrived just before onClose fired.
                     if (session.isClosed()) break;
+
+                    // Application-layer stall detection (Kafka max.poll.interval.ms /
+                    // etcd WithProgressNotify pattern). lastMessageAt was reset to
+                    // "now" when the session opened, so we won't false-trigger before
+                    // the first message — the threshold has to elapse with no traffic.
+                    {
+                        Duration idle = Duration.between(lastMessageAt, java.time.Instant.now());
+                        if (idle.compareTo(staleStreamThreshold) > 0) {
+                            LOG.log(System.Logger.Level.WARNING,
+                                    "Watch stream stalled (no message for {0}s, threshold={1}s). " +
+                                            "Forcing reconnect — SpiceDB may be deadlocked or middlebox " +
+                                            "dropped the stream.",
+                                    idle.toSeconds(), staleStreamThreshold.toSeconds());
+                            var bus = eventBus;
+                            if (bus != null) {
+                                try {
+                                    bus.publish(new com.authx.sdk.event.SdkTypedEvent.WatchStreamStale(
+                                            java.time.Instant.now(), idle, staleStreamThreshold));
+                                } catch (Exception pubEx) {
+                                    LOG.log(System.Logger.Level.WARNING,
+                                            "WatchStreamStale event publish failed: {0}", pubEx.getMessage());
+                                }
+                            }
+                            // Cancel the underlying gRPC call → triggers onClose →
+                            // the outer loop's exception/retry path takes over.
+                            session.close();
+                            // Reset the clock so the next session starts fresh.
+                            lastMessageAt = java.time.Instant.now();
+                            break;
+                        }
+                    }
                 }
 
                 // Session ended. If it was an error, re-throw to hit the retry handler.
@@ -385,9 +574,37 @@ public class WatchCacheInvalidator implements AutoCloseable {
                 // window, thread starvation, ...) and we must not tight-loop.
                 if (lastToken.get() != null && isCursorExpired(e)) {
                     consecutiveCursorExpiries++;
+                    String expiredToken = lastToken.get();
+
+                    // K8s informer / etcd / Debezium pattern: when the cursor
+                    // is too old, all events between the last cursor and now
+                    // are LOST. Cache entries written before the disconnect may
+                    // now reflect state that was overwritten during the gap, so
+                    // we cannot trust any of them. Full invalidation is the
+                    // only correct response — losing cache warmth is far
+                    // cheaper than serving wrong permission decisions.
+                    if (cache != null) {
+                        cache.invalidateAll();
+                    }
+
+                    // Publish event so business code can alert / audit / wait
+                    // for re-warming. Subscribers do their own thing; we just
+                    // make the data-loss window observable.
+                    var bus = eventBus;
+                    if (bus != null) {
+                        try {
+                            bus.publish(new com.authx.sdk.event.SdkTypedEvent.WatchCursorExpired(
+                                    java.time.Instant.now(), expiredToken, consecutiveCursorExpiries));
+                        } catch (Exception pubEx) {
+                            // Don't let a bad subscriber kill the watch loop.
+                            LOG.log(System.Logger.Level.WARNING,
+                                    "WatchCursorExpired event publish failed: {0}", pubEx.getMessage());
+                        }
+                    }
+
                     LOG.log(System.Logger.Level.WARNING,
                             "Watch cursor expired (likely SpiceDB gc-window elapsed during disconnect). " +
-                                    "Resetting cursor and resubscribing from HEAD. " +
+                                    "Cache fully invalidated. Resubscribing from HEAD. " +
                                     "Events between the last cursor and now are LOST. " +
                                     "Recurrence count: {0}. Last error: {1}",
                             consecutiveCursorExpiries, e.getMessage());
@@ -463,11 +680,36 @@ public class WatchCacheInvalidator implements AutoCloseable {
      * Process a single {@link WatchResponse}: update cursor, invalidate cache,
      * optionally dispatch listeners (gated by the dedup detector).
      *
+     * <p><b>Ordering invariant (SR:C2)</b> — for each update in the batch, the
+     * cache entry is invalidated BEFORE the corresponding listener dispatch is
+     * submitted to the executor. This establishes a happens-before edge:
+     *
+     * <pre>
+     *   cache.invalidate(key)  ─happens-before→  listenerExecutor.execute(dispatch)
+     *                                                     │
+     *                                                     ▼
+     *                                       listener.accept(change)
+     * </pre>
+     *
+     * Both operations are performed from the single watch thread (serialized by
+     * the drain loop), and the {@link ExecutorService#execute} call provides the
+     * usual JMM happens-before edge into the listener task. Therefore any
+     * {@code check()} that runs <em>after</em> the listener observes an event
+     * will see a cache miss and re-hit SpiceDB — it cannot observe the
+     * pre-change cached decision.
+     *
+     * <p>Do not reorder these steps: dispatching before invalidating would let
+     * a concurrent {@code check()} on another thread observe the new world via
+     * the listener while the cache still serves the old decision.
+     *
      * <p>Extracted from the watchLoop for readability; the body is unchanged
      * from the previous inline version except that it's now called from the
      * session-based drain loop.
      */
     private void processResponse(WatchResponse response) {
+        // Application-layer liveness: any message (data or checkpoint) proves
+        // SpiceDB is producing — refresh the staleness clock.
+        lastMessageAt = java.time.Instant.now();
         // Track token for reconnection (always, even on checkpoints)
         if (response.hasChangesThrough()) {
             lastToken.set(response.getChangesThrough().getToken());
@@ -505,7 +747,21 @@ public class WatchCacheInvalidator implements AutoCloseable {
             String resourceType = rel.getResource().getObjectType();
             String resourceId = rel.getResource().getObjectId();
 
-            // 1. Invalidate cache (never gated — idempotent and required)
+            // ─── SR:C2 ordering invariant ───
+            //
+            // STEP 1 (always) — invalidate cache. This MUST happen before the
+            // listener is enqueued. The order matters: a listener that fires
+            // while the cache still returns the pre-change value would let a
+            // consumer act on "new world via listener" + "old world via cache"
+            // simultaneously, violating read-your-writes semantics.
+            //
+            // STEP 2 (gated) — enqueue listener dispatch. The executor.execute()
+            // in dispatchChangeSafely() provides a JMM happens-before edge from
+            // this thread to the listener thread, so any listener observer is
+            // guaranteed to see the cache invalidation (step 1) as having
+            // already happened.
+            //
+            // DO NOT REORDER.
             String indexKey = resourceType + ":" + resourceId;
             if (cache instanceof IndexedCache<CheckKey, CheckResult> indexed) {
                 indexed.invalidateByIndex(indexKey);
@@ -565,19 +821,36 @@ public class WatchCacheInvalidator implements AutoCloseable {
      * and the next updates in the batch are processed normally.
      */
     private void dispatchChangeSafely(RelationshipChange change) {
-        try {
-            listenerExecutor.execute(() -> {
-                for (var listener : listeners) {
-                    try {
-                        listener.accept(change);
-                    } catch (Exception e) {
-                        LOG.log(System.Logger.Level.WARNING,
-                                "Watch listener error: {0}", e.getMessage());
+        Runnable task = ownsListenerExecutor
+                ? new DispatchTask(change)
+                : () -> {
+                    for (var listener : listeners) {
+                        try {
+                            listener.accept(change);
+                        } catch (Exception e) {
+                            LOG.log(System.Logger.Level.WARNING,
+                                    "Watch listener error: {0}", e.getMessage());
+                        }
                     }
-                }
-            });
+                };
+        try {
+            listenerExecutor.execute(task);
         } catch (Throwable t) {
+            // Covers RejectedExecutionException from user-supplied executors
+            // (we don't know their rejection policy). SDK-owned executor drops
+            // are handled by the RejectedExecutionHandler in
+            // defaultListenerExecutor() and never reach this catch.
             droppedListenerEvents.increment();
+            if (!ownsListenerExecutor) {
+                try {
+                    dropHandler.accept(new DroppedListenerEvent(
+                            change.zedToken(), change.resourceType(), change.resourceId(),
+                            -1, Instant.now()));
+                } catch (Throwable dh) {
+                    LOG.log(System.Logger.Level.WARNING,
+                            "watchListenerDropHandler threw: {0}", dh.toString());
+                }
+            }
             LOG.log(System.Logger.Level.WARNING,
                     "Watch listener executor rejected dispatch ({0}); counted as dropped. "
                             + "Cache invalidation for the current batch is unaffected.",

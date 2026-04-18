@@ -8,7 +8,7 @@ Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired auth
 
 - **Java 21**, Gradle, gRPC (Netty-shaded)
 - **Resilience**: Resilience4j (circuit breaker, retry, rate limiter, bulkhead)
-- **Cache**: Caffeine (optional), tiered cache with Watch-based invalidation
+- **Cache**: Caffeine (optional, single-tier L1) with Watch-based invalidation
 - **Observability**: OpenTelemetry API, Micrometer (optional), HdrHistogram
 - **Testing**: JUnit 5, AssertJ, Mockito
 
@@ -30,15 +30,22 @@ src/main/java/com/authx/sdk/
 ├── metrics/                   # SDK metrics
 └── telemetry/                 # Telemetry reporter
 test-app/                      # Demo Spring Boot app
+cluster-test/                  # Production cluster stress test harness
+                               # (3 SpringBoot instances + Toxiproxy + HTML report)
+sdk-redisson/                  # Optional Redisson-backed DistributedTokenStore
+                               # (multi-JVM SESSION consistency)
 ```
 
 ## Build commands
 
 ```bash
-./gradlew compileJava                  # Compile
-./gradlew test -x :test-app:test       # Unit tests (skip test-app)
-./gradlew test                         # All tests including test-app
+./gradlew compileJava                                    # Compile SDK
+./gradlew test -x :test-app:test -x :cluster-test:test   # SDK unit tests only
+./gradlew test                                            # All tests
+./gradlew :cluster-test:bootJar                           # Build cluster-test runnable jar
 ```
+
+For cluster stress testing see `cluster-test/README.md`.
 
 ## Workflow
 

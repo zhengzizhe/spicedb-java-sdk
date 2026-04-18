@@ -57,6 +57,18 @@ public class GrantAction {
         return this;
     }
 
+    /** Attach a caveat using a generated {@link CaveatRef}. */
+    public GrantAction withCaveat(CaveatRef ref) {
+        this.caveat = ref;
+        return this;
+    }
+
+    /** Alias for {@link #withCaveat(CaveatRef)} — reads as "grant member onlyIf ...". */
+    public GrantAction onlyIf(CaveatRef ref) { return withCaveat(ref); }
+
+    /** Alias for {@link #withCaveat(String, Map)} — reads as "grant member onlyIf ...". */
+    public GrantAction onlyIf(String caveatName, Map<String, Object> context) { return withCaveat(caveatName, context); }
+
     /** Grant the relation(s) to the given user ids and execute the write. */
     public GrantResult to(String... userIds) {
         return to(Arrays.asList(userIds));
