@@ -5,6 +5,13 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -60,5 +67,85 @@ class GrantCompletionTest {
         List<String> fired = new ArrayList<>();
         h.listener(r -> fired.add("ok"));
         assertThat(fired).containsExactly("ok");
+    }
+
+    // ─── Async listener tests (SR:req-8, req-11) ───
+
+    @Test
+    void listenerAsync_dispatchesToExecutor() throws Exception {
+        GrantCompletion h = new GrantCompletionImpl(R);
+        AtomicReference<Thread> fired = new AtomicReference<>();
+        CountDownLatch done = new CountDownLatch(1);
+        ExecutorService exec = Executors.newSingleThreadExecutor(
+                r -> new Thread(r, "listener-pool"));
+        try {
+            h.listenerAsync(res -> {
+                fired.set(Thread.currentThread());
+                done.countDown();
+            }, exec);
+            assertThat(done.await(2, TimeUnit.SECONDS)).isTrue();
+            assertThat(fired.get().getName()).isEqualTo("listener-pool");
+            assertThat(fired.get()).isNotEqualTo(Thread.currentThread());
+        } finally {
+            exec.shutdownNow();
+        }
+    }
+
+    @Test
+    void listenerAsync_nullCallbackOrExecutorThrows() {
+        GrantCompletion h = new GrantCompletionImpl(R);
+        ExecutorService exec = Executors.newSingleThreadExecutor();
+        try {
+            assertThatThrownBy(() -> h.listenerAsync(null, exec))
+                    .isInstanceOf(NullPointerException.class).hasMessage("callback");
+            assertThatThrownBy(() -> h.listenerAsync(r -> {}, null))
+                    .isInstanceOf(NullPointerException.class).hasMessage("executor");
+        } finally {
+            exec.shutdownNow();
+        }
+    }
+
+    @Test
+    void listenerAsync_rejectionPropagates() throws Exception {
+        GrantCompletion h = new GrantCompletionImpl(R);
+        // Saturated executor: queue size 0 + abort policy = reject when busy.
+        ThreadPoolExecutor exec = new ThreadPoolExecutor(
+                1, 1, 0, TimeUnit.MILLISECONDS,
+                new SynchronousQueue<>(),
+                new ThreadPoolExecutor.AbortPolicy());
+        CountDownLatch hold = new CountDownLatch(1);
+        CountDownLatch started = new CountDownLatch(1);
+        try {
+            // Occupy the single thread so the next submit is rejected.
+            exec.submit(() -> {
+                started.countDown();
+                try { hold.await(); } catch (InterruptedException ignored) {}
+            });
+            assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> h.listenerAsync(r -> {}, exec))
+                    .isInstanceOf(RejectedExecutionException.class);
+        } finally {
+            hold.countDown();
+            exec.shutdownNow();
+        }
+    }
+
+    @Test
+    void asyncListenerExceptionIsSwallowedAndLogged() throws Exception {
+        GrantCompletion h = new GrantCompletionImpl(R);
+        CountDownLatch done = new CountDownLatch(1);
+        ExecutorService exec = Executors.newSingleThreadExecutor();
+        try {
+            // First listener throws — impl must catch so the executor stays
+            // healthy and the second listener still fires.
+            h.listenerAsync(r -> { throw new RuntimeException("boom-async"); }, exec);
+            h.listenerAsync(r -> done.countDown(), exec);
+            assertThat(done.await(2, TimeUnit.SECONDS))
+                    .as("well-behaved async listener still fires after a throwing one")
+                    .isTrue();
+        } finally {
+            exec.shutdownNow();
+        }
     }
 }

@@ -13,6 +13,9 @@ import java.util.function.Consumer;
  */
 final class GrantCompletionImpl implements GrantCompletion {
 
+    private static final System.Logger LOG =
+            System.getLogger("com.authx.sdk.action.GrantCompletion");
+
     private final GrantResult result;
 
     GrantCompletionImpl(GrantResult result) {
@@ -33,7 +36,24 @@ final class GrantCompletionImpl implements GrantCompletion {
 
     @Override
     public GrantCompletion listenerAsync(Consumer<GrantResult> callback, Executor executor) {
-        // Filled in by T005.
-        throw new UnsupportedOperationException("listenerAsync — implemented in T005");
+        Objects.requireNonNull(callback, "callback");
+        Objects.requireNonNull(executor, "executor");
+        // Task wrapping: catch any Throwable from the user callback so that
+        // (a) the caller of listenerAsync never sees it, (b) the executor's
+        // UncaughtExceptionHandler doesn't print stacktraces for routine
+        // listener bugs, and (c) the thread stays alive for subsequent tasks.
+        // The submission itself (executor.execute) is NOT wrapped — a
+        // RejectedExecutionException from a saturated/shutdown executor must
+        // propagate to the caller per SR:req-8.
+        executor.execute(() -> {
+            try {
+                callback.accept(result);
+            } catch (Throwable t) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Async grant listener threw (source={0}): {1}",
+                        callback.getClass().getName(), t.toString());
+            }
+        });
+        return this;
     }
 }
