@@ -8,37 +8,37 @@ Legend: `[P]` parallelizable within phase — `[SR:req-N]` spec requirement trac
 
 ## Phase 0: Setup
 
-- [ ] T001 Verify green baseline on `feature/write-listener-api` — `(no files)`
+- [X] T001 Verify green baseline on `feature/write-listener-api` — `(no files)`
 
 ## Phase 1: Public interfaces (blocks all)
 
-- [ ] T002 [SR:req-1, req-2] Create sealed interfaces `GrantCompletion` + `RevokeCompletion` with `of(...)` static factory — `src/main/java/com/authx/sdk/action/GrantCompletion.java`, `src/main/java/com/authx/sdk/action/RevokeCompletion.java`
+- [X] T002 [SR:req-1, req-2] Create sealed interfaces `GrantCompletion` + `RevokeCompletion` with `of(...)` static factory — `src/main/java/com/authx/sdk/action/GrantCompletion.java`, `src/main/java/com/authx/sdk/action/RevokeCompletion.java`
 
 ## Phase 2: Sync listener (Grant ‖ Revoke)
 
-- [ ] T003 [P] [SR:req-7, req-10] Grant sync listener tests + impl — `src/main/java/com/authx/sdk/action/GrantCompletionImpl.java`, `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
-- [ ] T004 [P] [SR:req-9, req-10] Revoke sync listener tests + impl — `src/main/java/com/authx/sdk/action/RevokeCompletionImpl.java`, `src/test/java/com/authx/sdk/action/RevokeCompletionTest.java`
+- [X] T003 [P] [SR:req-7, req-10] Grant sync listener tests + impl — `src/main/java/com/authx/sdk/action/GrantCompletionImpl.java`, `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
+- [X] T004 [P] [SR:req-9, req-10] Revoke sync listener tests + impl — `src/main/java/com/authx/sdk/action/RevokeCompletionImpl.java`, `src/test/java/com/authx/sdk/action/RevokeCompletionTest.java`
 
 ## Phase 3: Async listener + exception handling (Grant ‖ Revoke)
 
-- [ ] T005 [P] [SR:req-8, req-11] Grant async listener + swallow/log — `src/main/java/com/authx/sdk/action/GrantCompletionImpl.java`, `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
-- [ ] T006 [P] [SR:req-9, req-11] Revoke async listener + swallow/log — `src/main/java/com/authx/sdk/action/RevokeCompletionImpl.java`, `src/test/java/com/authx/sdk/action/RevokeCompletionTest.java`
+- [X] T005 [P] [SR:req-8, req-11] Grant async listener + swallow/log — `src/main/java/com/authx/sdk/action/GrantCompletionImpl.java`, `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
+- [X] T006 [P] [SR:req-9, req-11] Revoke async listener + swallow/log — `src/main/java/com/authx/sdk/action/RevokeCompletionImpl.java`, `src/test/java/com/authx/sdk/action/RevokeCompletionTest.java`
 
 ## Phase 4: Typed action rewire + aggregation (Grant ‖ Revoke)
 
-- [ ] T007 [P] [SR:req-3, req-5] `TypedGrantAction` terminals return `GrantCompletion`; aggregate result; +aggregation test — `src/main/java/com/authx/sdk/TypedGrantAction.java`, `src/main/java/com/authx/sdk/action/GrantCompletion.java`, `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
-- [ ] T008 [P] [SR:req-4, req-6] `TypedRevokeAction` terminals return `RevokeCompletion`; aggregate result; +aggregation test — `src/main/java/com/authx/sdk/TypedRevokeAction.java`, `src/main/java/com/authx/sdk/action/RevokeCompletion.java`, `src/test/java/com/authx/sdk/action/RevokeCompletionTest.java`
+- [X] T007 [P] [SR:req-3, req-5] `TypedGrantAction` terminals return `GrantCompletion`; aggregate result; +aggregation test — `src/main/java/com/authx/sdk/TypedGrantAction.java`, `src/main/java/com/authx/sdk/action/GrantCompletion.java`, `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
+- [X] T008 [P] [SR:req-4, req-6] `TypedRevokeAction` terminals return `RevokeCompletion`; aggregate result; +aggregation test — `src/main/java/com/authx/sdk/TypedRevokeAction.java`, `src/main/java/com/authx/sdk/action/RevokeCompletion.java`, `src/test/java/com/authx/sdk/action/RevokeCompletionTest.java`
 
 ## Phase 5: Failure & back-compat tests
 
-- [ ] T009 [SR:req-12, req-13] Write-failure short-circuit test — `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
-- [ ] T010 [SR:req-14] Statement-form back-compat test — `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
+- [X] T009 [SR:req-12, req-13] Write-failure short-circuit test — `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
+- [X] T010 [SR:req-14] Statement-form back-compat test — `src/test/java/com/authx/sdk/action/GrantCompletionTest.java`
 
 ## Phase 6: Verification
 
-- [ ] T011 [SR:req-15] Verify no out-of-scope files changed — `(no files)`
-- [ ] T012 Full test suite + downstream `compileJava` green — `(no files)`
-- [ ] T013 README `Listeners` subsection (CN + EN) — `README.md`, `README_en.md`
+- [X] T011 [SR:req-15] Verify no out-of-scope files changed — `(no files)`
+- [X] T012 Full test suite + downstream `compileJava` green — `(no files)`
+- [X] T013 README `Listeners` subsection (CN + EN) — `README.md`, `README_en.md`
 
 ---
 
