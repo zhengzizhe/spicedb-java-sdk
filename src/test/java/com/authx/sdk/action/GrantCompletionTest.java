@@ -1,6 +1,11 @@
 package com.authx.sdk.action;
 
+import com.authx.sdk.AuthxClient;
+import com.authx.sdk.ResourceType;
 import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.SubjectRef;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,6 +24,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GrantCompletionTest {
+
+    // Typed test fixtures for aggregation tests.
+    enum Rel implements Relation.Named {
+        EDITOR, VIEWER;
+        @Override public String relationName() { return name().toLowerCase(); }
+    }
+    enum Perm implements Permission.Named {
+        VIEW;
+        @Override public String permissionName() { return name().toLowerCase(); }
+    }
+    private static final ResourceType<Rel, Perm> DOC =
+            ResourceType.of("document", Rel.class, Perm.class);
 
     private static final GrantResult R = new GrantResult("tok-1", 3);
 
@@ -128,6 +145,24 @@ class GrantCompletionTest {
         } finally {
             hold.countDown();
             exec.shutdownNow();
+        }
+    }
+
+    // ─── Typed chain aggregation (SR:req-5) ───
+
+    @Test
+    void resultAggregatesAcrossInternalWrites() {
+        try (var client = AuthxClient.inMemory()) {
+            // 2 resources × 2 relations × 2 subjects = 4 RPCs × 2 updates each = 8 total.
+            GrantCompletion h = client.on(DOC)
+                    .select("d1", "d2")
+                    .grant(Rel.EDITOR, Rel.VIEWER)
+                    .to(SubjectRef.of("user", "alice", null),
+                        SubjectRef.of("user", "bob", null));
+
+            GrantResult r = h.result();
+            // InMemoryTransport returns no zedToken; count still aggregates.
+            assertThat(r.count()).isEqualTo(8);
         }
     }
 
