@@ -17,6 +17,8 @@ Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired auth
 ```
 src/main/java/com/authx/sdk/
 ├── AuthxClient.java          # Main entry point
+├── action/                    # Fluent chain actions: Grant/Revoke/Check/Batch +
+│                              #   GrantCompletion/RevokeCompletion (listener handles)
 ├── transport/                 # Transport chain: gRPC → resilient → cached → instrumented
 ├── cache/                     # Cache<K,V>, Caffeine, tiered, schema cache
 ├── model/                     # Value objects, requests, results, enums
@@ -27,6 +29,9 @@ src/main/java/com/authx/sdk/
 ├── lifecycle/                 # SDK lifecycle state machine
 ├── event/                     # Typed event bus
 ├── watch/                     # Watch dispatcher, strategies
+├── dedup/                     # Watch cursor-replay duplicate detector
+├── health/                    # HealthProbe implementations
+├── trace/                     # TraceParent propagation
 ├── metrics/                   # SDK metrics
 └── telemetry/                 # Telemetry reporter
 test-app/                      # Demo Spring Boot app
