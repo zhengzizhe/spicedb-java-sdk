@@ -1,5 +1,6 @@
 package com.authx.sdk;
 
+
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.Permission;
