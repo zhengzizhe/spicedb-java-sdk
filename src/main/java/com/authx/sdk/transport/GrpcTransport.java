@@ -37,6 +37,8 @@ import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -47,6 +49,21 @@ public class GrpcTransport implements SdkTransport {
 
     private static final System.Logger LOG = System.getLogger(GrpcTransport.class.getName());
     private static final int MAX_BATCH_SIZE = 500;
+
+    /**
+     * Shared scheduler used by {@link io.grpc.Context#withDeadline(io.grpc.Deadline,
+     * ScheduledExecutorService)} to fire automatic cancellation when the
+     * per-call effective deadline elapses. Single-threaded daemon pool — the
+     * scheduler only fires late-timeout tasks, so one thread is plenty.
+     * Shared JVM-wide (static) because the tasks it runs are trivial and
+     * creating one per-instance would leak if clients are short-lived.
+     */
+    private static final ScheduledExecutorService DEADLINE_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "authx-grpc-deadline");
+                t.setDaemon(true);
+                return t;
+            });
 
     private final ManagedChannel channel;
     private final Metadata authMetadata;
@@ -204,7 +221,8 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(consistency));
         var request = requestBuilder.build();
 
-        try (var iterator = CloseableGrpcIterator.from(() -> stub().readRelationships(request))) {
+        try (var iterator = CloseableGrpcIterator.from(
+                () -> stub().readRelationships(request), newCallContext())) {
             List<Tuple> tuples = new ArrayList<>();
             while (iterator.hasNext()) {
                 var resp = iterator.next();
@@ -239,7 +257,8 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(request.consistency()));
 
         int limit = request.limit();
-        try (var iterator = CloseableGrpcIterator.from(() -> stub().lookupSubjects(builder.build()))) {
+        try (var iterator = CloseableGrpcIterator.from(
+                () -> stub().lookupSubjects(builder.build()), newCallContext())) {
             List<SubjectRef> subjects = new ArrayList<>();
             while (iterator.hasNext() && (limit <= 0 || subjects.size() < limit)) {
                 var resp = iterator.next();
@@ -261,7 +280,8 @@ public class GrpcTransport implements SdkTransport {
         if (request.limit() > 0) builder.setOptionalLimit(request.limit());
 
         int rlimit = request.limit();
-        try (var iterator = CloseableGrpcIterator.from(() -> stub().lookupResources(builder.build()))) {
+        try (var iterator = CloseableGrpcIterator.from(
+                () -> stub().lookupResources(builder.build()), newCallContext())) {
             List<ResourceRef> resources = new ArrayList<>();
             while (iterator.hasNext() && (rlimit <= 0 || resources.size() < rlimit)) {
                 var resp = iterator.next();
@@ -463,10 +483,50 @@ public class GrpcTransport implements SdkTransport {
     }
 
     private <T> T withErrorHandling(java.util.function.Supplier<T> call) {
+        io.grpc.Context.CancellableContext ctx = newCallContext();
+        io.grpc.Context prev = ctx.attach();
         try {
             return call.get();
         } catch (StatusRuntimeException e) {
             throw mapGrpcException(e);
+        } finally {
+            ctx.detach(prev);
+            // Cancel eagerly to release any Context listeners gRPC attached for
+            // deadline / cancellation propagation. The underlying unary call has
+            // already returned (or thrown) by now, so cancelling the context is
+            // a no-op on the RPC itself — it just frees the listener slot.
+            ctx.cancel(null);
         }
+    }
+
+    /**
+     * Build the {@link io.grpc.Context.CancellableContext} used for ONE gRPC
+     * call (unary or streaming). The context:
+     *
+     * <ul>
+     *   <li>Inherits from {@link io.grpc.Context#current()} so upstream
+     *       cancellation (e.g. from an HTTP handler thread whose context was
+     *       cancelled by the servlet container) propagates transitively.</li>
+     *   <li>Applies an effective deadline of
+     *       {@code min(Context.current().getDeadline(), now + policyTimeout)}.
+     *       If the caller already carried a tighter deadline (e.g. the HTTP
+     *       request had a 100ms SLA) we respect it — the gRPC call will fail
+     *       with {@code DEADLINE_EXCEEDED} at the upstream deadline, not the
+     *       (looser) SDK policy timeout.</li>
+     *   <li>Is cancellable, so {@link io.grpc.Context.CancellableContext#cancel}
+     *       or any upstream cancellation propagates to the bound ClientCall.</li>
+     * </ul>
+     *
+     * <p>Gives {@link GrpcTransport} the explicit Context handling the
+     * per-call stub deadline alone does not provide (SR:C1).
+     */
+    io.grpc.Context.CancellableContext newCallContext() {
+        io.grpc.Deadline upstream = io.grpc.Context.current().getDeadline();
+        io.grpc.Deadline policy = io.grpc.Deadline.after(deadlineMs, TimeUnit.MILLISECONDS);
+        io.grpc.Deadline effective =
+                (upstream != null && upstream.isBefore(policy)) ? upstream : policy;
+        return io.grpc.Context.current()
+                .withDeadline(effective, DEADLINE_SCHEDULER)
+                .withCancellation();
     }
 }
