@@ -1,7 +1,9 @@
 package com.authx.sdk;
 
+import com.authx.sdk.action.GrantCompletion;
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.CaveatRef;
+import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectRef;
 
@@ -111,12 +113,12 @@ public class TypedGrantAction<R extends Relation.Named> {
     // ════════════════════════════════════════════════════════════════
 
     /** Grant to one or more user ids — equivalent to {@code user:<id>} subjects. */
-    public void toUser(String... userIds) {
-        writeTypedSubjects("user", null, userIds);
+    public GrantCompletion toUser(String... userIds) {
+        return writeTypedSubjects("user", null, userIds);
     }
 
-    public void toUser(Collection<String> userIds) {
-        toUser(userIds.toArray(String[]::new));
+    public GrantCompletion toUser(Collection<String> userIds) {
+        return toUser(userIds.toArray(String[]::new));
     }
 
     /**
@@ -124,12 +126,12 @@ public class TypedGrantAction<R extends Relation.Named> {
      * {@code group:<id>#member}. Use this when the schema declares the
      * relation as accepting {@code group#member} references.
      */
-    public void toGroupMember(String... groupIds) {
-        writeTypedSubjects("group", "member", groupIds);
+    public GrantCompletion toGroupMember(String... groupIds) {
+        return writeTypedSubjects("group", "member", groupIds);
     }
 
-    public void toGroupMember(Collection<String> groupIds) {
-        toGroupMember(groupIds.toArray(String[]::new));
+    public GrantCompletion toGroupMember(Collection<String> groupIds) {
+        return toGroupMember(groupIds.toArray(String[]::new));
     }
 
     /**
@@ -137,8 +139,8 @@ public class TypedGrantAction<R extends Relation.Named> {
      * {@code user:*}. The schema's relation must declare {@code user:*}
      * as an allowed subject for this to pass validation.
      */
-    public void toUserAll() {
-        write(new String[]{"user:*"});
+    public GrantCompletion toUserAll() {
+        return write(new String[]{"user:*"});
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -162,17 +164,19 @@ public class TypedGrantAction<R extends Relation.Named> {
      *     .to(SubjectRef.of("department", "eng", "all_members"));
      * </pre>
      */
-    public void to(SubjectRef... subjects) {
-        if (subjects == null || subjects.length == 0) return;
+    public GrantCompletion to(SubjectRef... subjects) {
+        if (subjects == null || subjects.length == 0) {
+            return GrantCompletion.of(new GrantResult(null, 0));
+        }
         String[] refs = new String[subjects.length];
         for (int i = 0; i < subjects.length; i++) {
             refs[i] = subjects[i].toRefString();
         }
-        write(refs);
+        return write(refs);
     }
 
-    public void to(Collection<SubjectRef> subjects) {
-        to(subjects.toArray(SubjectRef[]::new));
+    public GrantCompletion to(Collection<SubjectRef> subjects) {
+        return to(subjects.toArray(SubjectRef[]::new));
     }
 
     /**
@@ -180,33 +184,39 @@ public class TypedGrantAction<R extends Relation.Named> {
      * {@code "type:id"} / {@code "type:id#relation"} / {@code "type:*"}
      * strings. Still validated against the schema at runtime.
      */
-    public void toSubjectRefs(String... subjectRefs) {
-        if (subjectRefs == null || subjectRefs.length == 0) return;
-        write(subjectRefs);
+    public GrantCompletion toSubjectRefs(String... subjectRefs) {
+        if (subjectRefs == null || subjectRefs.length == 0) {
+            return GrantCompletion.of(new GrantResult(null, 0));
+        }
+        return write(subjectRefs);
     }
 
     /** Collection overload for {@link #toSubjectRefs(String...)}. */
-    public void toSubjectRefs(Collection<String> subjectRefs) {
-        if (subjectRefs == null || subjectRefs.isEmpty()) return;
-        write(subjectRefs.toArray(String[]::new));
+    public GrantCompletion toSubjectRefs(Collection<String> subjectRefs) {
+        if (subjectRefs == null || subjectRefs.isEmpty()) {
+            return GrantCompletion.of(new GrantResult(null, 0));
+        }
+        return write(subjectRefs.toArray(String[]::new));
     }
 
     // ════════════════════════════════════════════════════════════════
     //  Internals
     // ════════════════════════════════════════════════════════════════
 
-    private void writeTypedSubjects(String type, String subRelation, String[] ids) {
-        if (ids == null || ids.length == 0) return;
+    private GrantCompletion writeTypedSubjects(String type, String subRelation, String[] ids) {
+        if (ids == null || ids.length == 0) {
+            return GrantCompletion.of(new GrantResult(null, 0));
+        }
         String[] refs = new String[ids.length];
         for (int i = 0; i < ids.length; i++) {
             refs[i] = (subRelation == null || subRelation.isEmpty())
                     ? type + ":" + ids[i]
                     : type + ":" + ids[i] + "#" + subRelation;
         }
-        write(refs);
+        return write(refs);
     }
 
-    private void write(String[] refs) {
+    private GrantCompletion write(String[] refs) {
         // Runtime subject-type validation. If the schema cache is empty or
         // disabled, validateSubject is a no-op — we cannot reject what we
         // cannot verify. In a normal client, the cache is populated at
@@ -223,11 +233,14 @@ public class TypedGrantAction<R extends Relation.Named> {
         }
 
         // Route through GrantAction so caveat + expiration propagate into
-        // the RelationshipUpdate written by the transport. The simple path
-        // (no caveat, no expiration) is a no-op extra allocation compared
-        // to the former direct call to factory.grantToSubjects, which is
-        // cheap enough to always take — the savings wouldn't be observable
-        // even at 100k writes/sec.
+        // the RelationshipUpdate written by the transport. Aggregate the
+        // per-RPC GrantResults into a single result (SR:req-5):
+        //   zedToken = token from the LAST internal write (SpiceDB's
+        //              monotonically-increasing revision, so the latest
+        //              covers all prior writes for consistency purposes)
+        //   count    = SUM of counts across all internal writes
+        String lastToken = null;
+        int totalCount = 0;
         for (String id : ids) {
             for (R rel : relations) {
                 var action = factory.resource(id).grant(rel.relationName());
@@ -237,8 +250,11 @@ public class TypedGrantAction<R extends Relation.Named> {
                 if (expiresAt != null) {
                     action.expiresAt(expiresAt);
                 }
-                action.toSubjects(refs);
+                GrantResult r = action.toSubjects(refs);
+                if (r.zedToken() != null) lastToken = r.zedToken();
+                totalCount += r.count();
             }
         }
+        return GrantCompletion.of(new GrantResult(lastToken, totalCount));
     }
 }
