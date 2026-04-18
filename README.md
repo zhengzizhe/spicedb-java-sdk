@@ -446,16 +446,27 @@ SDK 内部处理三种异常情况：
 
 ## Changelog
 
-### 未发布 — Critical Fixes (2026-04)
+### 未发布 — Write Listener API (2026-04-18)
 
-代码审查批次 `SR:C3, C4, C6, C7, C8, C9, C10`，无公共 API 破坏。详见
-[`specs/2026-04-16-sdk-review-critical-fixes/`](specs/2026-04-16-sdk-review-critical-fixes/)。
+类型化链式 API 的 grant/revoke 终端方法新增完成监听器支持，无公共 API 破坏。
+详见 [`specs/2026-04-18-write-listener-api/`](specs/2026-04-18-write-listener-api/)。
+
+- **新接口** `com.authx.sdk.action.GrantCompletion` / `RevokeCompletion`（sealed，`of(result)` 工厂）。
+- **`TypedGrantAction` / `TypedRevokeAction`** — 所有终端方法（`toUser` / `toGroupMember` / `to(SubjectRef)` / … 以及对应 `from*`）从 `void` 改返回 `GrantCompletion` / `RevokeCompletion`。Java 允许忽略非 void 返回，**老代码 0 改动**。
+- **同步 listener** — `.listener(cb)` 在当前线程执行回调，返回后继续。
+- **异步 listener** — `.listenerAsync(cb, executor)` 投递到用户提供的 executor，立即返回；回调抛异常被捕获并以 WARN 记录，不影响其他 listener。
+- **结果聚合** — 一条链调可能跨多次内部 RPC（`select("d1","d2").grant(R1,R2).toUser(...)` → 4 RPC），`result()` 返回单个聚合的 `GrantResult`（`zedToken` = 最后一次写入的 token，`count` = 所有 RPC 求和）。
+
+### 2026-04-18 — Critical Fixes (SR:C1–C10)
+
+代码审查批次全部落地，无公共 API 破坏。详见 [`specs/2026-04-16-sdk-review-critical-fixes/`](specs/2026-04-16-sdk-review-critical-fixes/)。
 
 - **`CoalescingTransport`** — leader 失败后先从 inflight 摘除再 publish 异常，避免 post-failure 的 newcomer 拿到 ghost 异常 (`SR:C3`)。
 - **`RetryPolicy.defaults()`** — `InvalidPermission/Relation/ResourceException` 加入非重试清单；新增 `isPermanent(Throwable)` 便捷谓词 (`SR:C4`)。
 - **`AuthxClientBuilder`** — `target` 与 `targets` 互斥；`cache.watchInvalidation(true)` 强制要求 `cache.enabled(true)`；`extend.addWatchStrategy(...)` 同理 (`SR:C6, SR:C7`)。
-- **Interceptor chain** — 读路径（`RealCheckChain` / `RealOperationChain`）隔离用户 interceptor 异常并跳过继续执行；写路径（`RealWriteChain`）fail-closed，非 Authx 异常包装为 `AuthxException` 中止写入 (`SR:C8`)。
-- **`SdkMetrics`** — HdrHistogram 上限从 60s 提升到 600s；新增 `latencyOverflowCount()` 和 `Snapshot.latencyOverflowCount()` 计数截断样本；`toString()` 非零时打印 `overflow=N` (`SR:C9`)。
-- **`TelemetryReporter`** — `sink.send()` 现在跑在独立 `sinkExecutor` 上并有默认 5s 超时；`close()` 时间上界 ≈ 调度器 5s + sinkTimeout；新增 `sinkTimeoutCount()` (`SR:C10`)。
-
-**已识别但推迟到下一轮**：`SR:C1` (gRPC `Context` 截止时间传播) 和 `SR:C5` (Watch listener drop SPI + 背压策略) — 需要更大的设计变更，单独成计划处理。`SR:C2` 核查发现当前代码已满足约束，无需修改。
+- **Interceptor chain** — 读路径（`RealCheckChain` / `RealOperationChain`）隔离用户 interceptor 异常并跳过继续执行；写路径（`RealWriteChain`）fail-closed (`SR:C8`)。
+- **`SdkMetrics`** — HdrHistogram 上限从 60s 提升到 600s；新增 `latencyOverflowCount()` (`SR:C9`)。
+- **`TelemetryReporter`** — `sink.send()` 跑在独立 `sinkExecutor` 上，默认 5s 超时；新增 `sinkTimeoutCount()` (`SR:C10`)。
+- **`GrpcTransport`** — 每个 RPC 在 `CancellableContext` 内执行，`effectiveDeadline = min(上游 ctx deadline, 策略超时)`；`CloseableGrpcIterator` 在 `hasNext` / `next` 期间重新 attach，上游取消在 50ms 内传导到 gRPC 调用 (`SR:C1`)。
+- **`WatchCacheInvalidator`** — `processResponse` 的 cache-invalidate-before-dispatch happens-before 边 Javadoc 明确化 + 1000 并发对回归测试 (`SR:C2`)。
+- **Watch listener 丢失可观测 + 背压** — 新 SPI `DroppedListenerEvent` + `QueueFullPolicy`；`SdkComponents.Builder#watchListenerDropHandler(...)`；`CacheConfig#listenerQueueOnFull(DROP|BLOCK_WITH_BACKPRESSURE)` (`SR:C5`)。
