@@ -88,6 +88,54 @@ client.revoke("document", "doc-1", "editor", "bob");
 client.revokeAll("document", "doc-1", "bob");
 ```
 
+### Write completion listeners (grant / revoke)
+
+Typed-chain grant / revoke terminals return a completion handle that lets you
+attach one or more completion listeners at the end of the chain. **The write
+itself remains synchronous**; only the listener's execution mode is configurable:
+
+```java
+// Sync listener — callback runs on the caller's thread before the call returns
+client.on(Document.TYPE).select("doc-1")
+    .grant(Document.Rel.EDITOR)
+    .toUser("bob")
+    .listener(r -> log.info("granted, zedToken={}", r.zedToken()));
+
+// Async listener — dispatched to the supplied executor and returns immediately
+client.on(Document.TYPE).select("doc-1")
+    .grant(Document.Rel.EDITOR)
+    .toUser("bob")
+    .listenerAsync(r -> audit.write(r), auditExecutor);
+
+// Multiple listeners can be chained
+client.on(Document.TYPE).select("doc-1")
+    .grant(Document.Rel.EDITOR)
+    .toUser("bob")
+    .listener(r -> localLog(r))
+    .listenerAsync(r -> remoteAudit(r), auditExecutor);
+
+// Statement form still works — existing callers don't need to change
+client.on(Document.TYPE).select("doc-1")
+    .grant(Document.Rel.EDITOR)
+    .toUser("bob");
+```
+
+**Semantics**:
+- A write failure (any `AuthxException` subclass) is thrown from the terminal
+  method before any listener can be registered, so listeners only observe
+  successful writes.
+- An exception thrown inside an async listener callback is caught and logged
+  at WARNING (logger name `com.authx.sdk.action.GrantCompletion` /
+  `RevokeCompletion`). It does NOT reach the caller, does NOT affect the
+  write outcome, and does NOT cancel other already-dispatched async listeners.
+- Listeners fire in chain registration order for the sync variant; for the
+  async variant submission order matches chain order but actual execution
+  order is governed by the supplied executor.
+- When a typed chain spans multiple internal RPCs (e.g. `select("d1","d2")
+  .grant(R1,R2).toUser("a","b")` triggers 4 RPCs), `result()` returns a
+  single aggregated `GrantResult` whose `zedToken` is the last internal
+  write's token and whose `count` is the sum across all internal writes.
+
 ### Close the Client
 
 ```java

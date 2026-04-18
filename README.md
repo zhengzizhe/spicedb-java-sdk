@@ -88,6 +88,45 @@ client.revoke("document", "doc-1", "editor", "bob");
 client.revokeAll("document", "doc-1", "bob");
 ```
 
+### 写入完成监听器（grant / revoke）
+
+类型化链式 API 的 grant / revoke 终端方法会返回一个 completion 句柄，支持
+在链末尾挂载一个或多个完成监听器。**写入本身仍是同步的**，只有监听器的执行方式
+可选：
+
+```java
+// 同步监听器 —— 回调在当前线程运行，本调用等它返回后才继续
+client.on(Document.TYPE).select("doc-1")
+    .grant(Document.Rel.EDITOR)
+    .toUser("bob")
+    .listener(r -> log.info("granted, zedToken={}", r.zedToken()));
+
+// 异步监听器 —— 投递到你提供的 executor，立即返回
+client.on(Document.TYPE).select("doc-1")
+    .grant(Document.Rel.EDITOR)
+    .toUser("bob")
+    .listenerAsync(r -> audit.write(r), auditExecutor);
+
+// 多个监听器可链式挂载
+client.on(Document.TYPE).select("doc-1")
+    .grant(Document.Rel.EDITOR)
+    .toUser("bob")
+    .listener(r -> localLog(r))
+    .listenerAsync(r -> remoteAudit(r), auditExecutor);
+
+// 忽略返回值（语句形式）仍然可用 —— 老代码 0 改动
+client.on(Document.TYPE).select("doc-1")
+    .grant(Document.Rel.EDITOR)
+    .toUser("bob");
+```
+
+**语义要点**：
+- 写入失败（`AuthxException` 子类）在终端调用处直接抛出，监听器**根本不会被注册**，也**不会触发**。
+- 异步监听器回调抛出的异常会被捕获并以 `WARNING` 日志记录（logger name
+  `com.authx.sdk.action.GrantCompletion` / `RevokeCompletion`），**不会**影响调用方、写入结果、或其他已投递的异步监听器。
+- 多个监听器按链式注册顺序执行（异步场景下提交顺序一致，真正执行顺序由 executor 决定）。
+- 链式写入跨多个内部 RPC 时（如 `select("d1","d2").grant(R1,R2).toUser("a","b")` 触发 4 次 RPC），`result()` 返回的 `GrantResult` 聚合为 `zedToken =` 最后一次写入的 token，`count =` 所有 RPC 的计数之和。
+
 ### 关闭客户端
 
 ```java
