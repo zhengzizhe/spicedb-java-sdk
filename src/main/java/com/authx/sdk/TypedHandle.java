@@ -1,6 +1,5 @@
 package com.authx.sdk;
 
-
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 

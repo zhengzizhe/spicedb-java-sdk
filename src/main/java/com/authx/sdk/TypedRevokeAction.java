@@ -1,6 +1,5 @@
 package com.authx.sdk;
 
-
 import com.authx.sdk.action.RevokeCompletion;
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.Relation;
