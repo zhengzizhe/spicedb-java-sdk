@@ -17,6 +17,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -150,6 +151,33 @@ class GrantCompletionTest {
 
     // ─── Typed chain aggregation (SR:req-5) ───
 
+    // ─── Write failure short-circuits listener (SR:req-12, req-13) ───
+
+    @Test
+    void writeFailureThrowsBeforeListenerRegistration() {
+        try (var client = AuthxClient.inMemory()) {
+            AtomicBoolean listenerFired = new AtomicBoolean(false);
+
+            // Trigger an exception inside the terminal write: an array with
+            // one null SubjectRef element NPEs at `subjects[i].toRefString()`
+            // in TypedGrantAction.to(SubjectRef...) — strictly BEFORE any
+            // GrantCompletion is returned.
+            SubjectRef[] bad = new SubjectRef[]{null};
+
+            assertThatThrownBy(() ->
+                    client.on(DOC).select("d1").grant(Rel.EDITOR)
+                            .to(bad)
+                            .listener(r -> listenerFired.set(true))
+            ).isInstanceOfAny(NullPointerException.class,
+                              IllegalArgumentException.class,
+                              com.authx.sdk.exception.AuthxException.class);
+
+            assertThat(listenerFired.get())
+                    .as("SR:req-12 — listener must not fire when write throws")
+                    .isFalse();
+        }
+    }
+
     @Test
     void resultAggregatesAcrossInternalWrites() {
         try (var client = AuthxClient.inMemory()) {
@@ -163,6 +191,21 @@ class GrantCompletionTest {
             GrantResult r = h.result();
             // InMemoryTransport returns no zedToken; count still aggregates.
             assertThat(r.count()).isEqualTo(8);
+        }
+    }
+
+    // ─── Backward compatibility (SR:req-14) ───
+
+    @Test
+    void statementFormStillCompiles() {
+        try (var client = AuthxClient.inMemory()) {
+            // Statement form — return value intentionally discarded. Matches
+            // the pre-feature void-returning API. The implicit assertion is
+            // that this line compiled (proving the return-type change was
+            // non-breaking) and did not throw.
+            client.on(DOC).select("d1").grant(Rel.EDITOR).toUser("bob");
+            // Reached here = write succeeded; back-compat invariant holds.
+            assertThat(true).isTrue();
         }
     }
 
