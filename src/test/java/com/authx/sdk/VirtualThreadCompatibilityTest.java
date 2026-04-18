@@ -1,6 +1,10 @@
 package com.authx.sdk;
 
 import com.authx.sdk.event.DefaultTypedEventBus;
+import com.authx.sdk.internal.SdkCaching;
+import com.authx.sdk.internal.SdkConfig;
+import com.authx.sdk.internal.SdkInfrastructure;
+import com.authx.sdk.internal.SdkObservability;
 import com.authx.sdk.lifecycle.LifecycleManager;
 import com.authx.sdk.metrics.SdkMetrics;
 import com.authx.sdk.policy.PolicyRegistry;

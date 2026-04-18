@@ -17,8 +17,15 @@ Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired auth
 ```
 src/main/java/com/authx/sdk/
 ├── AuthxClient.java          # Main entry point
-├── action/                    # Fluent chain actions: Grant/Revoke/Check/Batch +
-│                              #   GrantCompletion/RevokeCompletion (listener handles)
+├── AuthxClientBuilder.java   # Client builder (connection/cache/feature/extend)
+├── ResourceFactory/Handle/Type.java   # Resource navigation (typed chain uses these)
+├── Typed*.java               # Typed fluent chain (tightly coupled with
+│                              #   ResourceFactory package-private internals — stays here)
+├── internal/                  # Internal plumbing: SdkCaching, SdkConfig,
+│                              #   SdkInfrastructure, SdkObservability, SchemaClient.
+│                              #   Not public API — do not depend on.
+├── action/                    # Untyped fluent chain actions: Grant/Revoke/Check/
+│                              #   Batch + GrantCompletion/RevokeCompletion
 ├── transport/                 # Transport chain: gRPC → resilient → cached → instrumented
 ├── cache/                     # Cache<K,V>, Caffeine, tiered, schema cache
 ├── model/                     # Value objects, requests, results, enums

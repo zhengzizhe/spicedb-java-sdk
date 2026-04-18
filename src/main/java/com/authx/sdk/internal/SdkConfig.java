@@ -1,4 +1,4 @@
-package com.authx.sdk;
+package com.authx.sdk.internal;
 
 import com.authx.sdk.policy.PolicyRegistry;
 import java.util.Objects;

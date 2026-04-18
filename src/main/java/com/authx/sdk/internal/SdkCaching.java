@@ -1,5 +1,6 @@
-package com.authx.sdk;
+package com.authx.sdk.internal;
 
+import com.authx.sdk.CacheHandle;
 import com.authx.sdk.cache.Cache;
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.CheckKey;

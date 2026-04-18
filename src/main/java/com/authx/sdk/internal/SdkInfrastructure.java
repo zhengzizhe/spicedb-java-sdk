@@ -1,4 +1,4 @@
-package com.authx.sdk;
+package com.authx.sdk.internal;
 
 import com.authx.sdk.lifecycle.LifecycleManager;
 import java.util.Objects;
