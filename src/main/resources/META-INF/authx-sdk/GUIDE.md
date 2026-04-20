@@ -20,10 +20,14 @@ Your App → SDK → SpiceDB (gRPC direct, <5ms latency)
 
 **Key characteristics:**
 - Thread-safe: one client instance shared across all threads
-- High-performance: L1 cache, request coalescing, circuit breaker
-- Per-resource-type policies: different cache TTL, consistency, retry per type
-- Schema validation: typos caught at SDK layer with suggestions
-- Zero-config telemetry: async operation logging to platform
+- High-performance: request coalescing, circuit breaker, Resilience4j
+- Per-resource-type policies: consistency, retry, circuit-breaker per type
+- Zero-config telemetry: async operation logging via TelemetrySink SPI
+
+**Note (2026-04-18):** The SDK no longer caches decisions client-side.
+See [ADR 2026-04-18](../../../../docs/adr/2026-04-18-remove-l1-cache.md).
+Use `Consistency.minimizeLatency()` to hit SpiceDB's server-side
+dispatch cache for low-latency reads.
 
 ---
 
@@ -34,8 +38,8 @@ Your App → SDK → SpiceDB (gRPC direct, <5ms latency)
 dependencies {
     implementation("com.authx:authx-sdk:1.0.0")
 
-    // Optional: enable L1 cache (strongly recommended for production)
-    runtimeOnly("com.github.ben-manes.caffeine:caffeine:3.1.8")
+    // Optional: cross-JVM SESSION consistency via Redis
+    implementation("com.authx:authx-sdk-redisson:1.0.0")
 
     // Optional: generated type-safe constants for your schema
     implementation("com.authx:authx-sdk-typed:1.0.0")
@@ -70,10 +74,6 @@ AuthxClient client = AuthxClient.builder()
         .presharedKey("my-key")                    // SpiceDB preshared key
         .requestTimeout(Duration.ofSeconds(5))     // Per-request timeout (default: 5s)
         .tls(false))                               // TLS for SpiceDB gRPC (default: false)
-    .cache(c -> c
-        .enabled(true)                             // Enable L1 Caffeine cache (default: false)
-        .maxSize(100_000)                          // Max cached entries (default: 100,000)
-        .watchInvalidation(true))                  // Watch SpiceDB for real-time cache invalidation
     .features(f -> f
         .virtualThreads(true)                      // Java 21 virtual threads for internal threads
         .coalescing(true)                          // Deduplicate concurrent identical checks (default: true)
@@ -82,7 +82,6 @@ AuthxClient client = AuthxClient.builder()
     .extend(e -> e
         .policies(PolicyRegistry.builder()         // Per-resource-type policies (optional, see section 8)
             .defaultPolicy(ResourcePolicy.builder()
-                .cache(CachePolicy.builder().ttl(Duration.ofSeconds(5)).build())
                 .readConsistency(ReadConsistency.session())
                 .retry(RetryPolicy.defaults())
                 .circuitBreaker(CircuitBreakerPolicy.defaults())
@@ -93,11 +92,9 @@ AuthxClient client = AuthxClient.builder()
 ```
 
 `build()` performs the following steps:
-1. POST /sdk/connect to platform → get SpiceDB endpoints + preshared key + schema
-2. Create gRPC channel to SpiceDB
-3. Populate SchemaCache for input validation
-4. Start credential refresh scheduler (every TTL/2 seconds)
-5. Start Watch stream for cache invalidation (if enabled)
+1. Create gRPC channel to SpiceDB
+2. Build transport chain (resilient → coalescing → instrumented → gRPC)
+3. Start metrics rotation scheduler
 
 ### 3.2 Test Client (no external services)
 
@@ -108,7 +105,7 @@ AuthxClient client = AuthxClient.inMemory();
 InMemory behavior:
 - grant/revoke → stores in a ConcurrentHashMap
 - check → exact match on relation name (no recursive permission computation)
-- No schema validation, no cache, no circuit breaker
+- No circuit breaker
 - Thread-safe
 
 ### 3.3 Lifecycle
@@ -252,7 +249,7 @@ doc.who().withPermission("view")
 ```
 
 **IMPORTANT:** `withPermission()` uses LookupSubjects (recursive). `withRelation()` uses ReadRelationships (exact).
-Using a relation name with `withPermission()` or vice versa will trigger a SchemaCache validation error with a helpful suggestion.
+Using a relation name with `withPermission()` or vice versa will be rejected by SpiceDB's server-side validation.
 
 ### 4.6 relations — Read relationships
 
@@ -393,27 +390,11 @@ doc.grant("viewer").toSubjects(Subjects.groupMember("engineering"));
 
 ## 7. Schema Validation
 
-The SDK loads the schema from SpiceDB on startup and validates inputs:
-
-```java
-// Typo in resource type
-client.resource("docment", "d1");
-// → InvalidResourceException: "docment" does not exist in schema. Did you mean "document"?
-//   Available: [document, folder, group, user]
-
-// Using relation where permission is expected
-doc.check("editor").by("alice");
-// → InvalidPermissionException: "editor" is a relation, not a permission, on "document".
-//   For check/who, use a permission: [view, edit, delete, comment, share]
-//   Hint: relation "editor" → maybe permission "edit"?
-
-// Using permission where relation is expected
-doc.grant("view").to("bob");
-// → InvalidRelationException: "view" is a permission, not a relation, on "document".
-//   For grant/revoke, use a relation: [owner, editor, viewer, parent]
-```
-
-Schema is auto-refreshed on each credential refresh cycle.
+Client-side schema validation was removed on 2026-04-18 alongside the
+SchemaCache subsystem (see ADR). Invalid resource types, relations, or
+subject types now fail at the SpiceDB boundary with
+`AuthxInvalidArgumentException`. The SpiceDB error message carries the
+same diagnostic detail.
 
 ---
 
@@ -425,9 +406,6 @@ Different resource types often need different strategies:
 .extend(e -> e.policies(PolicyRegistry.builder()
     // Global defaults (applied to any type without specific config)
     .defaultPolicy(ResourcePolicy.builder()
-        .cache(CachePolicy.builder()
-            .ttl(Duration.ofSeconds(5))
-            .build())
         .readConsistency(ReadConsistency.session())
         .retry(RetryPolicy.builder()
             .maxAttempts(3)
@@ -444,25 +422,18 @@ Different resource types often need different strategies:
         .timeout(Duration.ofSeconds(5))
         .build())
 
-    // Document: fast-changing, per-permission cache TTL
+    // Document: shorter timeout
     .forResourceType("document", ResourcePolicy.builder()
-        .cache(CachePolicy.builder()
-            .ttl(Duration.ofSeconds(3))                    // default for document
-            .forPermission("view", Duration.ofSeconds(10)) // view can cache longer
-            .forPermission("delete", Duration.ofMillis(500)) // delete needs near-realtime
-            .build())
         .timeout(Duration.ofSeconds(3))
         .build())
 
-    // Folder: stable permissions, aggressive caching
+    // Folder: bounded staleness reads OK
     .forResourceType("folder", ResourcePolicy.builder()
-        .cache(CachePolicy.ofTtl(Duration.ofSeconds(30)))
         .readConsistency(ReadConsistency.boundedStaleness(Duration.ofSeconds(10)))
         .build())
 
-    // Group: membership must be strongly consistent, no cache
+    // Group: membership must be strongly consistent, no retry
     .forResourceType("group", ResourcePolicy.builder()
-        .cache(CachePolicy.disabled())
         .readConsistency(ReadConsistency.strong())
         .retry(RetryPolicy.disabled())
         .build())
@@ -470,7 +441,7 @@ Different resource types often need different strategies:
     .build()))
 ```
 
-**Resolution order:** per-permission TTL → per-type policy → global default.
+**Resolution order:** per-type policy → global default.
 Fields not set in a more specific policy inherit from the parent.
 
 ---
@@ -497,29 +468,24 @@ AuthxException (RuntimeException)
 
 ## 10. Transport Architecture
 
-SDK uses a decorator chain (outermost → innermost):
+SDK uses a decorator chain (outermost → innermost). As of ADR 2026-04-18
+the CachedTransport and Watch infrastructure have been removed:
 
 ```
-CoalescingTransport         — deduplicate concurrent identical check() calls
-  → PolicyAwareConsistency  — apply per-type ReadConsistency + track ZedTokens
-    → CachedTransport       — L1 Caffeine cache with per-type/per-permission TTL
-      → PolicyAwareRetry    — per-type exponential backoff + jitter
-        → InstrumentedTransport — telemetry recording (async, non-blocking)
-          → ConnectionManager   — hot-swappable gRPC channel (reconnects on endpoint/key change)
-            → GrpcTransport     — SpiceDB gRPC (preshared key bearer token)
+InterceptorTransport        — user-supplied SdkInterceptor hooks
+  → InstrumentedTransport   — telemetry + metrics recording
+    → CoalescingTransport   — deduplicate concurrent identical check() calls
+      → PolicyAwareConsistency  — apply per-type ReadConsistency + track ZedTokens
+        → ResilientTransport    — Resilience4j CB + retry + bulkhead + rate limit (per-type)
+          → GrpcTransport       — SpiceDB gRPC (preshared key bearer token)
 ```
 
-**Cache behavior:**
-- Only caches check() results
-- grant/revoke/batch → invalidates all cache entries for the affected resource
-- Watch stream → invalidates cache entries changed by OTHER SDK instances
-- Per-type cache disable: `CachePolicy.disabled()` for a resource type → cache layer is skipped
-
-**Connection management:**
-- Platform returns healthy endpoints via /sdk/connect
-- SDK refreshes every TTL/2 seconds
-- If endpoints or presharedKey change → gRPC channel is hot-swapped (ReadWriteLock, zero downtime)
-- Platform runs background health checks (every 30s) and only returns healthy endpoints
+**Decision caching:**
+- The SDK does NOT cache decisions client-side (removed 2026-04-18).
+- SpiceDB's server-side dispatch cache handles decision caching
+  (schema-aware, correct across inheritance).
+- Use `Consistency.minimizeLatency()` for reads that should hit the
+  server-side cache.
 
 ---
 
