@@ -46,16 +46,14 @@ curl -X POST http://localhost:8091/test/report/generate
 ## Failure injection (manual)
 
 ```bash
-# Stall all SpiceDB Watch streams (bandwidth=0)
-./orchestrator/inject/stall-watch.sh
-# ... reproduce something ...
-./orchestrator/inject/restore-watch.sh
-
 # Kill a SpiceDB node
 ./orchestrator/inject/kill-spicedb.sh 1
 # ... observe failover ...
 ./orchestrator/inject/restore-spicedb.sh 1
 ```
+
+(Watch-stream stall scripts were removed alongside SDK Watch support on
+2026-04-18 — see [ADR](../docs/adr/2026-04-18-remove-l1-cache.md).)
 
 ## Test catalogue
 
@@ -63,7 +61,7 @@ curl -X POST http://localhost:8091/test/report/generate
 |---|---|---|
 | Correctness | C1-C8 | Grant/revoke, group inheritance, deep folder, caveat, expiration, cross-instance, batch atomicity |
 | Baseline | B1-B5 | Read mix, write mix, cross-instance consistency, deep inheritance, batch |
-| Resilience | R1-R7 | The 7 P0/P1 SDK risk fixes from the 2026-04-14 audit |
+| Resilience | R1, R4-R7 | SDK P0/P1 risks (R2/R3 were Watch-specific and removed with the Watch subsystem 2026-04-18) |
 | Stress | S1-S2 | Concurrency ramp + sustained max-TPS |
 | Soak | L1 | 30-min sustained run for memory/thread leak detection |
 
