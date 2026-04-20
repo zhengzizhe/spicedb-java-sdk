@@ -329,10 +329,30 @@ public class ResilientTransport extends ForwardingTransport {
 
         Retry retry = Retry.of("authx-" + resourceType, config);
 
-        retry.getEventPublisher().onRetry(event ->
-                LOG.log(System.Logger.Level.WARNING, "Retry {0}/{1} for [{2}]: {3}",
-                        event.getNumberOfRetryAttempts(), policy.maxAttempts(),
-                        resourceType, event.getLastThrowable().getMessage()));
+        retry.getEventPublisher().onRetry(event -> {
+            // SR:req-8 — enrich current OTel span with retry attempt + event
+            try {
+                var span = io.opentelemetry.api.trace.Span.current();
+                span.setAttribute("authx.retry.attempt", event.getNumberOfRetryAttempts());
+                span.setAttribute("authx.retry.max", policy.maxAttempts());
+                span.addEvent("retry_attempt",
+                        io.opentelemetry.api.common.Attributes.of(
+                                io.opentelemetry.api.common.AttributeKey.longKey("attempt"),
+                                (long) event.getNumberOfRetryAttempts(),
+                                io.opentelemetry.api.common.AttributeKey.stringKey("errorType"),
+                                event.getLastThrowable() == null ? "null"
+                                        : event.getLastThrowable().getClass().getSimpleName()));
+            } catch (Throwable ignored) {
+                /* span enrichment is best-effort */
+            }
+            // SR:req-10 — retry is normal product of resilience policy, not
+            // operator-actionable; downgrade WARN → DEBUG. Real signal ("retry
+            // budget exhausted") stays at WARN above.
+            LOG.log(System.Logger.Level.DEBUG,
+                    com.authx.sdk.trace.LogCtx.fmt("Retry {0}/{1} for [{2}]: {3}",
+                            event.getNumberOfRetryAttempts(), policy.maxAttempts(),
+                            resourceType, event.getLastThrowable().getMessage()));
+        });
 
         return retry;
     }
