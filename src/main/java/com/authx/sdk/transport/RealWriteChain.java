@@ -7,6 +7,7 @@ import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.spi.SdkInterceptor.OperationContext;
 import com.authx.sdk.spi.SdkInterceptor.WriteChain;
 import com.authx.sdk.trace.LogCtx;
+import com.authx.sdk.trace.LogFields;
 
 import java.util.List;
 
@@ -70,8 +71,18 @@ public final class RealWriteChain implements WriteChain {
         } catch (com.authx.sdk.exception.AuthxException authx) {
             throw authx;
         } catch (RuntimeException bug) {
+            // First update carries enough resource context for the suffix —
+            // batch writes can span types, but the first entry still tells the
+            // on-call engineer where to start looking. Empty update list is
+            // uncommon but handled.
+            var first = request.updates().isEmpty() ? null : request.updates().get(0);
             LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
-                    "Write interceptor {0} threw {1}; aborting write (fail-closed).",
+                    "Write interceptor {0} threw {1}; aborting write (fail-closed)."
+                            + LogFields.suffixRel(
+                                    first == null || first.resource() == null ? null : first.resource().type(),
+                                    first == null || first.resource() == null ? null : first.resource().id(),
+                                    first == null || first.relation() == null ? null : first.relation().name(),
+                                    first == null || first.subject() == null ? null : first.subject().toRefString()),
                     interceptor.getClass().getName(), bug.toString()));
             throw new com.authx.sdk.exception.AuthxException(
                     "Write interceptor " + interceptor.getClass().getName()

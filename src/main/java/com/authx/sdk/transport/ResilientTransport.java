@@ -15,6 +15,7 @@ import com.authx.sdk.policy.CircuitBreakerPolicy;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.policy.RetryPolicy;
 import com.authx.sdk.trace.LogCtx;
+import com.authx.sdk.trace.LogFields;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -320,7 +321,9 @@ public class ResilientTransport extends ForwardingTransport {
                     }
                     if (!checkRetryBudget()) {
                         LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
-                                "Retry budget exhausted for [{0}], skipping retry", resourceType));
+                                "Retry budget exhausted for [{0}], skipping retry"
+                                        + LogFields.suffix(resourceType, null, null, null),
+                                resourceType));
                         return false;
                     }
                     retryCount.increment();

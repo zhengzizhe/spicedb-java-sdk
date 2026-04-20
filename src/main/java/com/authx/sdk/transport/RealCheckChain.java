@@ -7,6 +7,7 @@ import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.spi.SdkInterceptor.CheckChain;
 import com.authx.sdk.spi.SdkInterceptor.OperationContext;
 import com.authx.sdk.trace.LogCtx;
+import com.authx.sdk.trace.LogFields;
 
 import java.util.List;
 
@@ -72,7 +73,12 @@ public final class RealCheckChain implements CheckChain {
             throw authx;
         } catch (RuntimeException bug) {
             LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
-                    "Read interceptor {0} threw {1}; skipping and continuing the chain.",
+                    "Read interceptor {0} threw {1}; skipping and continuing the chain."
+                            + LogFields.suffixPerm(
+                                    request.resource() == null ? null : request.resource().type(),
+                                    request.resource() == null ? null : request.resource().id(),
+                                    request.permission() == null ? null : request.permission().name(),
+                                    request.subject() == null ? null : request.subject().toRefString()),
                     interceptor.getClass().getName(), bug.toString()));
             return next.proceed(request);
         }
