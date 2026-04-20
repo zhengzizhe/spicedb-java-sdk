@@ -622,3 +622,66 @@ client.resource("document", docId)
     .grant("viewer")
     .toSubjects("group:engineering#member");
 ```
+
+---
+
+## 15. Logging & Tracing
+
+### Overview
+
+SDK logs go through `java.lang.System.Logger` — the JDK's zero-dependency
+logging facade. The backend is host-chosen: `java.util.logging` by default,
+or route to SLF4J / Log4j 2 / Logback via standard bridges. On top of
+`System.Logger`, the SDK adds three non-invasive enrichment layers:
+
+- **Trace-id prefix** — every message is prepended with `[trace=<16hex>] `
+  when an OpenTelemetry span is active. Requires only the OTel API
+  (already a direct dependency); no SDK configuration needed.
+- **SLF4J MDC bridge** — when `org.slf4j:slf4j-api` (2.0.13) is on the
+  classpath, the SDK pushes up to 15 `authx.*` keys onto the per-thread
+  MDC at each RPC entry and clears them on return. Absent SLF4J, the
+  bridge is a silent no-op; no classes are loaded.
+- **WARN+ suffix** — messages at `WARN` or higher with resource context
+  in scope get a trailing ` [type=... res=... perm|rel=... subj=...]` so
+  readers without structured MDC still see the affected entity.
+
+### MDC fields
+
+Up to 15 keys are pushed, omitted when blank:
+
+`authx.traceId`, `authx.spanId`, `authx.action`, `authx.resourceType`,
+`authx.resourceId`, `authx.permission`, `authx.relation`, `authx.subject`,
+`authx.consistency`, `authx.retry.attempt`, `authx.retry.max`,
+`authx.cb.state`, `authx.caveat`, `authx.expiresAt`, `authx.zedToken`.
+
+### OTel integration
+
+The SDK uses `GlobalOpenTelemetry` via `Span.current()`. Any standard OTel
+SDK install registered globally at host startup is picked up automatically;
+no SDK-side wiring is required.
+
+Key span attributes set by the SDK:
+`authx.action`, `authx.resource.type`, `authx.resource.id`,
+`authx.permission`, `authx.subject`, `authx.consistency`, `authx.result`,
+`authx.errorType`, `authx.retry.attempt`, `authx.retry.max`.
+
+### SLF4J wiring (recommended)
+
+```gradle
+dependencies {
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("ch.qos.logback:logback-classic:1.5.6")
+    implementation("org.slf4j:jul-to-slf4j:2.0.13")  // System.Logger → SLF4J
+}
+```
+
+Install the JUL bridge once at startup:
+
+```java
+org.slf4j.bridge.SLF4JBridgeHandler.removeHandlersForRootLogger();
+org.slf4j.bridge.SLF4JBridgeHandler.install();
+```
+
+See `docs/logging-guide.md` for complete pattern examples (minimal / middle
+/ full JSON), the level-semantics table, and the seven stability guarantees
+(SG-1..SG-7) that govern the logging layer.

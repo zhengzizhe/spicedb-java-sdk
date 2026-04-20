@@ -281,12 +281,42 @@ AuthxClient client = AuthxClient.builder()
 | `io.github.resilience4j:*` | 2.4.0 | 熔断 / 重试 / 限流 / 隔仓 |
 | `org.hdrhistogram:HdrHistogram` | 2.2.2 | 延迟百分位追踪 |
 | `io.opentelemetry:opentelemetry-api` | 1.40.0 | 可观测性 API（无 SDK 时为 no-op） |
+| `org.slf4j:slf4j-api` | 2.0.13 | **可选** `compileOnly`，存在时自动 push 15 个 `authx.*` MDC 字段；不存在则 bridge 整体降级 no-op |
+
+### 日志与溯源
+
+SDK 日志默认走 `java.lang.System.Logger`（JDK 内置，零依赖，默认落到 JUL）。生产推荐接 SLF4J：
+
+```gradle
+dependencies {
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("ch.qos.logback:logback-classic:1.5.6")
+    implementation("org.slf4j:jul-to-slf4j:2.0.13")   // System.Logger → SLF4J
+}
+```
+
+SDK 的 `Slf4jMdcBridge` 会在 RPC 入口自动 push 15 个 `authx.*` MDC key，配合 Logback pattern 即可拿到结构化字段。OTel 存在时每条日志自动带 `[trace=<16hex>]` 前缀。WARN+ 日志追加 ` [type=... res=... perm|rel=... subj=...]` 尾缀，无 SLF4J 也能快速定位。
+
+详细配置、级别语义、完整 MDC 清单见 [`docs/logging-guide.md`](docs/logging-guide.md)。
 
 > **要求**：Java 21+
 >
 > **不附属于 Authzed 公司**。这是一个独立的 Java SDK，依赖 SpiceDB 官方的 `authzed-api` protobuf 定义。
 
 ## Changelog
+
+### 未发布 — 日志与溯源增强 (2026-04-20)
+
+非破坏性增强。详见 [`docs/logging-guide.md`](docs/logging-guide.md) 和 [`specs/2026-04-20-logging-traceability-upgrade/`](specs/2026-04-20-logging-traceability-upgrade/)。
+
+- 每条 SDK 日志在 OTel 活跃时自动带 `[trace=<16hex>]` 前缀
+- 新 `com.authx.sdk.trace` 包：`LogCtx` / `Slf4jMdcBridge` / `LogFields`
+- 可选 SLF4J 集成（`compileOnly` 2.0.13）—— 存在时自动 push 15 个 `authx.*` MDC 字段
+- OTel span 属性补齐：retry 次数、consistency、result、subject、errorType 等
+- WARN+ 日志追加 ` [type=... res=... perm|rel=... subj=...]` 尾缀，无 SLF4J 也可定位
+- 级别审计：3 条 WARN 降级 DEBUG（`GrpcTransport` bulk-item 错误 × 2、`ResilientTransport` per-retry 日志）
+
+**所有日志消息主干文本保持不变**；基于消息正则的告警规则继续 match。
 
 ### 未发布 — 移除 L1 本地缓存 + Watch 基础设施 (2026-04-18, BREAKING)
 
