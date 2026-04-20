@@ -2,7 +2,7 @@
 
 ## What is this
 
-Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired authorization system. This SDK wraps gRPC calls to SpiceDB and provides caching, resilience, observability, and a fluent API for permission checks, relationship writes, lookups, and schema management.
+Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired authorization system. This SDK wraps gRPC calls to SpiceDB and provides resilience, observability, and a fluent API for permission checks, relationship writes, lookups, and schema management. (No client-side decision caching — see ADR 2026-04-18.)
 
 ## Tech stack
 
