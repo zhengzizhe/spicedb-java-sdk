@@ -28,6 +28,25 @@ class ValueObjectTest {
         assertThat(ref.relation()).isNull();
     }
 
+    @Test void subjectRef_of_twoArgs_hasNullRelation() {
+        // The common type:id case — no need to pass an explicit `null` for relation.
+        var ref = SubjectRef.of("user", "alice");
+        assertThat(ref.type()).isEqualTo("user");
+        assertThat(ref.id()).isEqualTo("alice");
+        assertThat(ref.relation()).isNull();
+        assertThat(ref).isEqualTo(SubjectRef.of("user", "alice", null));
+    }
+
+    @Test void subjectRef_of_twoArgs_worksForAnyType() {
+        // Deliberately not using "user" — the SDK does not assume any specific
+        // business type. Schema-defined types like department / service /
+        // organization all work identically.
+        assertThat(SubjectRef.of("department", "eng"))
+                .isEqualTo(SubjectRef.of("department", "eng", null));
+        assertThat(SubjectRef.of("service", "bot-scraper").toRefString())
+                .isEqualTo("service:bot-scraper");
+    }
+
     @Test void subjectRef_parse_simple() {
         var ref = SubjectRef.parse("user:alice");
         assertThat(ref.type()).isEqualTo("user");
