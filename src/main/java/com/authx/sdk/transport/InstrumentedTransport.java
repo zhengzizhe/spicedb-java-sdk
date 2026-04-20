@@ -120,6 +120,12 @@ public class InstrumentedTransport extends ForwardingTransport {
         String traceId = TraceContext.traceId();
 
         try (var span = TraceContext.startSpan("authx." + action.name().toLowerCase(), spanAttrs)) {
+            // SR:req-7 — enrich span with subject for multi-tenant tracing
+            if (subjectType != null && !subjectType.isEmpty()) {
+                String subjectRef = subjectId == null || subjectId.isEmpty()
+                        ? subjectType : subjectType + ":" + subjectId;
+                span.setAttribute("authx.subject", subjectRef);
+            }
             try {
                 var ir = call.get();
                 result = ir.resultLabel;
@@ -128,6 +134,8 @@ public class InstrumentedTransport extends ForwardingTransport {
                 span.setAttribute("authx.result", result);
                 return ir.value;
             } catch (Exception e) {
+                // SR:req-7 — record exception class for faster APM triage
+                span.setAttribute("authx.errorType", e.getClass().getSimpleName());
                 span.setError(e);
                 throw e;
             }
