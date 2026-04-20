@@ -4,6 +4,7 @@ import com.authx.sdk.spi.AttributeKey;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.spi.SdkInterceptor.OperationChain;
 import com.authx.sdk.spi.SdkInterceptor.OperationContext;
+import com.authx.sdk.trace.LogCtx;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -48,9 +49,9 @@ public final class RealOperationChain<T> implements OperationChain<T> {
         } catch (com.authx.sdk.exception.AuthxException authx) {
             throw authx;
         } catch (RuntimeException bug) {
-            LOG.log(System.Logger.Level.WARNING,
+            LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                     "Read-path interceptor {0} threw {1}; skipping and continuing the chain.",
-                    interceptor.getClass().getName(), bug.toString());
+                    interceptor.getClass().getName(), bug.toString()));
             return next.proceed();
         }
     }

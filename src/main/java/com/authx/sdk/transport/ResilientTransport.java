@@ -14,6 +14,7 @@ import com.authx.sdk.model.enums.Permissionship;
 import com.authx.sdk.policy.CircuitBreakerPolicy;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.policy.RetryPolicy;
+import com.authx.sdk.trace.LogCtx;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -276,7 +277,7 @@ public class ResilientTransport extends ForwardingTransport {
                 default -> null;
             };
             if (sdkEvent != null) {
-                LOG.log(System.Logger.Level.INFO, "Circuit breaker [{0}]: {1}", resourceType, transition);
+                LOG.log(System.Logger.Level.INFO, LogCtx.fmt("Circuit breaker [{0}]: {1}", resourceType, transition));
                 eventBus.publish(sdkEvent);
             }
         });
@@ -318,8 +319,8 @@ public class ResilientTransport extends ForwardingTransport {
                         return false;
                     }
                     if (!checkRetryBudget()) {
-                        LOG.log(System.Logger.Level.WARNING,
-                                "Retry budget exhausted for [{0}], skipping retry", resourceType);
+                        LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
+                                "Retry budget exhausted for [{0}], skipping retry", resourceType));
                         return false;
                     }
                     retryCount.increment();
@@ -348,10 +349,10 @@ public class ResilientTransport extends ForwardingTransport {
             // SR:req-10 — retry is normal product of resilience policy, not
             // operator-actionable; downgrade WARN → DEBUG. Real signal ("retry
             // budget exhausted") stays at WARN above.
-            LOG.log(System.Logger.Level.DEBUG,
-                    com.authx.sdk.trace.LogCtx.fmt("Retry {0}/{1} for [{2}]: {3}",
-                            event.getNumberOfRetryAttempts(), policy.maxAttempts(),
-                            resourceType, event.getLastThrowable().getMessage()));
+            LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
+                    "Retry {0}/{1} for [{2}]: {3}",
+                    event.getNumberOfRetryAttempts(), policy.maxAttempts(),
+                    resourceType, event.getLastThrowable().getMessage()));
         });
 
         return retry;

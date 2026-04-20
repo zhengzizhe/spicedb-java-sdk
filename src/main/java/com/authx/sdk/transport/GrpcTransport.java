@@ -10,6 +10,7 @@ import com.authx.sdk.exception.AuthxTimeoutException;
 import com.authx.sdk.exception.AuthxUnimplementedException;
 import com.authx.sdk.model.*;
 import com.authx.sdk.model.enums.Permissionship;
+import com.authx.sdk.trace.LogCtx;
 import com.authzed.api.v1.AlgebraicSubjectSet;
 import com.authzed.api.v1.DeleteRelationshipsRequest;
 import com.authzed.api.v1.ExpandPermissionTreeRequest;
@@ -124,9 +125,9 @@ public class GrpcTransport implements SdkTransport {
             var pair = response.getPairs(i);
             CheckResult cr;
             if (pair.hasError()) {
-                LOG.log(System.Logger.Level.WARNING,
+                LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
                         "Bulk check item error (treating as NO_PERMISSION): {0}",
-                        pair.getError().getMessage());
+                        pair.getError().getMessage()));
                 cr = new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
             } else {
                 cr = mapPermissionship(pair.getItem().getPermissionship(), bulkToken);
@@ -170,9 +171,9 @@ public class GrpcTransport implements SdkTransport {
             var pair = response.getPairs(i);
             CheckResult cr;
             if (pair.hasError()) {
-                LOG.log(System.Logger.Level.WARNING,
+                LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
                         "Bulk check item error (treating as NO_PERMISSION): {0}",
-                        pair.getError().getMessage());
+                        pair.getError().getMessage()));
                 cr = new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
             } else {
                 cr = mapPermissionship(pair.getItem().getPermissionship(), bulkToken);

@@ -6,6 +6,7 @@ import com.authx.sdk.spi.AttributeKey;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.spi.SdkInterceptor.OperationContext;
 import com.authx.sdk.spi.SdkInterceptor.WriteChain;
+import com.authx.sdk.trace.LogCtx;
 
 import java.util.List;
 
@@ -69,9 +70,9 @@ public final class RealWriteChain implements WriteChain {
         } catch (com.authx.sdk.exception.AuthxException authx) {
             throw authx;
         } catch (RuntimeException bug) {
-            LOG.log(System.Logger.Level.WARNING,
+            LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                     "Write interceptor {0} threw {1}; aborting write (fail-closed).",
-                    interceptor.getClass().getName(), bug.toString());
+                    interceptor.getClass().getName(), bug.toString()));
             throw new com.authx.sdk.exception.AuthxException(
                     "Write interceptor " + interceptor.getClass().getName()
                             + " rejected the request: " + bug.getMessage(),
