@@ -20,14 +20,12 @@ import com.authx.sdk.AuthxClientBuilder;
  *   <li>Inject a Redis-backed {@code DistributedTokenStore} via
  *       {@code extend(e -> e.components(...))} to get SESSION
  *       consistency across multiple JVMs
- *   <li>Attach a {@code DuplicateDetector} to the Watch stream for
- *       cursor-replay deduplication
  *   <li>Register a custom {@code HealthProbe} that wraps the SDK's
  *       default with a team-specific "maintenance window" check
  * </ul>
  *
  * <p>Customizers run <b>after</b> infrastructure wiring (targets,
- * preshared key, cache on/off, feature toggles) and <b>before</b>
+ * preshared key, feature toggles) and <b>before</b>
  * {@link AuthxClientBuilder#build()} runs, so they see a fully
  * configured builder and can layer on top of it. Multiple customizers
  * compose in registration order.

@@ -13,24 +13,23 @@ import java.util.Map;
 
 /**
  * Typed grant action — grants one or more relations on one or more resources
- * to one or more subjects. Every subject method ({@link #toUser},
- * {@link #toGroupMember}, {@link #to(SubjectRef...)}, ...) validates against
- * the loaded SpiceDB schema at call time via {@link SchemaCache}, so an
- * incompatible subject type (e.g. granting a {@code folder} subject to an
- * {@code editor} relation that only accepts users) raises a clear
- * {@link IllegalArgumentException} instead of shipping a broken request.
+ * to one or more subjects. Invalid subject types (e.g. granting a
+ * {@code folder} subject to an {@code editor} relation that only accepts
+ * users) are rejected by SpiceDB and surface as
+ * {@link com.authx.sdk.exception.AuthxInvalidArgumentException}. (Pre-ADR
+ * 2026-04-18 this was a client-side check via the now-removed
+ * {@code SchemaCache}; the rejection moved to the server boundary with
+ * the cache subsystem removal.)
  *
  * <p>This class lives in the SDK core rather than being emitted per-resource
- * by codegen: because validation is runtime, the generator doesn't need to
- * know which subjects each relation accepts, and the generated type class
- * becomes a pure static API over the SDK's typed chain.
+ * by codegen: the generator only needs to emit type metadata (enums + the
+ * {@code ResourceType} constant), not per-type validation code.
  *
  * <pre>
  * doc.select("doc-1").grant(Document.Rel.EDITOR).toUser("bob");
  * doc.select("doc-1").grant(Document.Rel.EDITOR).toGroupMember("eng");
- * doc.select("doc-1").grant(Document.Rel.FOLDER).toFolder("f-1");        // cross-type
- * doc.select("doc-1").grant(Document.Rel.EDITOR).toFolder("f-1");        // IllegalArgumentException
- * doc.select("doc-1").grant(Document.Rel.VIEWER).toUserAll();            // user:*
+ * doc.select("doc-1").grant(Document.Rel.FOLDER).toFolder("f-1");   // cross-type
+ * doc.select("doc-1").grant(Document.Rel.VIEWER).toUserAll();       // user:*
  *
  * // Arbitrary subject type via SubjectRef — handles cross-type grants
  * task.select("t-1").grant(Task.Rel.DOCUMENT).to(SubjectRef.of("document", "doc-5", null));

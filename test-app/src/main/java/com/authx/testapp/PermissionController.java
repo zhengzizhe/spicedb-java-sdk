@@ -238,8 +238,10 @@ public class PermissionController {
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * 故意在 editor relation 上挂 folder 主体 —— SchemaCache 本地拦住,
-     * 不发 RPC.
+     * 故意在 editor relation 上挂 folder 主体 —— SpiceDB 服务端拒绝，
+     * SDK 把 INVALID_ARGUMENT 映射为 AuthxInvalidArgumentException。
+     * （2026-04-18 之前这里是客户端 SchemaCache 本地拦，现在 SchemaCache
+     * 已删，拒绝发生在服务端；见 ADR 2026-04-18。）
      */
     @GetMapping("/demo/invalid-grant")
     public Map<String, Object> invalidGrantDemo(@RequestParam String doc) {
@@ -249,11 +251,11 @@ public class PermissionController {
                     .grant(Document.Rel.EDITOR)
                     .to(SubjectRef.of("folder", "f-invalid", null));
             return Map.of("status", "unexpectedly succeeded");
-        } catch (com.authx.sdk.exception.InvalidRelationException e) {
+        } catch (com.authx.sdk.exception.AuthxException e) {
             return Map.of(
-                    "status", "rejected_locally",
+                    "status", "rejected_by_server",
                     "error", e.getMessage(),
-                    "note", "SchemaCache 在本地 fast-fail, 完全没有发 RPC 到 SpiceDB");
+                    "note", "SpiceDB 返回 INVALID_ARGUMENT，SDK 映射为 AuthxInvalidArgumentException");
         }
     }
 

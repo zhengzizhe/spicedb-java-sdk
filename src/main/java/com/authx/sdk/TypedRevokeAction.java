@@ -9,11 +9,15 @@ import java.util.Collection;
 
 /**
  * Typed revoke action — mirror of {@link TypedGrantAction} for removing
- * relationships. Subject-type methods validate against the schema at call
- * time so revoking from a subject type the relation doesn't accept raises
- * a clear {@link IllegalArgumentException} up-front rather than silently
- * succeeding as a no-op revoke (SpiceDB tolerates revokes that match no
- * tuples, which can hide programming errors).
+ * relationships.
+ *
+ * <p><b>No-match behaviour:</b> SpiceDB tolerates revokes that match no
+ * tuples — a revoke with a wrong subject type silently succeeds as a
+ * no-op rather than raising an error. Client code that wants fast-fail
+ * semantics must check the {@link com.authx.sdk.model.RevokeResult}'s
+ * {@code count()} or issue a {@code check()} first. (Pre-ADR 2026-04-18
+ * the SDK caught subject-type mismatches locally via SchemaCache; that
+ * check was removed with the cache subsystem.)
  *
  * <pre>
  * doc.select("doc-1").revoke(Document.Rel.EDITOR).fromUser("bob");
