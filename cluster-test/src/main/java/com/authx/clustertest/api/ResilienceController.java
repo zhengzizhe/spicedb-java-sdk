@@ -3,7 +3,7 @@ package com.authx.clustertest.api;
 import com.authx.clustertest.config.ResultsRepo;
 import com.authx.clustertest.resilience.R1StreamLeakTest;
 import com.authx.clustertest.resilience.R4TokenStoreTest;
-import com.authx.clustertest.resilience.R5DoubleDeleteTest;
+import com.authx.clustertest.resilience.R5ConcurrencyConsistencyTest;
 import com.authx.clustertest.resilience.R6BreakerEvictionTest;
 import com.authx.clustertest.resilience.R7CloseRobustnessTest;
 import com.authx.clustertest.resilience.ResilienceResult;
@@ -24,13 +24,13 @@ import java.util.Map;
 public class ResilienceController {
     private final R1StreamLeakTest r1;
     private final R4TokenStoreTest r4;
-    private final R5DoubleDeleteTest r5;
+    private final R5ConcurrencyConsistencyTest r5;
     private final R6BreakerEvictionTest r6;
     private final R7CloseRobustnessTest r7;
     private final ResultsRepo repo;
 
     public ResilienceController(R1StreamLeakTest r1,
-                                 R4TokenStoreTest r4, R5DoubleDeleteTest r5, R6BreakerEvictionTest r6,
+                                 R4TokenStoreTest r4, R5ConcurrencyConsistencyTest r5, R6BreakerEvictionTest r6,
                                  R7CloseRobustnessTest r7, ResultsRepo repo) {
         this.r1 = r1; this.r4 = r4;
         this.r5 = r5; this.r6 = r6; this.r7 = r7; this.repo = repo;

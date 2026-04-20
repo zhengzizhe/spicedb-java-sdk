@@ -22,10 +22,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * After a 1s settle, do a final authoritative pass.
  */
 @Component
-public class R5DoubleDeleteTest {
+public class R5ConcurrencyConsistencyTest {
     private final AuthxClient client;
 
-    public R5DoubleDeleteTest(AuthxClient c) { this.client = c; }
+    public R5ConcurrencyConsistencyTest(AuthxClient c) { this.client = c; }
 
     public ResilienceResult run() throws Exception {
         long t0 = System.currentTimeMillis();

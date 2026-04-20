@@ -242,14 +242,12 @@ public class HtmlReportGenerator {
               if(!r || !Object.keys(r).length) return '';
               const labels = {
                 'R1':'R1 流早退无泄漏',
-                'R2':'R2 Cursor 过期检测',
-                'R3':'R3 Watch 应用层假死',
                 'R4':'R4 TokenStore 事件可观测',
-                'R5':'R5 缓存 double-delete race',
+                'R5':'R5 并发读写一致性',
                 'R6':'R6 熔断器多租户 W-TinyLFU',
                 'R7':'R7 close 异常健壮'
               };
-              const order = ['R1','R2','R3','R4','R5','R6','R7'];
+              const order = ['R1','R4','R5','R6','R7'];
               const rows = order.filter(k=>r[k]).map(k=>{
                 const v = r[k];
                 const cls = v.status==='PASS'?'pass':(v.status==='SKIPPED'?'skip':'fail');
