@@ -8,68 +8,68 @@ Legend: `[P]` parallelizable within phase — `[SR:req-N]` spec requirement trac
 
 ## Phase 0: Setup
 
-- [ ] T001 Baseline green on `remove-l1-cache` — `(no files)`
+- [X] T001 Baseline green on `remove-l1-cache` — `(no files)`
 
 ## Phase 1: Clean in-repo downstream consumers
 
-- [ ] T002 [P] [SR:req-22] Clean `test-app/SpiceDbConfig.java` — remove `.cache(...)` + `watchInvalidation` + `CachePolicy` refs
-- [ ] T003 [P] [SR:req-22] Clean `test-app/PermissionController.java` — remove `client.cache()` + cache endpoint
-- [ ] T004 [P] [SR:req-23] Clean `cluster-test/config/SdkConfig.java` — remove `.cache(...)` + `CachePolicy`
-- [ ] T005 [P] [SR:req-23] Clean `cluster-test/matrix/RealMatrixClient.java` — remove `.cache(...)` + `client.cache()` + `CachePolicy`
-- [ ] T006 [P] [SR:req-23] Clean `cluster-test/soak/ResourceSampler.java` — remove `client.cache()` + `CacheStats`
-- [ ] T007 [P] [SR:req-23] Clean `cluster-test/resilience/R7CloseRobustnessTest.java` — remove `.cache(...)`
-- [ ] T008 [P] [SR:req-23] Clean `cluster-test/resilience/R4TokenStoreTest.java` — remove `.cache(...)` + `CachePolicy`
-- [ ] T009 [P] [SR:req-23] Clean `cluster-test/test/caveat/CaveatIT.java` — remove `.cache(...)`
-- [ ] T010 [SR:req-23] Delete `cluster-test/test/watchstorm/WatchStormIT.java` (exists only to stress Watch)
+- [X] T002 [P] [SR:req-22] Clean `test-app/SpiceDbConfig.java` — remove `.cache(...)` + `watchInvalidation` + `CachePolicy` refs
+- [X] T003 [P] [SR:req-22] Clean `test-app/PermissionController.java` — remove `client.cache()` + cache endpoint
+- [X] T004 [P] [SR:req-23] Clean `cluster-test/config/SdkConfig.java` — remove `.cache(...)` + `CachePolicy`
+- [X] T005 [P] [SR:req-23] Clean `cluster-test/matrix/RealMatrixClient.java` — remove `.cache(...)` + `client.cache()` + `CachePolicy`
+- [X] T006 [P] [SR:req-23] Clean `cluster-test/soak/ResourceSampler.java` — remove `client.cache()` + `CacheStats`
+- [X] T007 [P] [SR:req-23] Clean `cluster-test/resilience/R7CloseRobustnessTest.java` — remove `.cache(...)`
+- [X] T008 [P] [SR:req-23] Clean `cluster-test/resilience/R4TokenStoreTest.java` — remove `.cache(...)` + `CachePolicy`
+- [X] T009 [P] [SR:req-23] Clean `cluster-test/test/caveat/CaveatIT.java` — remove `.cache(...)`
+- [X] T010 [SR:req-23] Delete `cluster-test/test/watchstorm/WatchStormIT.java` (exists only to stress Watch)
 
 ## Phase 2: Gut SDK internal cache/Watch references (coordinated, compile may break mid-phase)
 
-- [ ] T011 [P] [SR:req-18] Drop schema validation from `TypedGrantAction#write` + `TypedRevokeAction#write`
-- [ ] T012 [SR:req-19, req-20, req-21] Remove `CacheConfig` + `cache()` method + cache fields + validation rules from `AuthxClientBuilder`
-- [ ] T013 [SR:req-4, req-5, req-12] Remove `caching` field + `cache()` + `onRelationshipChange/offRelationshipChange` from `AuthxClient`
-- [ ] T014 [SR:req-4] Drop `schemaCache` param from `ResourceFactory` constructor + accessor + all call sites
-- [ ] T015 [P] [SR:req-14] Remove watch fields from `SdkComponents` record + builder
-- [ ] T016 [P] [SR:req-17] Remove `CachePolicy` field from `ResourcePolicy` + `PolicyRegistry`
-- [ ] T017 [P] [SR:req-15] Remove cache/watch event types from `SdkTypedEvent` sealed interface
-- [ ] T018 [P] [SR:req-16] Remove cache/watch counters from `SdkMetrics` + `Snapshot`
+- [X] T011 [P] [SR:req-18] Drop schema validation from `TypedGrantAction#write` + `TypedRevokeAction#write`
+- [X] T012 [SR:req-19, req-20, req-21] Remove `CacheConfig` + `cache()` method + cache fields + validation rules from `AuthxClientBuilder`
+- [X] T013 [SR:req-4, req-5, req-12] Remove `caching` field + `cache()` + `onRelationshipChange/offRelationshipChange` from `AuthxClient`
+- [X] T014 [SR:req-4] Drop `schemaCache` param from `ResourceFactory` constructor + accessor + all call sites
+- [X] T015 [P] [SR:req-14] Remove watch fields from `SdkComponents` record + builder
+- [X] T016 [P] [SR:req-17] Remove `CachePolicy` field from `ResourcePolicy` + `PolicyRegistry`
+- [X] T017 [P] [SR:req-15] Remove cache/watch event types from `SdkTypedEvent` sealed interface
+- [X] T018 [P] [SR:req-16] Remove cache/watch counters from `SdkMetrics` + `Snapshot`
 
 ## Phase 3: Delete cache/Watch transport files
 
-- [ ] T019 [SR:req-10] Delete `transport/CachedTransport.java`
-- [ ] T020 [P] [SR:req-8] Delete `transport/WatchCacheInvalidator.java`
-- [ ] T021 [P] [SR:req-9] Delete `transport/WatchConnectionState.java`
-- [ ] T022 [P] [SR:req-11] Delete `transport/SchemaLoader.java`
+- [X] T019 [SR:req-10] Delete `transport/CachedTransport.java`
+- [X] T020 [P] [SR:req-8] Delete `transport/WatchCacheInvalidator.java`
+- [X] T021 [P] [SR:req-9] Delete `transport/WatchConnectionState.java`
+- [X] T022 [P] [SR:req-11] Delete `transport/SchemaLoader.java`
 
 ## Phase 4: Delete packages + misc files
 
-- [ ] T023 [P] [SR:req-6] Delete `com.authx.sdk.watch/` package
-- [ ] T024 [P] [SR:req-7] Delete `com.authx.sdk.dedup/` package
-- [ ] T025 [P] [SR:req-1] Delete `com.authx.sdk.cache/` package (incl. `SchemaCache`)
-- [ ] T026 [P] [SR:req-2, req-3, req-17] Delete `CacheHandle.java` + `internal/SdkCaching.java` + `policy/CachePolicy.java`
-- [ ] T027 [P] [SR:req-13] Delete Watch-specific SPIs: `DuplicateDetector.java` + `DroppedListenerEvent.java` + `QueueFullPolicy.java`
+- [X] T023 [P] [SR:req-6] Delete `com.authx.sdk.watch/` package
+- [X] T024 [P] [SR:req-7] Delete `com.authx.sdk.dedup/` package
+- [X] T025 [P] [SR:req-1] Delete `com.authx.sdk.cache/` package (incl. `SchemaCache`)
+- [X] T026 [P] [SR:req-2, req-3, req-17] Delete `CacheHandle.java` + `internal/SdkCaching.java` + `policy/CachePolicy.java`
+- [X] T027 [P] [SR:req-13] Delete Watch-specific SPIs: `DuplicateDetector.java` + `DroppedListenerEvent.java` + `QueueFullPolicy.java`
 
 ## Phase 5: Delete cache/Watch tests
 
-- [ ] T028 [SR:req-1] Delete `src/test/java/com/authx/sdk/cache/` directory
-- [ ] T029 [P] [SR:req-1, req-6, req-10] Delete cache/Watch test files in `transport/` test package
+- [X] T028 [SR:req-1] Delete `src/test/java/com/authx/sdk/cache/` directory
+- [X] T029 [P] [SR:req-1, req-6, req-10] Delete cache/Watch test files in `transport/` test package
 
 ## Phase 6: Add regression guards
 
-- [ ] T030 [P] [SR:req-19] Create `BuilderCacheMethodRemovedTest.java` — reflection-based check that `.cache()` + watch fields/methods are gone
-- [ ] T031 [P] [SR:req-6, req-8] Create `NoWatchStreamStartsTest.java` — thread enumeration asserts no `authx-sdk-watch` thread starts
-- [ ] T032 [P] [SR:req-10, req-25] Create `TransportChainTest.java` — verifies chain has no `CachedTransport` but still has `CoalescingTransport`
+- [X] T030 [P] [SR:req-19] Create `BuilderCacheMethodRemovedTest.java` — reflection-based check that `.cache()` + watch fields/methods are gone
+- [X] T031 [P] [SR:req-6, req-8] Create `NoWatchStreamStartsTest.java` — thread enumeration asserts no `authx-sdk-watch` thread starts
+- [X] T032 [P] [SR:req-10, req-25] Create `TransportChainTest.java` — verifies chain has no `CachedTransport` but still has `CoalescingTransport`
 
 ## Phase 7: Documentation
 
-- [ ] T033 [P] [SR:req-30] Update `CLAUDE.md` — remove `cache/`, `watch/`, `dedup/` from package structure; update tech stack line
-- [ ] T034 [P] [SR:req-31, req-33] Update `README.md` — delete cache + Watch sections; add breaking-change changelog entry
-- [ ] T035 [P] [SR:req-31] Update `README_en.md` — mirror CN changes + breaking-change note
-- [ ] T036 [P] [SR:req-32] Update `llms.txt` — remove any cache/Watch references
+- [X] T033 [P] [SR:req-30] Update `CLAUDE.md` — remove `cache/`, `watch/`, `dedup/` from package structure; update tech stack line
+- [X] T034 [P] [SR:req-31, req-33] Update `README.md` — delete cache + Watch sections; add breaking-change changelog entry
+- [X] T035 [P] [SR:req-31] Update `README_en.md` — mirror CN changes + breaking-change note
+- [X] T036 [P] [SR:req-32] Update `llms.txt` — remove any cache/Watch references
 
 ## Phase 8: Verification
 
-- [ ] T037 [SR:req-24, req-26, req-27, req-28] Full SDK test suite + downstream (`test-app`, `cluster-test`, `sdk-redisson`) compile green + javadoc clean
-- [ ] T038 Scope check — `git diff --name-status` lists only expected changes
+- [X] T037 [SR:req-24, req-26, req-27, req-28] Full SDK test suite + downstream (`test-app`, `cluster-test`, `sdk-redisson`) compile green + javadoc clean
+- [X] T038 Scope check — `git diff --name-status` lists only expected changes
 
 ---
 

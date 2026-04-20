@@ -84,15 +84,18 @@ These exceptions don't count toward failure rate:
 
 ## Schema Validation Exceptions
 
-Thrown by `SchemaCache` before making gRPC calls:
-
 | Exception | When |
 |---|---|
 | InvalidResourceException | Resource type not in schema |
 | InvalidRelationException | Relation not found for resource type |
 | InvalidPermissionException | Permission not found for resource type |
 
-Note: These only have `(String message)` constructors — no cause wrapping. This is intentional: validation failures are deterministic, not caused by external errors.
+**Note:** Client-side schema validation was removed on 2026-04-18 with
+the SchemaCache subsystem. These exceptions are still defined (for
+consistency with internal invariants and future reintroduction) but
+invalid schema usage is now primarily detected server-side as
+`AuthxInvalidArgumentException`. The three classes above use only
+`(String message)` constructors — no cause wrapping.
 
 ## Proactive Coverage Checklist
 
@@ -100,7 +103,7 @@ Note: These only have `(String message)` constructors — no cause wrapping. Thi
 
 ### gRPC Layer
 - [ ] Every `StatusRuntimeException` goes through `mapGrpcException()` — never caught and rethrown raw
-- [ ] Streaming RPCs (Watch, LookupResources, LookupSubjects, ReadRelationships) handle `StatusRuntimeException` in their iteration loops
+- [ ] Streaming RPCs (LookupResources, LookupSubjects, ReadRelationships) handle `StatusRuntimeException` in their iteration loops
 - [ ] Streaming RPC iterators are wrapped in `CloseableGrpcIterator` and consumed inside try-with-resources, so early break / loop exception sends `RST_STREAM` to SpiceDB instead of leaking the HTTP/2 stream
 - [ ] New gRPC methods added to SpiceDB get an explicit case in the mapping, not just the default
 
@@ -130,7 +133,6 @@ Note: These only have `(String message)` constructors — no cause wrapping. Thi
 - [ ] User-facing methods only throw `AuthxException` or its subtypes
 
 ### Background Tasks
-- [ ] `WatchCacheInvalidator` catches exceptions and logs, never crashes the watch loop
 - [ ] `TelemetryReporter` catches exceptions and logs, never crashes the reporting loop
 - [ ] **Sink calls bounded by timeout (SR:C10)** — `TelemetryReporter.flush()`
   runs `sink.send()` on a dedicated single-thread `sinkExecutor` and waits
@@ -152,10 +154,7 @@ Note: These only have `(String message)` constructors — no cause wrapping. Thi
 | SpiceDB schema not written yet | AuthxPreconditionException | FAILED_PRECONDITION mapping |
 | Token expired mid-stream | AuthxAuthException in stream iteration | Streaming RPC error handlers |
 | Server closes stream unexpectedly | AuthxConnectionException | Streaming RPC error handlers |
-| Caffeine cache loader throws | Wrapped in AuthxException? | CachedTransport / CaffeineCache |
 | Thread pool exhausted (ForkJoinPool) | RejectedExecutionException → ? | CoalescingTransport |
 | Jackson deserialization failure | RuntimeException → ? | CaveatContext handling |
 | gRPC metadata parsing failure | StatusRuntimeException → mapped | GrpcTransport |
-| Concurrent schema cache invalidation | Thread-safe? | SchemaCache / WatchCacheInvalidator |
-| Watch stream reconnect failure | Logged, retry with backoff | WatchDispatcher |
 | OTel exporter failure | Swallowed, non-fatal | TelemetryReporter |

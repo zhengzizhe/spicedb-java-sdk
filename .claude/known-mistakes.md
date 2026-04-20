@@ -3,6 +3,14 @@
 <!-- Record anti-patterns and past mistakes here so Claude never repeats them. -->
 <!-- Format: **What went wrong** — why it's wrong, what to do instead. -->
 
+### Client-side decision cache on top of Zanzibar
+
+**What went wrong:** The SDK shipped with a Caffeine L1 cache for `check()` results plus a Watch-stream invalidation subsystem. Two weeks of operation revealed that resource-key-based invalidation cannot correctly track SpiceDB inheritance (`permission view = parent->editor`): revoking `folder:f-1#editor` left `document:d-1#view` cache entries stale for up to ~10 s.
+
+**Why it's wrong:** Client-side resource-key invalidation doesn't know the schema dependency graph. Workarounds (subject-keyed index over-invalidates; schema-aware reverse index is a half-copy of SpiceDB's state) each bring their own correctness or memory costs. Industry consensus (Zanzibar, OpenFGA, Cerbos, SpiceDB docs) is to cache decisions server-side only.
+
+**What to do instead:** Let SpiceDB's server-side dispatch cache handle decision caching — it's schema-aware and inheritance-correct. On the client, use `Consistency.minimizeLatency()` to hit that cache. For write-after-read, use SESSION consistency via `DistributedTokenStore` (`sdk-redisson`). See ADR 2026-04-18.
+
 ### Parallel agents create nested package directories
 
 **What went wrong:** When dispatching multiple parallel agents to write Java files into the same module (e.g., T006 + T008 of cluster-test), agents created nested directories like `correctness/correctness/C1.java` and `resilience/resilience/R2.java`. Both agents had to do follow-up cleanup commits.
