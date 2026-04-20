@@ -8,48 +8,48 @@ Legend: `[P]` parallelizable within phase — `[SR:req-N]` spec requirement trac
 
 ## Phase 0: Setup
 
-- [ ] T001 Baseline green on `feature/logging-traceability` — `(no files)`
+- [X] T001 Baseline green on `feature/logging-traceability` — `(no files)`
 
 ## Phase 1: Build config
 
-- [ ] T002 [SR:req-3] Add SLF4J 2.0.13 compileOnly + testImplementation — `build.gradle`
+- [X] T002 [SR:req-3] Add SLF4J 2.0.13 compileOnly + testImplementation — `build.gradle`
 
 ## Phase 2: Foundation helpers (TDD, parallelizable)
 
-- [ ] T003 [P] [SR:req-1] Create `LogCtx` class + tests — `src/main/java/com/authx/sdk/trace/LogCtx.java`, `src/test/java/com/authx/sdk/trace/LogCtxTest.java`
-- [ ] T004 [P] [SR:req-5] Create `LogFields` class + tests — `src/main/java/com/authx/sdk/trace/LogFields.java`, `src/test/java/com/authx/sdk/trace/LogFieldsTest.java`
-- [ ] T005 [P] [SR:req-4, req-20, req-21, req-23] Create `Slf4jMdcBridge` class + tests — `src/main/java/com/authx/sdk/trace/Slf4jMdcBridge.java`, `src/test/java/com/authx/sdk/trace/Slf4jMdcBridgeTest.java`
+- [X] T003 [P] [SR:req-1] Create `LogCtx` class + tests — `src/main/java/com/authx/sdk/trace/LogCtx.java`, `src/test/java/com/authx/sdk/trace/LogCtxTest.java`
+- [X] T004 [P] [SR:req-5] Create `LogFields` class + tests — `src/main/java/com/authx/sdk/trace/LogFields.java`, `src/test/java/com/authx/sdk/trace/LogFieldsTest.java`
+- [X] T005 [P] [SR:req-4, req-20, req-21, req-23] Create `Slf4jMdcBridge` class + tests — `src/main/java/com/authx/sdk/trace/Slf4jMdcBridge.java`, `src/test/java/com/authx/sdk/trace/Slf4jMdcBridgeTest.java`
 
 ## Phase 3: Transport entry MDC push + OTel span enrichment
 
-- [ ] T006 [SR:req-6] Wire `Slf4jMdcBridge.push/pop` into `InterceptorTransport` — `src/main/java/com/authx/sdk/transport/InterceptorTransport.java`
-- [ ] T007 [P] [SR:req-7] Additional span attributes in `InstrumentedTransport` — `src/main/java/com/authx/sdk/transport/InstrumentedTransport.java`
-- [ ] T008 [P] [SR:req-8, req-10] Retry attribute + event in `ResilientTransport`; retry log WARN→DEBUG — `src/main/java/com/authx/sdk/transport/ResilientTransport.java`
-- [ ] T009 [P] [SR:req-9] Consistency attribute in `PolicyAwareConsistencyTransport` — `src/main/java/com/authx/sdk/transport/PolicyAwareConsistencyTransport.java`
+- [X] T006 [SR:req-6] Wire `Slf4jMdcBridge.push/pop` into `InterceptorTransport` — `src/main/java/com/authx/sdk/transport/InterceptorTransport.java`
+- [X] T007 [P] [SR:req-7] Additional span attributes in `InstrumentedTransport` — `src/main/java/com/authx/sdk/transport/InstrumentedTransport.java`
+- [X] T008 [P] [SR:req-8, req-10] Retry attribute + event in `ResilientTransport`; retry log WARN→DEBUG — `src/main/java/com/authx/sdk/transport/ResilientTransport.java`
+- [X] T009 [P] [SR:req-9] Consistency attribute in `PolicyAwareConsistencyTransport` — `src/main/java/com/authx/sdk/transport/PolicyAwareConsistencyTransport.java`
 
 ## Phase 4: Log-site mechanical wrap (LogCtx.fmt around every LOG.log)
 
-- [ ] T010 [P] [SR:req-2] action/ package log-site wrap — `src/main/java/com/authx/sdk/action/GrantCompletionImpl.java`, `RevokeCompletionImpl.java`
-- [ ] T011 [SR:req-2, req-10] transport/ package log-site wrap + 2 WARN→DEBUG in GrpcTransport — `src/main/java/com/authx/sdk/transport/{RealOperationChain,RealWriteChain,RealCheckChain,GrpcTransport,TokenTracker,ResilientTransport}.java`
-- [ ] T012 [P] [SR:req-2] lifecycle/ + telemetry/ + event/ + builtin/ log-site wrap — 4 files
-- [ ] T013 [SR:req-2] root + internal inline log-site wrap — `AuthxClient.java`, `AuthxClientBuilder.java`, `internal/SdkInfrastructure.java`
+- [X] T010 [P] [SR:req-2] action/ package log-site wrap — `src/main/java/com/authx/sdk/action/GrantCompletionImpl.java`, `RevokeCompletionImpl.java`
+- [X] T011 [SR:req-2, req-10] transport/ package log-site wrap + 2 WARN→DEBUG in GrpcTransport — `src/main/java/com/authx/sdk/transport/{RealOperationChain,RealWriteChain,RealCheckChain,GrpcTransport,TokenTracker,ResilientTransport}.java`
+- [X] T012 [P] [SR:req-2] lifecycle/ + telemetry/ + event/ + builtin/ log-site wrap — 4 files
+- [X] T013 [SR:req-2] root + internal inline log-site wrap — `AuthxClient.java`, `AuthxClientBuilder.java`, `internal/SdkInfrastructure.java`
 
 ## Phase 5: WARN+ suffix enrichment
 
-- [ ] T014 [SR:req-13, req-14] Append `LogFields.suffix*(...)` to WARN+ sites with resource context — ~6 files
+- [X] T014 [SR:req-13, req-14] Append `LogFields.suffix*(...)` to WARN+ sites with resource context — ~6 files
 
 ## Phase 6: Integration test
 
-- [ ] T015 [SR:req-1, req-2, req-6, req-13] End-to-end log+MDC+span assertion — `src/test/java/com/authx/sdk/trace/LogEnrichmentIntegrationTest.java`
+- [X] T015 [SR:req-1, req-2, req-6, req-13] End-to-end log+MDC+span assertion — `src/test/java/com/authx/sdk/trace/LogEnrichmentIntegrationTest.java`
 
 ## Phase 7: Documentation
 
-- [ ] T016 [P] [SR:req-15] New guide — `docs/logging-guide.md`
-- [ ] T017 [P] [SR:req-16, req-17, req-18] README.md + README_en.md + CLAUDE.md + META-INF/GUIDE.md updates
+- [X] T016 [P] [SR:req-15] New guide — `docs/logging-guide.md`
+- [X] T017 [P] [SR:req-16, req-17, req-18] README.md + README_en.md + CLAUDE.md + META-INF/GUIDE.md updates
 
 ## Phase 8: Verification
 
-- [ ] T018 [SR:req-19..25] Full suite + downstream compile + javadoc + scope check — `(no files)`
+- [X] T018 [SR:req-19..25] Full suite + downstream compile + javadoc + scope check — `(no files)`
 
 ---
 
