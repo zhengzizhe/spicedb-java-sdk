@@ -1,6 +1,7 @@
 package com.authx.sdk.action;
 
 import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.trace.LogCtx;
 
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -49,9 +50,9 @@ final class GrantCompletionImpl implements GrantCompletion {
             try {
                 callback.accept(result);
             } catch (Throwable t) {
-                LOG.log(System.Logger.Level.WARNING,
+                LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                         "Async grant listener threw (source={0}): {1}",
-                        callback.getClass().getName(), t.toString());
+                        callback.getClass().getName(), t.toString()));
             }
         });
         return this;
