@@ -77,9 +77,9 @@ public final class Slf4jMdcBridge {
             };
         } catch (Throwable t) {
             if (disabled.compareAndSet(false, true)) {
-                LOG.log(System.Logger.Level.WARNING,
+                LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                         "SLF4J MDC bridge disabled due to error; SDK continues without MDC. Cause: {0}",
-                        t.toString());
+                        t.toString()));
             }
             return NOOP;
         }

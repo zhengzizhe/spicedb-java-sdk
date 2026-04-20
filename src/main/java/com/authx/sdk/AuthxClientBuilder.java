@@ -270,10 +270,11 @@ public class AuthxClientBuilder {
             if (spi.tokenStore() == null) {
                 System.getLogger(AuthxClient.class.getName()).log(
                         System.Logger.Level.WARNING,
-                        "No DistributedTokenStore configured — SESSION consistency only works " +
-                        "within a single JVM. For multi-instance deployments, provide a Redis-backed " +
-                        "tokenStore via .extend(e -> e.components(SdkComponents.builder()" +
-                        ".tokenStore(redisStore).build()))");
+                        com.authx.sdk.trace.LogCtx.fmt(
+                                "No DistributedTokenStore configured — SESSION consistency only works " +
+                                "within a single JVM. For multi-instance deployments, provide a Redis-backed " +
+                                "tokenStore via .extend(e -> e.components(SdkComponents.builder()" +
+                                ".tokenStore(redisStore).build()))"));
             }
 
             // Async executor: virtual threads if enabled, otherwise direct (caller thread)
