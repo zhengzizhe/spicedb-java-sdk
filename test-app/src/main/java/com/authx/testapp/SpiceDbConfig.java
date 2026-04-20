@@ -8,10 +8,12 @@ import com.authx.sdk.policy.ResourcePolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 import java.time.Duration;
 
 @Configuration
+@Profile("!inmem")
 public class SpiceDbConfig {
 
     @Value("${spicedb.targets}")

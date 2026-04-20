@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!--
+      AuthX SDK logging demo.
+      Pattern shows, for every line:
+        - timestamp + level
+        - [trace=...] prefix (added by LogCtx when a span is active)
+        - from MDC: authx.action / authx.resourceType:authx.resourceId / authx.subject / authx.consistency
+        - logger name (short)
+        - message body
+      MDC placeholders use "-" as default so lines without SDK context still align.
+    -->
+    <property name="PATTERN"
+              value="%d{HH:mm:ss.SSS} %-5level [%X{authx.action:--} %X{authx.resourceType:--}:%X{authx.resourceId:--} subj=%X{authx.subject:--} consistency=%X{authx.consistency:--}] %logger{30} - %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- SDK own lines at DEBUG so retry / bulk-item DEBUG lines show up in the demo -->
+    <logger name="com.authx.sdk" level="DEBUG"/>
+
+    <!-- Keep framework noise reasonable -->
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="io.grpc" level="INFO"/>
+    <logger name="io.netty" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>
