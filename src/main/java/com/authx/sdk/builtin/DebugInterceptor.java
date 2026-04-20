@@ -3,6 +3,7 @@ package com.authx.sdk.builtin;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.spi.SdkInterceptor;
+import com.authx.sdk.trace.LogCtx;
 
 /**
  * Debug interceptor: logs every operation with full details.
@@ -20,23 +21,23 @@ public class DebugInterceptor implements SdkInterceptor {
     @Override
     public CheckResult interceptCheck(CheckChain chain) {
         var ctx = chain.operationContext();
-        LOG.log(System.Logger.Level.INFO,
+        LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                 "-> {0} {1}:{2} permission={3} subject={4}:{5}",
                 ctx.action(), ctx.resourceType(), ctx.resourceId(),
-                ctx.permission(), ctx.subjectType(), ctx.subjectId());
+                ctx.permission(), ctx.subjectType(), ctx.subjectId()));
         long start = System.nanoTime();
         try {
             CheckResult result = chain.proceed(chain.request());
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOG.log(System.Logger.Level.INFO,
+            LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                     "<- {0} {1}ms result={2}",
-                    ctx.action(), ms, result.permissionship());
+                    ctx.action(), ms, result.permissionship()));
             return result;
         } catch (Exception e) {
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOG.log(System.Logger.Level.WARNING,
+            LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                     "<- {0} {1}ms ERROR: {2}",
-                    ctx.action(), ms, e.getMessage());
+                    ctx.action(), ms, e.getMessage()));
             throw e;
         }
     }
@@ -44,22 +45,22 @@ public class DebugInterceptor implements SdkInterceptor {
     @Override
     public GrantResult interceptWrite(WriteChain chain) {
         var ctx = chain.operationContext();
-        LOG.log(System.Logger.Level.INFO,
+        LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                 "-> {0} {1}:{2}",
-                ctx.action(), ctx.resourceType(), ctx.resourceId());
+                ctx.action(), ctx.resourceType(), ctx.resourceId()));
         long start = System.nanoTime();
         try {
             GrantResult result = chain.proceed(chain.request());
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOG.log(System.Logger.Level.INFO,
+            LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                     "<- {0} {1}ms count={2}",
-                    ctx.action(), ms, result.count());
+                    ctx.action(), ms, result.count()));
             return result;
         } catch (Exception e) {
             long ms = (System.nanoTime() - start) / 1_000_000;
-            LOG.log(System.Logger.Level.WARNING,
+            LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                     "<- {0} {1}ms ERROR: {2}",
-                    ctx.action(), ms, e.getMessage());
+                    ctx.action(), ms, e.getMessage()));
             throw e;
         }
     }

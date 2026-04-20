@@ -2,6 +2,7 @@ package com.authx.sdk.lifecycle;
 
 import com.authx.sdk.event.SdkTypedEvent;
 import com.authx.sdk.event.TypedEventBus;
+import com.authx.sdk.trace.LogCtx;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -63,8 +64,9 @@ public class LifecycleManager {
         } catch (Exception e) {
             long ms = (System.nanoTime() - start) / 1_000_000;
             phaseDurations.put(phase, ms);
-            LOG.log(System.Logger.Level.ERROR, "Startup phase {0} failed after {1}ms: {2}",
-                    phase, ms, e.getMessage());
+            LOG.log(System.Logger.Level.ERROR, LogCtx.fmt(
+                    "Startup phase {0} failed after {1}ms: {2}",
+                    phase, ms, e.getMessage()));
             throw e;
         }
     }
@@ -82,8 +84,9 @@ public class LifecycleManager {
         } catch (Exception e) {
             long ms = (System.nanoTime() - start) / 1_000_000;
             phaseDurations.put(phase, ms);
-            LOG.log(System.Logger.Level.ERROR, "Startup phase {0} failed after {1}ms: {2}",
-                    phase, ms, e.getMessage());
+            LOG.log(System.Logger.Level.ERROR, LogCtx.fmt(
+                    "Startup phase {0} failed after {1}ms: {2}",
+                    phase, ms, e.getMessage()));
             throw e;
         }
     }
@@ -96,7 +99,7 @@ public class LifecycleManager {
         state.set(SdkState.RUNNING);
 
         String report = startupReport();
-        LOG.log(System.Logger.Level.INFO, "SDK started in {0}ms [{1}]", totalStartupMs, report);
+        LOG.log(System.Logger.Level.INFO, LogCtx.fmt("SDK started in {0}ms [{1}]", totalStartupMs, report));
         eventBus.publish(new SdkTypedEvent.ClientReady(Instant.now(), Duration.ofMillis(totalStartupMs)));
     }
 
@@ -120,7 +123,7 @@ public class LifecycleManager {
     public void degraded(String reason) {
         if (state.get() == SdkState.RUNNING) {
             state.set(SdkState.DEGRADED);
-            LOG.log(System.Logger.Level.WARNING, "SDK degraded: {0}", reason);
+            LOG.log(System.Logger.Level.WARNING, LogCtx.fmt("SDK degraded: {0}", reason));
         }
     }
 
@@ -130,7 +133,7 @@ public class LifecycleManager {
     public void recovered() {
         if (state.get() == SdkState.DEGRADED) {
             state.set(SdkState.RUNNING);
-            LOG.log(System.Logger.Level.INFO, "SDK recovered to RUNNING");
+            LOG.log(System.Logger.Level.INFO, LogCtx.fmt("SDK recovered to RUNNING"));
         }
     }
 

@@ -1,6 +1,7 @@
 package com.authx.sdk.telemetry;
 
 import com.authx.sdk.spi.TelemetrySink;
+import com.authx.sdk.trace.LogCtx;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -135,9 +136,9 @@ public class TelemetryReporter implements AutoCloseable {
             droppedEvents.add(batch.size());
             consecutiveFlushFailures++;
             if (consecutiveFlushFailures <= 3) {
-                LOG.log(System.Logger.Level.WARNING,
+                LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                         "Telemetry sink timed out after {0}ms ({1} events dropped)",
-                        sinkTimeout.toMillis(), batch.size());
+                        sinkTimeout.toMillis(), batch.size()));
             }
             // Let the underlying CompletableFuture keep running so the sink's
             // I/O completes naturally — we just stopped waiting for it.
@@ -149,12 +150,13 @@ public class TelemetryReporter implements AutoCloseable {
             consecutiveFlushFailures++;
             Throwable cause = ee.getCause();
             if (consecutiveFlushFailures <= 3) {
-                LOG.log(System.Logger.Level.WARNING, "Telemetry flush failed ({0} events dropped): {1}",
-                        batch.size(), cause != null ? cause.getMessage() : ee.getMessage());
+                LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
+                        "Telemetry flush failed ({0} events dropped): {1}",
+                        batch.size(), cause != null ? cause.getMessage() : ee.getMessage()));
             } else if (consecutiveFlushFailures == 4) {
-                LOG.log(System.Logger.Level.WARNING,
+                LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                         "Telemetry sink consistently failing, suppressing further warnings (total dropped: {0})",
-                        droppedEvents.sum());
+                        droppedEvents.sum()));
             }
             // After 4 failures, stop logging but keep trying (sink may recover)
         }

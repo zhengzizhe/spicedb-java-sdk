@@ -1,5 +1,7 @@
 package com.authx.sdk.event;
 
+import com.authx.sdk.trace.LogCtx;
+
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -53,9 +55,9 @@ public class DefaultTypedEventBus implements TypedEventBus {
                     try {
                         ((TypedEventListener<SdkTypedEvent>) listener).onEvent(event);
                     } catch (Exception e) {
-                        LOG.log(System.Logger.Level.WARNING,
+                        LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                                 "Event listener error for {0}: {1}",
-                                event.getClass().getSimpleName(), e.getMessage());
+                                event.getClass().getSimpleName(), e.getMessage()));
                     }
                 }
             }
@@ -64,9 +66,9 @@ public class DefaultTypedEventBus implements TypedEventBus {
                 try {
                     listener.onEvent(event);
                 } catch (Exception e) {
-                    LOG.log(System.Logger.Level.WARNING,
+                    LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                             "Global event listener error for {0}: {1}",
-                            event.getClass().getSimpleName(), e.getMessage());
+                            event.getClass().getSimpleName(), e.getMessage()));
                 }
             }
         });
