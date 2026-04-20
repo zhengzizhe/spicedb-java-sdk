@@ -1,6 +1,7 @@
 package com.authx.sdk.action;
 
 import com.authx.sdk.model.RevokeResult;
+import com.authx.sdk.trace.LogCtx;
 
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -42,9 +43,9 @@ final class RevokeCompletionImpl implements RevokeCompletion {
             try {
                 callback.accept(result);
             } catch (Throwable t) {
-                LOG.log(System.Logger.Level.WARNING,
+                LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                         "Async revoke listener threw (source={0}): {1}",
-                        callback.getClass().getName(), t.toString());
+                        callback.getClass().getName(), t.toString()));
             }
         });
         return this;

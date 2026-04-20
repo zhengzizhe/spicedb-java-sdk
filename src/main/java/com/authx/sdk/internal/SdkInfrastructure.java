@@ -103,8 +103,9 @@ public final class SdkInfrastructure implements AutoCloseable {
         } catch (Throwable t) {
             System.getLogger(SdkInfrastructure.class.getName()).log(
                     System.Logger.Level.WARNING,
-                    "SdkInfrastructure close step failed: {0} — continuing shutdown. Error: {1}",
-                    step, t.toString());
+                    com.authx.sdk.trace.LogCtx.fmt(
+                            "SdkInfrastructure close step failed: {0} — continuing shutdown. Error: {1}",
+                            step, t.toString()));
         }
     }
 }

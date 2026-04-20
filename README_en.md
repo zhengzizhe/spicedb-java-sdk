@@ -273,7 +273,23 @@ If you run multiple service instances (K8s deployment with replicas > 1): SESSIO
 | `io.github.resilience4j:*` | 2.4.0 | CircuitBreaker / Retry / RateLimiter / Bulkhead |
 | `org.hdrhistogram:HdrHistogram` | 2.2.2 | Latency percentile tracking |
 | `io.opentelemetry:opentelemetry-api` | 1.40.0 | Observability API (no-op without an SDK) |
-| `com.github.ben-manes.caffeine:caffeine` | 3.1.8 | L1 cache (**optional**, falls back to noop if missing) |
+| `org.slf4j:slf4j-api` | 2.0.13 | **Optional** `compileOnly` — when present, the SDK auto-pushes 15 `authx.*` MDC keys; absent, the bridge is a silent no-op |
+
+### Logging & Traceability
+
+SDK logs go through `java.lang.System.Logger` (JDK-built-in, zero-dependency, JUL by default). For production, route to SLF4J:
+
+```gradle
+dependencies {
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("ch.qos.logback:logback-classic:1.5.6")
+    implementation("org.slf4j:jul-to-slf4j:2.0.13")   // System.Logger → SLF4J
+}
+```
+
+When SLF4J is on the classpath, `Slf4jMdcBridge` pushes 15 `authx.*` MDC keys at each RPC entry so your Logback pattern / JSON encoder picks them up. When an OTel span is active, every message is automatically prefixed with `[trace=<16hex>] `. `WARN` and above also carry a ` [type=... res=... perm|rel=... subj=...]` suffix for readers without SLF4J.
+
+See [`docs/logging-guide.md`](docs/logging-guide.md) for the full configuration guide, level semantics, and the complete MDC field reference.
 
 > **Requires**: Java 21+
 >

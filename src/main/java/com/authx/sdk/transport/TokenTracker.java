@@ -3,6 +3,7 @@ package com.authx.sdk.transport;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.policy.ReadConsistency;
 import com.authx.sdk.spi.DistributedTokenStore;
+import com.authx.sdk.trace.LogCtx;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -145,8 +146,8 @@ public class TokenTracker {
      */
     private void onDistributedSuccess() {
         if (distributedAvailable.compareAndSet(false, true)) {
-            LOG.log(System.Logger.Level.INFO,
-                    "Distributed token store recovered, cross-instance SESSION consistency restored");
+            LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
+                    "Distributed token store recovered, cross-instance SESSION consistency restored"));
             publishEvent(new com.authx.sdk.event.SdkTypedEvent.TokenStoreRecovered(java.time.Instant.now()));
         }
     }
@@ -161,9 +162,9 @@ public class TokenTracker {
     private void onDistributedFailure(Exception e) {
         distributedFailures.increment();
         if (distributedAvailable.compareAndSet(true, false)) {
-            LOG.log(System.Logger.Level.WARNING,
+            LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                     "Distributed token store unavailable, SESSION consistency degraded to local-only: {0}",
-                    e.getMessage());
+                    e.getMessage()));
             publishEvent(new com.authx.sdk.event.SdkTypedEvent.TokenStoreUnavailable(
                     java.time.Instant.now(),
                     e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
@@ -177,8 +178,8 @@ public class TokenTracker {
             bus.publish(event);
         } catch (Exception pubEx) {
             // Don't let a bad subscriber affect token tracking.
-            LOG.log(System.Logger.Level.WARNING,
-                    "TokenTracker event publish failed: {0}", pubEx.getMessage());
+            LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
+                    "TokenTracker event publish failed: {0}", pubEx.getMessage()));
         }
     }
 

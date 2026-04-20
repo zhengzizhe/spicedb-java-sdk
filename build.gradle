@@ -55,6 +55,9 @@ dependencies {
     // Optional
     compileOnly("com.github.ben-manes.caffeine:caffeine:3.1.8")
     compileOnly("io.micrometer:micrometer-core:1.13.0")
+    // Optional SLF4J bridge — when on user's classpath, Slf4jMdcBridge
+    // pushes authx.* MDC fields. Absent = noop (see Slf4jMdcBridge).
+    compileOnly("org.slf4j:slf4j-api:2.0.13")
 
     // Testing
     // assertj 3.25.3 → 3.27.7: fixes CVE-2026-24400 (XXE in isXmlEqualTo). Test-only.
@@ -66,6 +69,9 @@ dependencies {
     testImplementation("io.grpc:grpc-inprocess:1.80.0")
     testImplementation("org.testcontainers:testcontainers:1.21.1")
     testImplementation("org.testcontainers:junit-jupiter:1.21.1")
+    // SLF4J for Slf4jMdcBridge + LogEnrichmentIntegrationTest (ListAppender via Logback)
+    testImplementation("org.slf4j:slf4j-api:2.0.13")
+    testImplementation("ch.qos.logback:logback-classic:1.5.6")
     testRuntimeOnly("org.slf4j:slf4j-simple:2.0.12")
 }
 

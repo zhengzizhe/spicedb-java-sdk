@@ -14,6 +14,8 @@ import com.authx.sdk.model.enums.Permissionship;
 import com.authx.sdk.policy.CircuitBreakerPolicy;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.policy.RetryPolicy;
+import com.authx.sdk.trace.LogCtx;
+import com.authx.sdk.trace.LogFields;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -276,7 +278,7 @@ public class ResilientTransport extends ForwardingTransport {
                 default -> null;
             };
             if (sdkEvent != null) {
-                LOG.log(System.Logger.Level.INFO, "Circuit breaker [{0}]: {1}", resourceType, transition);
+                LOG.log(System.Logger.Level.INFO, LogCtx.fmt("Circuit breaker [{0}]: {1}", resourceType, transition));
                 eventBus.publish(sdkEvent);
             }
         });
@@ -318,8 +320,10 @@ public class ResilientTransport extends ForwardingTransport {
                         return false;
                     }
                     if (!checkRetryBudget()) {
-                        LOG.log(System.Logger.Level.WARNING,
-                                "Retry budget exhausted for [{0}], skipping retry", resourceType);
+                        LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
+                                "Retry budget exhausted for [{0}], skipping retry"
+                                        + LogFields.suffix(resourceType, null, null, null),
+                                resourceType));
                         return false;
                     }
                     retryCount.increment();
@@ -329,10 +333,30 @@ public class ResilientTransport extends ForwardingTransport {
 
         Retry retry = Retry.of("authx-" + resourceType, config);
 
-        retry.getEventPublisher().onRetry(event ->
-                LOG.log(System.Logger.Level.WARNING, "Retry {0}/{1} for [{2}]: {3}",
-                        event.getNumberOfRetryAttempts(), policy.maxAttempts(),
-                        resourceType, event.getLastThrowable().getMessage()));
+        retry.getEventPublisher().onRetry(event -> {
+            // SR:req-8 — enrich current OTel span with retry attempt + event
+            try {
+                var span = io.opentelemetry.api.trace.Span.current();
+                span.setAttribute("authx.retry.attempt", event.getNumberOfRetryAttempts());
+                span.setAttribute("authx.retry.max", policy.maxAttempts());
+                span.addEvent("retry_attempt",
+                        io.opentelemetry.api.common.Attributes.of(
+                                io.opentelemetry.api.common.AttributeKey.longKey("attempt"),
+                                (long) event.getNumberOfRetryAttempts(),
+                                io.opentelemetry.api.common.AttributeKey.stringKey("errorType"),
+                                event.getLastThrowable() == null ? "null"
+                                        : event.getLastThrowable().getClass().getSimpleName()));
+            } catch (Throwable ignored) {
+                /* span enrichment is best-effort */
+            }
+            // SR:req-10 — retry is normal product of resilience policy, not
+            // operator-actionable; downgrade WARN → DEBUG. Real signal ("retry
+            // budget exhausted") stays at WARN above.
+            LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
+                    "Retry {0}/{1} for [{2}]: {3}",
+                    event.getNumberOfRetryAttempts(), policy.maxAttempts(),
+                    resourceType, event.getLastThrowable().getMessage()));
+        });
 
         return retry;
     }

@@ -114,11 +114,25 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
      * If the user explicitly passed full/atLeast/atExactSnapshot, respect it.
      */
     private Consistency resolveConsistency(String resourceType, Consistency requested) {
+        Consistency effective;
         if (!(requested instanceof Consistency.MinimizeLatency)) {
-            return requested; // explicit user choice wins
+            effective = requested; // explicit user choice wins
+        } else {
+            ReadConsistency policy = policyRegistry.resolveReadConsistency(resourceType);
+            effective = tokenTracker.resolve(policy, resourceType);
         }
-
-        ReadConsistency policy = policyRegistry.resolveReadConsistency(resourceType);
-        return tokenTracker.resolve(policy, resourceType);
+        // SR:req-9 — record the effective consistency on the current OTel
+        // span so APM backends can filter "which reads used minimize_latency
+        // vs fully_consistent" in the same trace.
+        try {
+            var span = io.opentelemetry.api.trace.Span.current();
+            if (span.getSpanContext().isValid() && effective != null) {
+                span.setAttribute("authx.consistency",
+                        effective.getClass().getSimpleName().toLowerCase());
+            }
+        } catch (Throwable ignored) {
+            /* span enrichment is best-effort */
+        }
+        return effective;
     }
 }

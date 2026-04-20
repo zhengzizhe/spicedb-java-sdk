@@ -10,6 +10,7 @@ Java SDK for [SpiceDB](https://authzed.com/spicedb) — a Zanzibar-inspired auth
 - **Resilience**: Resilience4j (circuit breaker, retry, rate limiter, bulkhead)
 - **Decision cache**: none in SDK — SpiceDB's server-side dispatch cache handles it (ADR 2026-04-18)
 - **Observability**: OpenTelemetry API, Micrometer (optional), HdrHistogram
+- **Logging**: `java.lang.System.Logger` + optional SLF4J 2.0.13 MDC bridge (`com.authx.sdk.trace.Slf4jMdcBridge`). All log messages auto-enriched with OTel trace-id prefix when a span is active. See [`docs/logging-guide.md`](docs/logging-guide.md).
 - **Testing**: JUnit 5, AssertJ, Mockito
 
 ## Project structure
@@ -34,7 +35,8 @@ src/main/java/com/authx/sdk/
 ├── lifecycle/                 # SDK lifecycle state machine
 ├── event/                     # Typed event bus
 ├── health/                    # HealthProbe implementations
-├── trace/                     # TraceParent propagation
+├── trace/                     # TraceParent propagation + logging/MDC enrichment
+│                              #   (LogCtx prefix, Slf4jMdcBridge, LogFields suffix)
 ├── metrics/                   # SDK metrics
 └── telemetry/                 # Telemetry reporter
 test-app/                      # Demo Spring Boot app
