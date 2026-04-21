@@ -33,7 +33,7 @@ class AuthxClientTest {
     @Test
     void grant_single_thenCheck() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice");
+        doc.grant("editor").to("user:alice");
 
         assertTrue(doc.check("editor").by("alice").hasPermission());
         assertFalse(doc.check("editor").by("bob").hasPermission());
@@ -42,7 +42,7 @@ class AuthxClientTest {
     @Test
     void grant_multiple_users() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("viewer").to("alice", "bob", "carol");
+        doc.grant("viewer").to("user:alice", "user:bob", "user:carol");
 
         assertTrue(doc.check("viewer").by("alice").hasPermission());
         assertTrue(doc.check("viewer").by("bob").hasPermission());
@@ -53,7 +53,7 @@ class AuthxClientTest {
     @Test
     void grant_multiple_relations() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor", "can_download").to("alice");
+        doc.grant("editor", "can_download").to("user:alice");
 
         assertTrue(doc.check("editor").by("alice").hasPermission());
         assertTrue(doc.check("can_download").by("alice").hasPermission());
@@ -62,7 +62,7 @@ class AuthxClientTest {
     @Test
     void grant_collection() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("viewer").to(List.of("alice", "bob"));
+        doc.grant("viewer").to("user:alice", "user:bob");
 
         assertTrue(doc.check("viewer").by("alice").hasPermission());
         assertTrue(doc.check("viewer").by("bob").hasPermission());
@@ -71,7 +71,7 @@ class AuthxClientTest {
     @Test
     void grant_toSubjects() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("viewer").toSubjects("department:eng#member");
+        doc.grant("viewer").to("department:eng#member");
 
         var tuples = doc.relations("viewer").fetch();
         assertEquals(1, tuples.size());
@@ -83,7 +83,7 @@ class AuthxClientTest {
     @Test
     void grantResult_returnsCount() {
         var doc = client.resource("document", "doc-1");
-        GrantResult r = doc.grant("editor").to("alice", "bob");
+        GrantResult r = doc.grant("editor").to("user:alice", "user:bob");
         assertEquals(2, r.count());
         assertNotNull(r.zedToken());
     }
@@ -93,21 +93,21 @@ class AuthxClientTest {
     @Test
     void revoke_removesRelationship() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice");
+        doc.grant("editor").to("user:alice");
         assertTrue(doc.check("editor").by("alice").hasPermission());
 
-        doc.revoke("editor").from("alice");
+        doc.revoke("editor").from("user:alice");
         assertFalse(doc.check("editor").by("alice").hasPermission());
     }
 
     @Test
     void revokeAll_removesAllRelationsForUser() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice");
-        doc.grant("viewer").to("alice");
-        doc.grant("can_download").to("alice");
+        doc.grant("editor").to("user:alice");
+        doc.grant("viewer").to("user:alice");
+        doc.grant("can_download").to("user:alice");
 
-        doc.revokeAll().from("alice");
+        doc.revokeAll().from("user:alice");
 
         assertFalse(doc.check("editor").by("alice").hasPermission());
         assertFalse(doc.check("viewer").by("alice").hasPermission());
@@ -119,7 +119,7 @@ class AuthxClientTest {
     @Test
     void check_byAll() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("viewer").to("alice", "carol");
+        doc.grant("viewer").to("user:alice", "user:carol");
 
         BulkCheckResult result = doc.check("viewer").byAll("alice", "bob", "carol");
 
@@ -135,8 +135,8 @@ class AuthxClientTest {
     @Test
     void checkAll_permissionSet() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice");
-        doc.grant("viewer").to("alice");
+        doc.grant("editor").to("user:alice");
+        doc.grant("viewer").to("user:alice");
 
         PermissionSet perms = doc.checkAll("editor", "viewer", "owner").by("alice");
 
@@ -149,8 +149,8 @@ class AuthxClientTest {
     @Test
     void checkAll_permissionMatrix() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice");
-        doc.grant("viewer").to("bob");
+        doc.grant("editor").to("user:alice");
+        doc.grant("viewer").to("user:bob");
 
         PermissionMatrix matrix = doc.checkAll("editor", "viewer").byAll("alice", "bob");
 
@@ -165,8 +165,8 @@ class AuthxClientTest {
     @Test
     void who_withRelation() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice", "bob");
-        doc.grant("viewer").to("carol");
+        doc.grant("editor").to("user:alice", "user:bob");
+        doc.grant("viewer").to("user:carol");
 
         List<String> editors = doc.who().withRelation("editor").fetch();
         assertEquals(2, editors.size());
@@ -177,7 +177,7 @@ class AuthxClientTest {
     @Test
     void who_withPermission() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("viewer").to("alice", "bob");
+        doc.grant("viewer").to("user:alice", "user:bob");
 
         // InMemory: permission == relation match
         Set<String> viewers = doc.who().withPermission("viewer").fetchSet();
@@ -189,14 +189,14 @@ class AuthxClientTest {
         var doc = client.resource("document", "doc-1");
         assertFalse(doc.who().withRelation("editor").fetchExists());
 
-        doc.grant("editor").to("alice");
+        doc.grant("editor").to("user:alice");
         assertTrue(doc.who().withRelation("editor").fetchExists());
     }
 
     @Test
     void who_fetchCount() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice", "bob", "carol");
+        doc.grant("editor").to("user:alice", "user:bob", "user:carol");
         assertEquals(3, doc.who().withRelation("editor").fetchCount());
     }
 
@@ -205,8 +205,8 @@ class AuthxClientTest {
     @Test
     void relations_fetch() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice");
-        doc.grant("viewer").to("bob");
+        doc.grant("editor").to("user:alice");
+        doc.grant("viewer").to("user:bob");
 
         List<Tuple> all = doc.relations().fetch();
         assertEquals(2, all.size());
@@ -215,8 +215,8 @@ class AuthxClientTest {
     @Test
     void relations_filtered() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice");
-        doc.grant("viewer").to("bob");
+        doc.grant("editor").to("user:alice");
+        doc.grant("viewer").to("user:bob");
 
         List<Tuple> editors = doc.relations("editor").fetch();
         assertEquals(1, editors.size());
@@ -226,7 +226,7 @@ class AuthxClientTest {
     @Test
     void relations_fetchSubjectIds() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice", "bob");
+        doc.grant("editor").to("user:alice", "user:bob");
 
         Set<String> ids = doc.relations("editor").fetchSubjectIdSet();
         assertEquals(Set.of("alice", "bob"), ids);
@@ -235,8 +235,8 @@ class AuthxClientTest {
     @Test
     void relations_groupByRelation() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("editor").to("alice");
-        doc.grant("viewer").to("bob", "carol");
+        doc.grant("editor").to("user:alice");
+        doc.grant("viewer").to("user:bob", "user:carol");
 
         Map<String, List<String>> grouped = doc.relations().groupByRelation();
         assertEquals(1, grouped.get("editor").size());
@@ -247,9 +247,9 @@ class AuthxClientTest {
 
     @Test
     void lookup_resources() {
-        client.resource("document", "doc-1").grant("viewer").to("alice");
-        client.resource("document", "doc-2").grant("viewer").to("alice");
-        client.resource("document", "doc-3").grant("editor").to("alice");
+        client.resource("document", "doc-1").grant("viewer").to("user:alice");
+        client.resource("document", "doc-2").grant("viewer").to("user:alice");
+        client.resource("document", "doc-3").grant("editor").to("user:alice");
 
         List<String> viewable = client.lookup("document").withPermission("viewer").by("alice").fetch();
         assertEquals(2, viewable.size());
@@ -261,7 +261,7 @@ class AuthxClientTest {
     void lookup_fetchExists() {
         assertFalse(client.lookup("document").withPermission("viewer").by("alice").fetchExists());
 
-        client.resource("document", "doc-1").grant("viewer").to("alice");
+        client.resource("document", "doc-1").grant("viewer").to("user:alice");
         assertTrue(client.lookup("document").withPermission("viewer").by("alice").fetchExists());
     }
 
@@ -270,12 +270,12 @@ class AuthxClientTest {
     @Test
     void batch_mixedGrantRevoke() {
         var doc = client.resource("document", "doc-1");
-        doc.grant("owner").to("alice");
+        doc.grant("owner").to("user:alice");
 
         BatchResult result = doc.batch()
-                .revoke("owner").from("alice")
-                .grant("owner").to("bob")
-                .grant("editor").to("alice")
+                .revoke("owner").from("user:alice")
+                .grant("owner").to("user:bob")
+                .grant("editor").to("user:alice")
                 .execute();
 
         assertNotNull(result.zedToken());
@@ -288,8 +288,8 @@ class AuthxClientTest {
 
     @Test
     void differentResources_independent() {
-        client.resource("document", "doc-1").grant("editor").to("alice");
-        client.resource("document", "doc-2").grant("viewer").to("bob");
+        client.resource("document", "doc-1").grant("editor").to("user:alice");
+        client.resource("document", "doc-2").grant("viewer").to("user:bob");
 
         assertFalse(client.resource("document", "doc-1").check("editor").by("bob").hasPermission());
         assertFalse(client.resource("document", "doc-2").check("viewer").by("alice").hasPermission());

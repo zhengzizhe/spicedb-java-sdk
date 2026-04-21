@@ -87,7 +87,7 @@ class VirtualThreadCompatibilityTest {
     @Test
     void clientWithVirtualThreads_basicOperationsWork() {
         var doc = client.on("document");
-        doc.grant("doc-1", "editor", "alice");
+        doc.grant("doc-1", "editor", "user:alice");
         assertThat(doc.check("doc-1", "editor", "alice")).isTrue();
         assertThat(doc.check("doc-1", "editor", "bob")).isFalse();
     }
@@ -101,7 +101,7 @@ class VirtualThreadCompatibilityTest {
         // Seed data
         var doc = client.on("document");
         for (int i = 0; i < 100; i++) {
-            doc.grant("doc-" + i, "viewer", "user-" + (i % 10));
+            doc.grant("doc-" + i, "viewer", "user:user-" + (i % 10));
         }
 
         int concurrency = 500;
@@ -161,7 +161,7 @@ class VirtualThreadCompatibilityTest {
                         var doc = client.on("document");
                         if (idx % 3 == 0) {
                             // Write
-                            doc.grant("mixed-doc-" + (idx % 20), "editor", "mixed-user-" + idx);
+                            doc.grant("mixed-doc-" + (idx % 20), "editor", "user:mixed-user-" + idx);
                         } else {
                             // Read
                             doc.check("mixed-doc-" + (idx % 20), "viewer", "mixed-user-" + (idx % 10));
@@ -329,7 +329,7 @@ class VirtualThreadCompatibilityTest {
         // Seed some data first
         var doc = client.on("document");
         for (int i = 0; i < 50; i++) {
-            doc.grant("burst-doc-" + i, "viewer", "burst-user-" + (i % 5));
+            doc.grant("burst-doc-" + i, "viewer", "user:burst-user-" + (i % 5));
         }
 
         long startNanos = System.nanoTime();
@@ -341,7 +341,7 @@ class VirtualThreadCompatibilityTest {
                     try {
                         // Mix operations
                         if (idx % 10 == 0) {
-                            doc.grant("burst-doc-" + (idx % 50), "commenter", "burst-vt-" + idx);
+                            doc.grant("burst-doc-" + (idx % 50), "commenter", "user:burst-vt-" + idx);
                         } else {
                             doc.check("burst-doc-" + (idx % 50), "viewer", "burst-user-" + (idx % 5));
                         }

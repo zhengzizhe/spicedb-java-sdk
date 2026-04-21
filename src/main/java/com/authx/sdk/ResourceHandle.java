@@ -63,24 +63,24 @@ public class ResourceHandle {
 
     /** Start a grant action to add one or more relations on this resource. */
     public GrantAction grant(String... relations) {
-        return new GrantAction(resourceType, resourceId, transport, defaultSubjectType, relations);
+        return new GrantAction(resourceType, resourceId, transport, relations);
     }
 
     // ---- Revoke ----
 
     /** Start a revoke action to remove specific relations from subjects. */
     public RevokeAction revoke(String... relations) {
-        return new RevokeAction(resourceType, resourceId, transport, defaultSubjectType, relations);
+        return new RevokeAction(resourceType, resourceId, transport, relations);
     }
 
     /** Revoke all relationships on this resource using filter-based delete. */
     public RevokeAllAction revokeAll() {
-        return new RevokeAllAction(resourceType, resourceId, transport, defaultSubjectType, null);
+        return new RevokeAllAction(resourceType, resourceId, transport, null);
     }
 
     /** Revoke all relationships for the given relations using filter-based delete. */
     public RevokeAllAction revokeAll(String... relations) {
-        return new RevokeAllAction(resourceType, resourceId, transport, defaultSubjectType, relations);
+        return new RevokeAllAction(resourceType, resourceId, transport, relations);
     }
 
     // ---- Check ----
@@ -127,6 +127,6 @@ public class ResourceHandle {
 
     /** Start a batch builder to combine multiple grant/revoke operations into a single RPC. */
     public BatchBuilder batch() {
-        return new BatchBuilder(resourceType, resourceId, transport, defaultSubjectType);
+        return new BatchBuilder(resourceType, resourceId, transport);
     }
 }

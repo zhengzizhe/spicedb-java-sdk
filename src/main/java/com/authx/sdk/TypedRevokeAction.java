@@ -40,33 +40,10 @@ public class TypedRevokeAction<R extends Relation.Named> {
     }
 
     // ════════════════════════════════════════════════════════════════
-    //  Common subject-type shortcuts (validated against schema)
+    //  Terminal methods — subjects come in as SubjectRef or canonical strings
     // ════════════════════════════════════════════════════════════════
 
-    public RevokeCompletion fromUser(String... userIds) {
-        return writeTypedSubjects("user", null, userIds);
-    }
-
-    public RevokeCompletion fromUser(Collection<String> userIds) {
-        return fromUser(userIds.toArray(String[]::new));
-    }
-
-    public RevokeCompletion fromGroupMember(String... groupIds) {
-        return writeTypedSubjects("group", "member", groupIds);
-    }
-
-    public RevokeCompletion fromGroupMember(Collection<String> groupIds) {
-        return fromGroupMember(groupIds.toArray(String[]::new));
-    }
-
-    public RevokeCompletion fromUserAll() {
-        return write(new String[]{"user:*"});
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    //  Generic subject entry — supports any subject type in the schema
-    // ════════════════════════════════════════════════════════════════
-
+    /** Revoke from one or more {@link SubjectRef subjects}. */
     public RevokeCompletion from(SubjectRef... subjects) {
         if (subjects == null || subjects.length == 0) {
             return RevokeCompletion.of(new RevokeResult(null, 0));
@@ -78,42 +55,25 @@ public class TypedRevokeAction<R extends Relation.Named> {
         return write(refs);
     }
 
+    /** Collection overload of {@link #from(SubjectRef...)}. */
     public RevokeCompletion from(Collection<SubjectRef> subjects) {
         return from(subjects.toArray(SubjectRef[]::new));
     }
 
-    /** Raw-string escape hatch — still validated against schema at runtime. */
-    public RevokeCompletion fromSubjectRefs(String... subjectRefs) {
+    /**
+     * Revoke from one or more canonical subject strings:
+     * {@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}.
+     */
+    public RevokeCompletion from(String... subjectRefs) {
         if (subjectRefs == null || subjectRefs.length == 0) {
             return RevokeCompletion.of(new RevokeResult(null, 0));
         }
         return write(subjectRefs);
     }
 
-    /** Collection overload for {@link #fromSubjectRefs(String...)}. */
-    public RevokeCompletion fromSubjectRefs(Collection<String> subjectRefs) {
-        if (subjectRefs == null || subjectRefs.isEmpty()) {
-            return RevokeCompletion.of(new RevokeResult(null, 0));
-        }
-        return write(subjectRefs.toArray(String[]::new));
-    }
-
     // ════════════════════════════════════════════════════════════════
     //  Internals
     // ════════════════════════════════════════════════════════════════
-
-    private RevokeCompletion writeTypedSubjects(String type, String subRelation, String[] ids) {
-        if (ids == null || ids.length == 0) {
-            return RevokeCompletion.of(new RevokeResult(null, 0));
-        }
-        String[] refs = new String[ids.length];
-        for (int i = 0; i < ids.length; i++) {
-            refs[i] = (subRelation == null || subRelation.isEmpty())
-                    ? type + ":" + ids[i]
-                    : type + ":" + ids[i] + "#" + subRelation;
-        }
-        return write(refs);
-    }
 
     private RevokeCompletion write(String[] refs) {
         // Client-side schema validation was removed with the SchemaCache in
@@ -125,7 +85,7 @@ public class TypedRevokeAction<R extends Relation.Named> {
         int totalCount = 0;
         for (String id : ids) {
             for (R rel : relations) {
-                RevokeResult r = factory.revokeFromSubjects(id, rel.relationName(), refs);
+                RevokeResult r = factory.revoke(id, rel.relationName(), refs);
                 if (r.zedToken() != null) lastToken = r.zedToken();
                 totalCount += r.count();
             }

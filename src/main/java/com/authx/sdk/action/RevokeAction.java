@@ -15,44 +15,44 @@ import java.util.List;
 
 /**
  * Fluent action for revoking specific relations from subjects.
+ *
+ * <p>Subjects come in as programmatic {@link SubjectRef} values or canonical
+ * strings ({@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}).
+ * The SDK does not assume a default subject type.
  */
 public class RevokeAction {
     private final String resourceType;
     private final String resourceId;
     private final SdkTransport transport;
-    private final String defaultSubjectType;
     private final String[] relations;
 
     /** Internal — use {@link com.authx.sdk.ResourceHandle} entry points. */
     public RevokeAction(String resourceType, String resourceId, SdkTransport transport,
-                        String defaultSubjectType, String[] relations) {
+                        String[] relations) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
         this.relations = relations;
     }
 
-    /** Revoke the relation(s) from the given user ids and execute the delete. */
-    public RevokeResult from(String... userIds) {
-        return from(Arrays.asList(userIds));
+    /** Revoke the relation(s) from the given {@link SubjectRef subjects}. */
+    public RevokeResult from(SubjectRef... subjects) {
+        return from(Arrays.asList(subjects));
     }
 
-    /** Revoke the relation(s) from the given user ids and execute the delete. */
-    public RevokeResult from(Collection<String> userIds) {
-        return deleteRelationships(userIds.stream()
-                .map(id -> SubjectRef.of(defaultSubjectType, id, null))
-                .toList());
+    /** Collection overload of {@link #from(SubjectRef...)}. */
+    public RevokeResult from(Collection<SubjectRef> subjects) {
+        return deleteRelationships(List.copyOf(subjects));
     }
 
-    /** Revoke the relation(s) from the given subject refs. */
-    public RevokeResult fromSubjects(String... subjectRefs) {
-        return fromSubjects(Arrays.asList(subjectRefs));
-    }
-
-    /** Revoke the relation(s) from the given subject refs. */
-    public RevokeResult fromSubjects(Collection<String> subjectRefs) {
-        return deleteRelationships(subjectRefs.stream().map(SubjectRef::parse).toList());
+    /**
+     * Revoke the relation(s) from the given canonical subject strings.
+     * See {@link GrantAction#to(String...)} for the accepted format.
+     *
+     * @throws IllegalArgumentException if any string is not a valid subject ref
+     */
+    public RevokeResult from(String... subjectRefs) {
+        return deleteRelationships(Arrays.stream(subjectRefs).map(SubjectRef::parse).toList());
     }
 
     private RevokeResult deleteRelationships(List<SubjectRef> subjects) {

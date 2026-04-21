@@ -22,7 +22,7 @@ class ValueObjectTest {
     }
 
     @Test void subjectRef_user() {
-        var ref = SubjectRef.user("alice");
+        var ref = SubjectRef.of("user", "alice");
         assertThat(ref.type()).isEqualTo("user");
         assertThat(ref.id()).isEqualTo("alice");
         assertThat(ref.relation()).isNull();
@@ -73,26 +73,26 @@ class ValueObjectTest {
     }
 
     @Test void subjectRef_toRefString() {
-        assertThat(SubjectRef.user("alice").toRefString()).isEqualTo("user:alice");
+        assertThat(SubjectRef.of("user", "alice").toRefString()).isEqualTo("user:alice");
         assertThat(SubjectRef.parse("department:eng#all_members").toRefString())
             .isEqualTo("department:eng#all_members");
     }
 
     @Test void checkKey_equality() {
-        var k1 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.user("alice"));
-        var k2 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.user("alice"));
+        var k1 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
+        var k2 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
         assertThat(k1).isEqualTo(k2);
         assertThat(k1.hashCode()).isEqualTo(k2.hashCode());
     }
 
     @Test void checkKey_inequality() {
-        var k1 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.user("alice"));
-        var k2 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("edit"), SubjectRef.user("alice"));
+        var k1 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
+        var k2 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("edit"), SubjectRef.of("user", "alice"));
         assertThat(k1).isNotEqualTo(k2);
     }
 
     @Test void checkKey_resourceIndex() {
-        var k = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.user("alice"));
+        var k = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
         assertThat(k.resourceIndex()).isEqualTo("document:d1");
     }
 

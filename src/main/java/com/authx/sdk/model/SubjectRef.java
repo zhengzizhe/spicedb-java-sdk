@@ -94,21 +94,7 @@ public record SubjectRef(String type, String id, @Nullable String relation) {
         return new SubjectRef(type, "*", null);
     }
 
-    /**
-     * Creates a user subject reference with type {@code "user"} and no relation.
-     *
-     * @param id the user id
-     * @return a new {@code SubjectRef} of type {@code "user"}
-     * @deprecated SDK should not hard-code business subject type names.
-     *     Use {@link #of(String, String) SubjectRef.of("user", id)} or the
-     *     canonical string form {@code "user:" + id} directly.
-     */
-    @Deprecated(forRemoval = true)
-    public static SubjectRef user(String id) {
-        return new SubjectRef("user", id, null);
-    }
-
-    /**
+/**
      * Parses a subject reference string such as {@code "group:eng#member"},
      * {@code "user:alice"}, or {@code "user:*"}.
      *

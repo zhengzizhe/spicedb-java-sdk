@@ -105,24 +105,18 @@ public class ResourceFactory {
         return resource(id).check(permission).withConsistency(consistency).by(userId).hasPermission();
     }
 
-    /** Grant relation to user(s). Returns result with zedToken for write-after-read consistency. */
-    public GrantResult grant(String id, String relation, String... userIds) {
-        return resource(id).grant(relation).to(userIds);
+    /**
+     * Grant relation to canonical subject refs
+     * (e.g., {@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}).
+     * Returns result with zedToken for write-after-read consistency.
+     */
+    public GrantResult grant(String id, String relation, String... subjectRefs) {
+        return resource(id).grant(relation).to(subjectRefs);
     }
 
-    /** Grant relation to subject refs (e.g., "department:eng#all_members", "user:*"). */
-    public GrantResult grantToSubjects(String id, String relation, String... subjectRefs) {
-        return resource(id).grant(relation).toSubjects(subjectRefs);
-    }
-
-    /** Revoke relation from user(s). Returns result with zedToken for write-after-read consistency. */
-    public RevokeResult revoke(String id, String relation, String... userIds) {
-        return resource(id).revoke(relation).from(userIds);
-    }
-
-    /** Revoke relation from subject refs. */
-    public RevokeResult revokeFromSubjects(String id, String relation, String... subjectRefs) {
-        return resource(id).revoke(relation).fromSubjects(subjectRefs);
+    /** Revoke relation from canonical subject refs. */
+    public RevokeResult revoke(String id, String relation, String... subjectRefs) {
+        return resource(id).revoke(relation).from(subjectRefs);
     }
 
     /** Get all relations grouped by relation name. */

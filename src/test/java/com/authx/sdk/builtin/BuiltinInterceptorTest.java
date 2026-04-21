@@ -26,7 +26,7 @@ class BuiltinInterceptorTest {
             var request = CheckRequest.of(
                 ResourceRef.of(resType != null ? resType : "document", resId != null ? resId : "1"),
                 Permission.of(perm != null ? perm : "view"),
-                SubjectRef.user("alice"),
+                SubjectRef.of("user", "alice"),
                 Consistency.minimizeLatency());
             return new CheckChain() {
                 @Override public CheckRequest request() { return request; }
@@ -98,7 +98,7 @@ class BuiltinInterceptorTest {
         @Test void interceptCheckLogsAndReturns() {
             var ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
             var request = CheckRequest.of(ResourceRef.of("doc", "1"), Permission.of("view"),
-                SubjectRef.user("alice"), Consistency.minimizeLatency());
+                SubjectRef.of("user", "alice"), Consistency.minimizeLatency());
 
             CheckChain chain = new CheckChain() {
                 @Override public CheckRequest request() { return request; }
@@ -117,7 +117,7 @@ class BuiltinInterceptorTest {
         @Test void interceptCheckPropagatesException() {
             var ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
             var request = CheckRequest.of(ResourceRef.of("doc", "1"), Permission.of("view"),
-                SubjectRef.user("alice"), Consistency.minimizeLatency());
+                SubjectRef.of("user", "alice"), Consistency.minimizeLatency());
 
             CheckChain chain = new CheckChain() {
                 @Override public CheckRequest request() { return request; }

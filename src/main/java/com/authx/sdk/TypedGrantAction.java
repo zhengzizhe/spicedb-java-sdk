@@ -107,55 +107,16 @@ public class TypedGrantAction<R extends Relation.Named> {
     }
 
     // ════════════════════════════════════════════════════════════════
-    //  Common subject-type shortcuts (validated against schema)
-    // ════════════════════════════════════════════════════════════════
-
-    /** Grant to one or more user ids — equivalent to {@code user:<id>} subjects. */
-    public GrantCompletion toUser(String... userIds) {
-        return writeTypedSubjects("user", null, userIds);
-    }
-
-    public GrantCompletion toUser(Collection<String> userIds) {
-        return toUser(userIds.toArray(String[]::new));
-    }
-
-    /**
-     * Grant to one or more group-member subjects — equivalent to
-     * {@code group:<id>#member}. Use this when the schema declares the
-     * relation as accepting {@code group#member} references.
-     */
-    public GrantCompletion toGroupMember(String... groupIds) {
-        return writeTypedSubjects("group", "member", groupIds);
-    }
-
-    public GrantCompletion toGroupMember(Collection<String> groupIds) {
-        return toGroupMember(groupIds.toArray(String[]::new));
-    }
-
-    /**
-     * Grant to the "everyone" wildcard — equivalent to granting
-     * {@code user:*}. The schema's relation must declare {@code user:*}
-     * as an allowed subject for this to pass validation.
-     */
-    public GrantCompletion toUserAll() {
-        return write(new String[]{"user:*"});
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    //  Generic subject entry — supports any subject type in the schema
+    //  Terminal methods — subjects come in as SubjectRef or canonical strings
     // ════════════════════════════════════════════════════════════════
 
     /**
-     * Grant to one or more {@link SubjectRef}s of arbitrary type. This is the
-     * canonical entry point for cross-type grants (task → document, document
-     * → folder, etc.) and anything that doesn't have a first-class
-     * convenience method. Each subject is validated against the schema's
-     * declared subject types for every relation in this action.
+     * Grant to one or more {@link SubjectRef subjects}.
      *
      * <pre>
      * // Cross-type: task's "document" relation accepts a document subject
      * task.select("t-1").grant(Task.Rel.DOCUMENT)
-     *     .to(SubjectRef.of("document", "doc-5", null));
+     *     .to(SubjectRef.of("document", "doc-5"));
      *
      * // Department#all_members subject
      * doc.select("doc-1").grant(Document.Rel.VIEWER)
@@ -173,46 +134,25 @@ public class TypedGrantAction<R extends Relation.Named> {
         return write(refs);
     }
 
+    /** Collection overload of {@link #to(SubjectRef...)}. */
     public GrantCompletion to(Collection<SubjectRef> subjects) {
         return to(subjects.toArray(SubjectRef[]::new));
     }
 
     /**
-     * Raw-string escape hatch for dynamic scenarios where you already have
-     * {@code "type:id"} / {@code "type:id#relation"} / {@code "type:*"}
-     * strings. Still validated against the schema at runtime.
+     * Grant to one or more canonical subject strings:
+     * {@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}.
      */
-    public GrantCompletion toSubjectRefs(String... subjectRefs) {
+    public GrantCompletion to(String... subjectRefs) {
         if (subjectRefs == null || subjectRefs.length == 0) {
             return GrantCompletion.of(new GrantResult(null, 0));
         }
         return write(subjectRefs);
     }
 
-    /** Collection overload for {@link #toSubjectRefs(String...)}. */
-    public GrantCompletion toSubjectRefs(Collection<String> subjectRefs) {
-        if (subjectRefs == null || subjectRefs.isEmpty()) {
-            return GrantCompletion.of(new GrantResult(null, 0));
-        }
-        return write(subjectRefs.toArray(String[]::new));
-    }
-
     // ════════════════════════════════════════════════════════════════
     //  Internals
     // ════════════════════════════════════════════════════════════════
-
-    private GrantCompletion writeTypedSubjects(String type, String subRelation, String[] ids) {
-        if (ids == null || ids.length == 0) {
-            return GrantCompletion.of(new GrantResult(null, 0));
-        }
-        String[] refs = new String[ids.length];
-        for (int i = 0; i < ids.length; i++) {
-            refs[i] = (subRelation == null || subRelation.isEmpty())
-                    ? type + ":" + ids[i]
-                    : type + ":" + ids[i] + "#" + subRelation;
-        }
-        return write(refs);
-    }
 
     private GrantCompletion write(String[] refs) {
         // Client-side schema validation was removed with the SchemaCache in
@@ -237,7 +177,7 @@ public class TypedGrantAction<R extends Relation.Named> {
                 if (expiresAt != null) {
                     action.expiresAt(expiresAt);
                 }
-                GrantResult r = action.toSubjects(refs);
+                GrantResult r = action.to(refs);
                 if (r.zedToken() != null) lastToken = r.zedToken();
                 totalCount += r.count();
             }

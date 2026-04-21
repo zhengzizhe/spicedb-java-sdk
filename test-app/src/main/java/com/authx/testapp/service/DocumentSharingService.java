@@ -95,15 +95,15 @@ public class DocumentSharingService {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(relFor(level))
-                .toUser(targetUserId);
+                .to("user:" + targetUserId);
     }
 
-    /** 批量分享 —— 同一个链, toUser varargs 接受多 userId. */
+    /** 批量分享 —— 给 userIds 批量 grant. */
     public void shareWithUsers(String docId, List<String> userIds, ShareLevel level) {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(relFor(level))
-                .toUser(userIds);
+                .to(userIds.stream().map(u -> "user:" + u).toArray(String[]::new));
     }
 
     /** 分享给一个组 (group#member subject). */
@@ -111,7 +111,7 @@ public class DocumentSharingService {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(relFor(level))
-                .toGroupMember(groupId);
+                .to("group:" + groupId + "#member");
     }
 
     /** 公开文档 —— 所有用户可见 (user:* 通配符). */
@@ -119,7 +119,7 @@ public class DocumentSharingService {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(Document.Rel.VIEWER)
-                .toUserAll();
+                .to("user:*");
     }
 
     /** 限时分享 —— SpiceDB 关系过期字段, 到期自动失效. */
@@ -128,7 +128,7 @@ public class DocumentSharingService {
                 .select(docId)
                 .grant(relFor(level))
                 .expiringIn(ttl)
-                .toUser(targetUserId);
+                .to("user:" + targetUserId);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -136,9 +136,10 @@ public class DocumentSharingService {
     // ═══════════════════════════════════════════════════════════════
 
     public void unshareWithUser(String docId, String targetUserId) {
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.VIEWER).fromUser(targetUserId);
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.COMMENTER).fromUser(targetUserId);
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.EDITOR).fromUser(targetUserId);
+        String subj = "user:" + targetUserId;
+        client.on(Document.TYPE).select(docId).revoke(Document.Rel.VIEWER).from(subj);
+        client.on(Document.TYPE).select(docId).revoke(Document.Rel.COMMENTER).from(subj);
+        client.on(Document.TYPE).select(docId).revoke(Document.Rel.EDITOR).from(subj);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -224,13 +225,13 @@ public class DocumentSharingService {
     }
 
     /**
-     * 批量撤销 —— 一次 {@code fromUser(Collection)} 把文档从 N 个用户那里收回 VIEWER.
+     * 批量撤销 —— 一次调用把文档从 N 个用户那里收回 VIEWER / COMMENTER / EDITOR 三种关系.
      */
     public void unshareWithMany(String docId, List<String> userIds) {
         client.on(Document.TYPE)
                 .select(docId)
                 .revoke(Document.Rel.VIEWER, Document.Rel.COMMENTER, Document.Rel.EDITOR)
-                .fromUser(userIds);
+                .from(userIds.stream().map(u -> "user:" + u).toArray(String[]::new));
     }
 
     // ─── internal ────────────────────────────────────────────────

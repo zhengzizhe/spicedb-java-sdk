@@ -203,7 +203,7 @@ class GrantCompletionTest {
             // the pre-feature void-returning API. The implicit assertion is
             // that this line compiled (proving the return-type change was
             // non-breaking) and did not throw.
-            client.on(DOC).select("d1").grant(Rel.EDITOR).toUser("bob");
+            client.on(DOC).select("d1").grant(Rel.EDITOR).to("user:bob");
             // Reached here = write succeeded; back-compat invariant holds.
             assertThat(true).isTrue();
         }

@@ -78,7 +78,7 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
 
     /** Convenience overload for the default user subject type. */
     public TypedFinder<P> findByUser(String userId) {
-        return new TypedFinder<>(factory, SubjectRef.user(userId));
+        return new TypedFinder<>(factory, SubjectRef.of("user", userId));
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -106,13 +106,13 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
 
     public MultiFinder<R, P> findByUsers(String... userIds) {
         var refs = new java.util.ArrayList<SubjectRef>(userIds.length);
-        for (String id : userIds) refs.add(SubjectRef.user(id));
+        for (String id : userIds) refs.add(SubjectRef.of("user", id));
         return new MultiFinder<>(factory, refs);
     }
 
     public MultiFinder<R, P> findByUsers(Collection<String> userIds) {
         var refs = new java.util.ArrayList<SubjectRef>(userIds.size());
-        for (String id : userIds) refs.add(SubjectRef.user(id));
+        for (String id : userIds) refs.add(SubjectRef.of("user", id));
         return new MultiFinder<>(factory, refs);
     }
 

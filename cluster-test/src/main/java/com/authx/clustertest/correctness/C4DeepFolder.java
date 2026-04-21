@@ -35,14 +35,14 @@ public class C4DeepFolder implements Function<AuthxClient, String> {
         for (int i = 1; i < DEPTH; i++) {
             for (int j = 0; j < i; j++) {
                 client.on("folder").resource(folders[i]).grant("ancestor")
-                        .toSubjects("folder:" + folders[j]);
+                        .to("folder:" + folders[j]);
             }
         }
 
         // Attach a document to the deepest folder.
         String docId = "c4-doc-" + suffix;
         client.on("document").resource(docId).grant("folder")
-                .toSubjects("folder:" + folders[DEPTH - 1]);
+                .to("folder:" + folders[DEPTH - 1]);
 
         boolean ok = client.on("document").resource(docId)
                 .check("view")

@@ -9,7 +9,7 @@ class RequestObjectTest {
         var req = CheckRequest.of(
             ResourceRef.of("document", "d1"),
             Permission.of("view"),
-            SubjectRef.user("alice"),
+            SubjectRef.of("user", "alice"),
             Consistency.full()
         );
         assertThat(req.resource().type()).isEqualTo("document");
@@ -44,7 +44,7 @@ class RequestObjectTest {
     }
 
     @Test void checkRequest_rejectsNull() {
-        assertThatThrownBy(() -> CheckRequest.of(null, Permission.of("view"), SubjectRef.user("a"), Consistency.full()))
+        assertThatThrownBy(() -> CheckRequest.of(null, Permission.of("view"), SubjectRef.of("user", "a"), Consistency.full()))
             .isInstanceOf(NullPointerException.class);
     }
 
@@ -62,14 +62,14 @@ class RequestObjectTest {
     }
 
     @Test void lookupResourcesRequest() {
-        var req = new LookupResourcesRequest("document", Permission.of("view"), SubjectRef.user("alice"), 50);
+        var req = new LookupResourcesRequest("document", Permission.of("view"), SubjectRef.of("user", "alice"), 50);
         assertThat(req.resourceType()).isEqualTo("document");
         assertThat(req.subject().id()).isEqualTo("alice");
         assertThat(req.limit()).isEqualTo(50);
     }
 
     @Test void lookupResourcesRequest_defaultLimit() {
-        var req = new LookupResourcesRequest("document", Permission.of("view"), SubjectRef.user("alice"));
+        var req = new LookupResourcesRequest("document", Permission.of("view"), SubjectRef.of("user", "alice"));
         assertThat(req.limit()).isEqualTo(0);
     }
 }

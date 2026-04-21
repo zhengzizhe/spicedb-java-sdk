@@ -26,7 +26,7 @@ public class C3GroupInheritance implements Function<AuthxClient, String> {
 
         // group#member ∈ space.member
         client.on("space").resource(spaceId).grant("member")
-                .toSubjects("group:" + groupId + "#member");
+                .to("group:" + groupId + "#member");
 
         boolean ok = client.on("space").resource(spaceId)
                 .check("view")

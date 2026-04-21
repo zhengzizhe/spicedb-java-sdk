@@ -86,47 +86,47 @@ class TypedClassesTest {
 
         @Test
         void check_stringBased() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             assertThat(docFactory.check("doc-1", "view", "alice")).isTrue();
             assertThat(docFactory.check("doc-1", "view", "bob")).isFalse();
         }
 
         @Test
         void check_withConsistency() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             assertThat(docFactory.check("doc-1", "view", "alice", Consistency.full())).isTrue();
         }
 
         @Test
         void grant_stringBased() {
-            GrantResult result = docFactory.grant("doc-1", "editor", "alice", "bob");
+            GrantResult result = docFactory.grant("doc-1", "editor", "user:alice", "user:bob");
             assertThat(result.count()).isEqualTo(2);
         }
 
         @Test
         void grantToSubjects() {
-            GrantResult result = docFactory.grantToSubjects("doc-1", "viewer", "group:eng#member");
+            GrantResult result = docFactory.grant("doc-1", "viewer", "group:eng#member");
             assertThat(result.count()).isEqualTo(1);
         }
 
         @Test
         void revoke_stringBased() {
-            docFactory.grant("doc-1", "editor", "alice");
-            RevokeResult result = docFactory.revoke("doc-1", "editor", "alice");
+            docFactory.grant("doc-1", "editor", "user:alice");
+            RevokeResult result = docFactory.revoke("doc-1", "editor", "user:alice");
             assertThat(result.count()).isEqualTo(1);
         }
 
         @Test
         void revokeFromSubjects() {
-            docFactory.grantToSubjects("doc-1", "viewer", "group:eng#member");
-            RevokeResult result = docFactory.revokeFromSubjects("doc-1", "viewer", "group:eng#member");
+            docFactory.grant("doc-1", "viewer", "group:eng#member");
+            RevokeResult result = docFactory.revoke("doc-1", "viewer", "group:eng#member");
             assertThat(result.count()).isEqualTo(1);
         }
 
         @Test
         void allRelations() {
-            docFactory.grant("doc-1", "editor", "alice");
-            docFactory.grant("doc-1", "viewer", "bob");
+            docFactory.grant("doc-1", "editor", "user:alice");
+            docFactory.grant("doc-1", "viewer", "user:bob");
             Map<String, List<String>> grouped = docFactory.allRelations("doc-1");
 
             assertThat(grouped).containsKeys("editor", "viewer");
@@ -141,7 +141,7 @@ class TypedClassesTest {
 
         @Test
         void lookup_returnsQuery() {
-            docFactory.grant("doc-1", "viewer", "alice");
+            docFactory.grant("doc-1", "viewer", "user:alice");
             List<String> ids = docFactory.lookup().withPermission("viewer").by("alice").fetch();
             assertThat(ids).contains("doc-1");
         }
@@ -157,24 +157,24 @@ class TypedClassesTest {
         @Test
         void grant_and_check() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            handle.grant("editor").to("alice");
+            handle.grant("editor").to("user:alice");
             assertThat(handle.check("editor").by("alice").hasPermission()).isTrue();
         }
 
         @Test
         void revoke() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            handle.grant("editor").to("alice");
-            handle.revoke("editor").from("alice");
+            handle.grant("editor").to("user:alice");
+            handle.revoke("editor").from("user:alice");
             assertThat(handle.check("editor").by("alice").hasPermission()).isFalse();
         }
 
         @Test
         void revokeAll_noRelations() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            handle.grant("editor").to("alice");
-            handle.grant("viewer").to("alice");
-            handle.revokeAll().from("alice");
+            handle.grant("editor").to("user:alice");
+            handle.grant("viewer").to("user:alice");
+            handle.revokeAll().from("user:alice");
 
             assertThat(handle.check("editor").by("alice").hasPermission()).isFalse();
             assertThat(handle.check("viewer").by("alice").hasPermission()).isFalse();
@@ -183,9 +183,9 @@ class TypedClassesTest {
         @Test
         void revokeAll_withRelations() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            handle.grant("editor").to("alice");
-            handle.grant("viewer").to("alice");
-            handle.revokeAll("editor").from("alice");
+            handle.grant("editor").to("user:alice");
+            handle.grant("viewer").to("user:alice");
+            handle.revokeAll("editor").from("user:alice");
 
             assertThat(handle.check("editor").by("alice").hasPermission()).isFalse();
             assertThat(handle.check("viewer").by("alice").hasPermission()).isTrue();
@@ -194,7 +194,7 @@ class TypedClassesTest {
         @Test
         void checkAll() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            handle.grant("editor").to("alice");
+            handle.grant("editor").to("user:alice");
             PermissionSet set = handle.checkAll("editor", "viewer").by("alice");
 
             assertThat(set.can("editor")).isTrue();
@@ -204,7 +204,7 @@ class TypedClassesTest {
         @Test
         void who() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            handle.grant("editor").to("alice", "bob");
+            handle.grant("editor").to("user:alice", "user:bob");
             List<String> editors = handle.who().withPermission("editor").fetch();
 
             assertThat(editors).containsExactlyInAnyOrder("alice", "bob");
@@ -213,7 +213,7 @@ class TypedClassesTest {
         @Test
         void relations() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            handle.grant("editor").to("alice");
+            handle.grant("editor").to("user:alice");
             List<Tuple> tuples = handle.relations("editor").fetch();
 
             assertThat(tuples).hasSize(1);
@@ -223,8 +223,8 @@ class TypedClassesTest {
         void batch() {
             ResourceHandle handle = docFactory.resource("doc-1");
             BatchResult result = handle.batch()
-                    .grant("editor").to("alice")
-                    .grant("viewer").to("bob")
+                    .grant("editor").to("user:alice")
+                    .grant("viewer").to("user:bob")
                     .execute();
 
             assertThat(result.zedToken()).isNotNull();
@@ -235,7 +235,7 @@ class TypedClassesTest {
         @Test
         void expand() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            handle.grant("editor").to("alice");
+            handle.grant("editor").to("user:alice");
             ExpandTree tree = handle.expand("editor");
 
             assertThat(tree).isNotNull();
@@ -251,7 +251,7 @@ class TypedClassesTest {
 
         @Test
         void check_single_permission() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAction action = handle.check(TestPerm.VIEW);
@@ -261,8 +261,8 @@ class TypedClassesTest {
 
         @Test
         void check_multiple_permissions() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-1", "edit", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-1", "edit", "user:alice");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             CheckMatrix matrix = handle.check(TestPerm.VIEW, TestPerm.EDIT).byAll("alice");
@@ -272,7 +272,7 @@ class TypedClassesTest {
 
         @Test
         void check_collection() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAction action = handle.check(List.of(TestPerm.VIEW));
@@ -284,7 +284,7 @@ class TypedClassesTest {
         void grant_typed() {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
             // No schema cache => validation is skipped
-            handle.grant(TestRel.EDITOR).toUser("alice");
+            handle.grant(TestRel.EDITOR).to("user:alice");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
         }
@@ -292,33 +292,33 @@ class TypedClassesTest {
         @Test
         void grant_collection() {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
-            handle.grant(List.of(TestRel.EDITOR)).toUser("alice");
+            handle.grant(List.of(TestRel.EDITOR)).to("user:alice");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
         }
 
         @Test
         void revoke_typed() {
-            docFactory.grant("doc-1", "editor", "alice");
+            docFactory.grant("doc-1", "editor", "user:alice");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
-            handle.revoke(TestRel.EDITOR).fromUser("alice");
+            handle.revoke(TestRel.EDITOR).from("user:alice");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
         }
 
         @Test
         void revoke_collection() {
-            docFactory.grant("doc-1", "editor", "alice");
+            docFactory.grant("doc-1", "editor", "user:alice");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
-            handle.revoke(List.of(TestRel.EDITOR)).fromUser("alice");
+            handle.revoke(List.of(TestRel.EDITOR)).from("user:alice");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
         }
 
         @Test
         void checkAll_with_class() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-1", "edit", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-1", "edit", "user:alice");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAllAction<TestPerm> action = handle.checkAll(TestPerm.class);
@@ -331,7 +331,7 @@ class TypedClassesTest {
 
         @Test
         void checkAll_parameterless_withPermClass() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
             var action = handle.checkAll();
@@ -349,7 +349,7 @@ class TypedClassesTest {
 
         @Test
         void who() {
-            docFactory.grant("doc-1", "view", "alice", "bob");
+            docFactory.grant("doc-1", "view", "user:alice", "user:bob");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedWhoQuery query = handle.who(TestPerm.VIEW);
@@ -375,7 +375,7 @@ class TypedClassesTest {
 
         @Test
         void by_singleId_singlePerm_allowed() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             assertThat(action.by("alice")).isTrue();
@@ -406,23 +406,23 @@ class TypedClassesTest {
 
         @Test
         void by_subjectRef() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            assertThat(action.by(SubjectRef.user("alice"))).isTrue();
+            assertThat(action.by(SubjectRef.of("user", "alice"))).isTrue();
         }
 
         @Test
         void by_subjectRef_multipleIds_throws() {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
 
-            assertThatThrownBy(() -> action.by(SubjectRef.user("alice")))
+            assertThatThrownBy(() -> action.by(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
         void detailedBy_returnsCheckResult() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckResult result = action.detailedBy("alice");
@@ -439,10 +439,10 @@ class TypedClassesTest {
 
         @Test
         void detailedBy_subjectRef() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            CheckResult result = action.detailedBy(SubjectRef.user("alice"));
+            CheckResult result = action.detailedBy(SubjectRef.of("user", "alice"));
             assertThat(result.hasPermission()).isTrue();
         }
 
@@ -450,13 +450,13 @@ class TypedClassesTest {
         void detailedBy_subjectRef_multiplePerms_throws() {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view", "edit"});
 
-            assertThatThrownBy(() -> action.detailedBy(SubjectRef.user("alice")))
+            assertThatThrownBy(() -> action.detailedBy(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
         void withConsistency() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
             action.withConsistency(Consistency.full());
 
@@ -465,7 +465,7 @@ class TypedClassesTest {
 
         @Test
         void withContext() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
             action.withContext(Map.of("ip", "10.0.0.1"));
 
@@ -474,7 +474,7 @@ class TypedClassesTest {
 
         @Test
         void byAll_strings() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckMatrix matrix = action.byAll("alice", "bob");
@@ -484,7 +484,7 @@ class TypedClassesTest {
 
         @Test
         void byAll_collection() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckMatrix matrix = action.byAll(List.of("alice"));
@@ -493,10 +493,10 @@ class TypedClassesTest {
 
         @Test
         void byAll_subjectRefs() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            CheckMatrix matrix = action.byAll(SubjectRef.user("alice"), SubjectRef.user("bob"));
+            CheckMatrix matrix = action.byAll(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
             assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
             assertThat(matrix.allowed("doc-1", "view", "bob")).isFalse();
         }
@@ -519,8 +519,8 @@ class TypedClassesTest {
 
         @Test
         void byAll_multiResource_multiPerm_multiSubject() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-2", "edit", "bob");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-2", "edit", "user:bob");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view", "edit"});
 
             CheckMatrix matrix = action.byAll("alice", "bob");
@@ -531,11 +531,11 @@ class TypedClassesTest {
 
         @Test
         void byAll_singleCell_usesSimplePath() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             // Single id x single perm x single subject -> simple path
-            CheckMatrix matrix = action.byAll(SubjectRef.user("alice"));
+            CheckMatrix matrix = action.byAll(SubjectRef.of("user", "alice"));
             assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
             assertThat(matrix.size()).isEqualTo(1);
         }
@@ -550,8 +550,8 @@ class TypedClassesTest {
 
         @Test
         void by_singleUser() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-1", "edit", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-1", "edit", "user:alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
             EnumMap<TestPerm, Boolean> result = action.by("alice");
@@ -562,10 +562,10 @@ class TypedClassesTest {
 
         @Test
         void by_subjectRef() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
-            EnumMap<TestPerm, Boolean> result = action.by(SubjectRef.user("alice"));
+            EnumMap<TestPerm, Boolean> result = action.by(SubjectRef.of("user", "alice"));
             assertThat(result.get(TestPerm.VIEW)).isTrue();
         }
 
@@ -581,14 +581,14 @@ class TypedClassesTest {
         void by_subjectRef_multipleIds_throws() {
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
 
-            assertThatThrownBy(() -> action.by(SubjectRef.user("alice")))
+            assertThatThrownBy(() -> action.by(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
         void byAll_singleUser() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-2", "edit", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-2", "edit", "user:alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
 
             Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll("alice");
@@ -599,16 +599,16 @@ class TypedClassesTest {
 
         @Test
         void byAll_subjectRef() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
-            Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll(SubjectRef.user("alice"));
+            Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll(SubjectRef.of("user", "alice"));
             assertThat(result.get("doc-1").get(TestPerm.VIEW)).isTrue();
         }
 
         @Test
         void withConsistency_and_withContext() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
             action.withConsistency(Consistency.full());
             action.withContext(Map.of("ip", "10.0.0.1"));
@@ -628,7 +628,7 @@ class TypedClassesTest {
         @Test
         void toUser_single() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.toUser("alice");
+            action.to("user:alice");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
         }
@@ -636,7 +636,7 @@ class TypedClassesTest {
         @Test
         void toUser_multiple() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.toUser("alice", "bob");
+            action.to("user:alice", "user:bob");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
             assertThat(docFactory.check("doc-1", "editor", "bob")).isTrue();
@@ -645,7 +645,7 @@ class TypedClassesTest {
         @Test
         void toUser_collection() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.toUser(List.of("alice", "bob"));
+            action.to("user:alice", "user:bob");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
         }
@@ -653,7 +653,7 @@ class TypedClassesTest {
         @Test
         void toGroupMember() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.VIEWER);
-            action.toGroupMember("eng");
+            action.to("group:eng#member");
 
             var tuples = transport.allTuples();
             assertThat(tuples).hasSize(1);
@@ -666,7 +666,7 @@ class TypedClassesTest {
         @Test
         void toGroupMember_collection() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.VIEWER);
-            action.toGroupMember(List.of("eng", "sales"));
+            action.to("group:eng#member", "group:sales#member");
 
             assertThat(transport.size()).isEqualTo(2);
         }
@@ -674,7 +674,7 @@ class TypedClassesTest {
         @Test
         void toUserAll() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.VIEWER);
-            action.toUserAll();
+            action.to("user:*");
 
             var tuples = transport.allTuples();
             assertThat(tuples).hasSize(1);
@@ -699,7 +699,7 @@ class TypedClassesTest {
         @Test
         void to_subjectRef_collection() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.to(List.of(SubjectRef.user("alice"), SubjectRef.user("bob")));
+            action.to(List.of(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob")));
 
             assertThat(transport.size()).isEqualTo(2);
         }
@@ -721,7 +721,7 @@ class TypedClassesTest {
         @Test
         void toSubjectRefs_strings() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.toSubjectRefs("user:alice", "group:eng#member");
+            action.to("user:alice", "group:eng#member");
 
             assertThat(transport.size()).isEqualTo(2);
         }
@@ -729,7 +729,7 @@ class TypedClassesTest {
         @Test
         void toSubjectRefs_collection() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.toSubjectRefs(List.of("user:alice"));
+            action.to("user:alice");
 
             assertThat(transport.size()).isEqualTo(1);
         }
@@ -737,21 +737,21 @@ class TypedClassesTest {
         @Test
         void toSubjectRefs_null_noop() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.toSubjectRefs((String[]) null);
+            action.to((String[]) null);
             assertThat(transport.size()).isEqualTo(0);
         }
 
         @Test
         void toSubjectRefs_emptyCollection_noop() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.toSubjectRefs(List.of());
+            action.to(List.of());
             assertThat(transport.size()).isEqualTo(0);
         }
 
         @Test
         void multipleIds_multipleRelations() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestRel.EDITOR, TestRel.VIEWER);
-            action.toUser("alice");
+            action.to("user:alice");
 
             // 2 ids x 2 relations x 1 user = 4
             assertThat(transport.size()).isEqualTo(4);
@@ -760,7 +760,7 @@ class TypedClassesTest {
         @Test
         void withCaveat() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.withCaveat("ip_range", Map.of("allowed_cidr", "10.0.0.0/8")).toUser("alice");
+            action.withCaveat("ip_range", Map.of("allowed_cidr", "10.0.0.0/8")).to("user:alice");
 
             assertThat(transport.size()).isEqualTo(1);
         }
@@ -768,7 +768,7 @@ class TypedClassesTest {
         @Test
         void toUser_null_noop() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.toUser((String[]) null);
+            action.to((String[]) null);
             assertThat(transport.size()).isEqualTo(0);
         }
     }
@@ -782,15 +782,15 @@ class TypedClassesTest {
 
         @BeforeEach
         void grantSome() {
-            docFactory.grant("doc-1", "editor", "alice");
-            docFactory.grant("doc-1", "editor", "bob");
-            docFactory.grantToSubjects("doc-1", "viewer", "group:eng#member");
+            docFactory.grant("doc-1", "editor", "user:alice");
+            docFactory.grant("doc-1", "editor", "user:bob");
+            docFactory.grant("doc-1", "viewer", "group:eng#member");
         }
 
         @Test
         void fromUser() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.fromUser("alice");
+            action.from("user:alice");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
             assertThat(docFactory.check("doc-1", "editor", "bob")).isTrue();
@@ -799,7 +799,7 @@ class TypedClassesTest {
         @Test
         void fromUser_collection() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.fromUser(List.of("alice", "bob"));
+            action.from("user:alice", "user:bob");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
             assertThat(docFactory.check("doc-1", "editor", "bob")).isFalse();
@@ -808,7 +808,7 @@ class TypedClassesTest {
         @Test
         void fromGroupMember() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.VIEWER);
-            action.fromGroupMember("eng");
+            action.from("group:eng#member");
 
             assertThat(transport.size()).isEqualTo(2); // editors remain
         }
@@ -816,16 +816,16 @@ class TypedClassesTest {
         @Test
         void fromGroupMember_collection() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.VIEWER);
-            action.fromGroupMember(List.of("eng"));
+            action.from("group:eng#member");
 
             assertThat(transport.size()).isEqualTo(2);
         }
 
         @Test
         void fromUserAll() {
-            docFactory.grantToSubjects("doc-1", "viewer", "user:*");
+            docFactory.grant("doc-1", "viewer", "user:*");
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.VIEWER);
-            action.fromUserAll();
+            action.from("user:*");
 
             // user:* and group:eng#member viewer both revoked; editors remain
             // Actually only user:* is revoked by fromUserAll
@@ -857,7 +857,7 @@ class TypedClassesTest {
         @Test
         void fromSubjectRefs_string() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.fromSubjectRefs("user:alice");
+            action.from("user:alice");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
         }
@@ -865,7 +865,7 @@ class TypedClassesTest {
         @Test
         void fromSubjectRefs_collection() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.fromSubjectRefs(List.of("user:alice"));
+            action.from("user:alice");
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
         }
@@ -873,14 +873,14 @@ class TypedClassesTest {
         @Test
         void fromSubjectRefs_null_noop() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.fromSubjectRefs((String[]) null);
+            action.from((String[]) null);
             assertThat(transport.size()).isEqualTo(3);
         }
 
         @Test
         void fromSubjectRefs_emptyCollection_noop() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.fromSubjectRefs(List.of());
+            action.from(List.of());
             assertThat(transport.size()).isEqualTo(3);
         }
     }
@@ -894,9 +894,9 @@ class TypedClassesTest {
 
         @BeforeEach
         void grantSome() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-1", "view", "bob");
-            docFactory.grant("doc-1", "view", "carol");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-1", "view", "user:bob");
+            docFactory.grant("doc-1", "view", "user:carol");
         }
 
         @Test
@@ -963,15 +963,15 @@ class TypedClassesTest {
 
         @BeforeEach
         void grantSome() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-2", "view", "alice");
-            docFactory.grant("doc-3", "edit", "alice");
-            docFactory.grant("doc-1", "view", "bob");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-2", "view", "user:alice");
+            docFactory.grant("doc-3", "edit", "user:alice");
+            docFactory.grant("doc-1", "view", "user:bob");
         }
 
         @Test
         void can_single() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.can(TestPerm.VIEW);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -979,7 +979,7 @@ class TypedClassesTest {
 
         @Test
         void can_withLimit() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             finder.limit(1);
             List<String> ids = finder.can(TestPerm.VIEW);
 
@@ -988,7 +988,7 @@ class TypedClassesTest {
 
         @Test
         void can_multiple() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(result.get(TestPerm.VIEW)).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -997,21 +997,21 @@ class TypedClassesTest {
 
         @Test
         void can_multiple_empty() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can();
             assertThat(result).isEmpty();
         }
 
         @Test
         void can_multiple_null() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can((TestPerm[]) null);
             assertThat(result).isEmpty();
         }
 
         @Test
         void can_collection() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(List.of(TestPerm.VIEW));
 
             assertThat(result.get(TestPerm.VIEW)).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -1019,14 +1019,14 @@ class TypedClassesTest {
 
         @Test
         void can_collection_empty() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(List.of());
             assertThat(result).isEmpty();
         }
 
         @Test
         void canAny() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAny(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2", "doc-3");
@@ -1034,7 +1034,7 @@ class TypedClassesTest {
 
         @Test
         void canAny_empty() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAny();
             assertThat(ids).isEmpty();
         }
@@ -1043,7 +1043,7 @@ class TypedClassesTest {
         void canAll() {
             // alice has view on doc-1 and doc-2, edit on doc-3
             // Only doc-1 and doc-2 have view; none have both view AND edit
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(ids).isEmpty(); // no doc has both view and edit
@@ -1051,7 +1051,7 @@ class TypedClassesTest {
 
         @Test
         void canAll_singlePerm() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll(TestPerm.VIEW);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -1059,7 +1059,7 @@ class TypedClassesTest {
 
         @Test
         void canAll_empty() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll();
             assertThat(ids).isEmpty();
         }
@@ -1116,7 +1116,7 @@ class TypedClassesTest {
 
         @Test
         void findByUser() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             TypedFinder<TestPerm> finder = entry.findByUser("alice");
             List<String> ids = finder.can(TestPerm.VIEW);
 
@@ -1125,8 +1125,8 @@ class TypedClassesTest {
 
         @Test
         void findBy_subjectRef() {
-            docFactory.grant("doc-1", "view", "alice");
-            TypedFinder<TestPerm> finder = entry.findBy(SubjectRef.user("alice"));
+            docFactory.grant("doc-1", "view", "user:alice");
+            TypedFinder<TestPerm> finder = entry.findBy(SubjectRef.of("user", "alice"));
             List<String> ids = finder.can(TestPerm.VIEW);
 
             assertThat(ids).contains("doc-1");
@@ -1134,8 +1134,8 @@ class TypedClassesTest {
 
         @Test
         void findByUsers() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-2", "view", "bob");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-2", "view", "user:bob");
 
             var multi = entry.findByUsers("alice", "bob");
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
@@ -1146,7 +1146,7 @@ class TypedClassesTest {
 
         @Test
         void findByUsers_collection() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
 
             var multi = entry.findByUsers(List.of("alice"));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
@@ -1156,9 +1156,9 @@ class TypedClassesTest {
 
         @Test
         void findBy_subjectRefs_varargs() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
 
-            var multi = entry.findBy(new SubjectRef[]{SubjectRef.user("alice"), SubjectRef.user("bob")});
+            var multi = entry.findBy(new SubjectRef[]{SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob")});
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("alice")).contains("doc-1");
@@ -1166,9 +1166,9 @@ class TypedClassesTest {
 
         @Test
         void findBy_subjectRefs_collection() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
 
-            var multi = entry.findBy(List.of(SubjectRef.user("alice")));
+            var multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("alice")).contains("doc-1");
@@ -1176,8 +1176,8 @@ class TypedClassesTest {
 
         @Test
         void multiFinder_withLimit() {
-            docFactory.grant("doc-1", "view", "alice");
-            docFactory.grant("doc-2", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
+            docFactory.grant("doc-2", "view", "user:alice");
 
             var multi = entry.findByUsers("alice");
             multi.limit(1);
@@ -1196,15 +1196,15 @@ class TypedClassesTest {
 
         @BeforeEach
         void grantSome() {
-            docFactory.grant("doc-1", "view", "alice");
+            docFactory.grant("doc-1", "view", "user:alice");
             var taskFactory = new ResourceFactory("task", transport, DEFAULT_SUBJECT, SYNC_EXEC);
-            taskFactory.grant("t-1", "complete", "alice");
+            taskFactory.grant("t-1", "complete", "user:alice");
         }
 
         @Test
         void add_stringBased_and_fetch() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add("document", "doc-1", "view", SubjectRef.user("alice"));
+            builder.add("document", "doc-1", "view", SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
             assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
@@ -1213,7 +1213,7 @@ class TypedClassesTest {
         @Test
         void add_permissionNamed() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.user("alice"));
+            builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
             assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
@@ -1231,7 +1231,7 @@ class TypedClassesTest {
         @Test
         void add_resourceType_descriptor() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.user("alice"));
+            builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
             assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
@@ -1269,7 +1269,7 @@ class TypedClassesTest {
         void addAll_cells() {
             var builder = new BatchCheckBuilder(transport);
             builder.addAll(List.of(
-                    BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.user("alice")),
+                    BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice")),
                     BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, "bob")
             ));
 
@@ -1317,13 +1317,13 @@ class TypedClassesTest {
 
         @Test
         void on_string_grant_and_revoke() {
-            docFactory.grant("doc-1", "owner", "alice");
+            docFactory.grant("doc-1", "owner", "user:alice");
 
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             BatchResult result = builder
                     .on("document", "doc-1")
-                        .grant("editor").to("bob")
-                        .revoke("owner").from("alice")
+                        .grant("editor").to("user:bob")
+                        .revoke("owner").from("user:alice")
                     .execute();
 
             assertThat(result.zedToken()).isNotNull();
@@ -1334,26 +1334,26 @@ class TypedClassesTest {
         @Test
         void on_resourceHandle() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on(handle).grant("editor").to("alice").execute();
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on(handle).grant("editor").to("user:alice").execute();
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
         }
 
         @Test
         void on_resourceType() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on(DOC_TYPE, "doc-1").grant("editor").to("alice").execute();
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on(DOC_TYPE, "doc-1").grant("editor").to("user:alice").execute();
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
         }
 
         @Test
         void multipleResources() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder
-                    .on("document", "doc-1").grant("editor").to("alice")
-                    .on("document", "doc-2").grant("viewer").to("bob")
+                    .on("document", "doc-1").grant("editor").to("user:alice")
+                    .on("document", "doc-2").grant("viewer").to("user:bob")
                     .execute();
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
@@ -1362,58 +1362,58 @@ class TypedClassesTest {
 
         @Test
         void grant_toSubjects() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on("document", "doc-1").grant("viewer").toSubjects("group:eng#member").execute();
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on("document", "doc-1").grant("viewer").to("group:eng#member").execute();
 
             assertThat(transport.size()).isEqualTo(1);
         }
 
         @Test
         void grant_typedRelation() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on("document", "doc-1").grant(TestRel.EDITOR).to("alice").execute();
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on("document", "doc-1").grant(TestRel.EDITOR).to("user:alice").execute();
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
         }
 
         @Test
         void revoke_typedRelation() {
-            docFactory.grant("doc-1", "editor", "alice");
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on("document", "doc-1").revoke(TestRel.EDITOR).from("alice").execute();
+            docFactory.grant("doc-1", "editor", "user:alice");
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on("document", "doc-1").revoke(TestRel.EDITOR).from("user:alice").execute();
 
             assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
         }
 
         @Test
         void revoke_fromCollection() {
-            docFactory.grant("doc-1", "editor", "alice");
-            docFactory.grant("doc-1", "editor", "bob");
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on("document", "doc-1").revoke("editor").from(List.of("alice", "bob")).execute();
+            docFactory.grant("doc-1", "editor", "user:alice");
+            docFactory.grant("doc-1", "editor", "user:bob");
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on("document", "doc-1").revoke("editor").from("user:alice", "user:bob").execute();
 
             assertThat(transport.size()).isEqualTo(0);
         }
 
         @Test
         void grant_toCollection() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on("document", "doc-1").grant("editor").to(List.of("alice", "bob")).execute();
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on("document", "doc-1").grant("editor").to("user:alice", "user:bob").execute();
 
             assertThat(transport.size()).isEqualTo(2);
         }
 
         @Test
         void commit_alias() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            BatchResult result = builder.on("document", "doc-1").grant("editor").to("alice").commit();
+            var builder = new CrossResourceBatchBuilder(transport);
+            BatchResult result = builder.on("document", "doc-1").grant("editor").to("user:alice").commit();
 
             assertThat(result.zedToken()).isNotNull();
         }
 
         @Test
         void empty_execute() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             BatchResult result = builder.execute();
 
             assertThat(result.zedToken()).isNull();
@@ -1421,12 +1421,12 @@ class TypedClassesTest {
 
         @Test
         void scope_chaining_on() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             // Test chaining through ResourceScope.on()
             builder
-                    .on("document", "doc-1").grant("editor").to("alice")
-                    .on("document", "doc-2").grant("viewer").to("bob")
-                    .on(DOC_TYPE, "doc-3").grant("owner").to("carol")
+                    .on("document", "doc-1").grant("editor").to("user:alice")
+                    .on("document", "doc-2").grant("viewer").to("user:bob")
+                    .on(DOC_TYPE, "doc-3").grant("owner").to("user:carol")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(3);
@@ -1434,16 +1434,16 @@ class TypedClassesTest {
 
         @Test
         void scope_commit_from_resourceScope() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            BatchResult result = builder.on("document", "doc-1").grant("editor").to("alice").commit();
+            var builder = new CrossResourceBatchBuilder(transport);
+            BatchResult result = builder.on("document", "doc-1").grant("editor").to("user:alice").commit();
 
             assertThat(result.zedToken()).isNotNull();
         }
 
         @Test
         void scope_execute_from_resourceScope() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            BatchResult result = builder.on("document", "doc-1").grant("editor").to("alice").execute();
+            var builder = new CrossResourceBatchBuilder(transport);
+            BatchResult result = builder.on("document", "doc-1").grant("editor").to("user:alice").execute();
 
             assertThat(result.zedToken()).isNotNull();
         }
@@ -1452,9 +1452,9 @@ class TypedClassesTest {
 
         @Test
         void onAll_grant_fansAcrossIds() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2", "doc-3"))
-                    .grant("viewer").to("alice")
+                    .grant("viewer").to("user:alice")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(3);
@@ -1465,9 +1465,9 @@ class TypedClassesTest {
 
         @Test
         void onAll_string_grant() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll("document", List.of("doc-1", "doc-2"))
-                    .grant("editor").to("alice")
+                    .grant("editor").to("user:alice")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(2);
@@ -1475,9 +1475,9 @@ class TypedClassesTest {
 
         @Test
         void onAll_grant_toSubjects() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
-                    .grant("viewer").toSubjects("group:eng#member")
+                    .grant("viewer").to("group:eng#member")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(2);
@@ -1485,9 +1485,9 @@ class TypedClassesTest {
 
         @Test
         void onAll_grant_typedRelation() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
-                    .grant(TestRel.EDITOR).to("alice")
+                    .grant(TestRel.EDITOR).to("user:alice")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(2);
@@ -1495,12 +1495,12 @@ class TypedClassesTest {
 
         @Test
         void onAll_revoke() {
-            docFactory.grant("doc-1", "editor", "alice");
-            docFactory.grant("doc-2", "editor", "alice");
+            docFactory.grant("doc-1", "editor", "user:alice");
+            docFactory.grant("doc-2", "editor", "user:alice");
 
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
-                    .revoke("editor").from("alice")
+                    .revoke("editor").from("user:alice")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(0);
@@ -1508,12 +1508,12 @@ class TypedClassesTest {
 
         @Test
         void onAll_revoke_typedRelation() {
-            docFactory.grant("doc-1", "editor", "alice");
-            docFactory.grant("doc-2", "editor", "alice");
+            docFactory.grant("doc-1", "editor", "user:alice");
+            docFactory.grant("doc-2", "editor", "user:alice");
 
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
-                    .revoke(TestRel.EDITOR).from("alice")
+                    .revoke(TestRel.EDITOR).from("user:alice")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(0);
@@ -1521,12 +1521,12 @@ class TypedClassesTest {
 
         @Test
         void onAll_revoke_fromCollection() {
-            docFactory.grant("doc-1", "editor", "alice");
-            docFactory.grant("doc-1", "editor", "bob");
+            docFactory.grant("doc-1", "editor", "user:alice");
+            docFactory.grant("doc-1", "editor", "user:bob");
 
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1"))
-                    .revoke("editor").from(List.of("alice", "bob"))
+                    .revoke("editor").from("user:alice", "user:bob")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(0);
@@ -1534,10 +1534,10 @@ class TypedClassesTest {
 
         @Test
         void onAll_chaining_to_on() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
-                    .grant("viewer").to("alice")
-                    .on(DOC_TYPE, "doc-3").grant("editor").to("bob")
+                    .grant("viewer").to("user:alice")
+                    .on(DOC_TYPE, "doc-3").grant("editor").to("user:bob")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(3);
@@ -1545,11 +1545,11 @@ class TypedClassesTest {
 
         @Test
         void onAll_chaining_to_onAll() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1"))
-                    .grant("viewer").to("alice")
+                    .grant("viewer").to("user:alice")
                     .onAll(DOC_TYPE, List.of("doc-2"))
-                    .grant("editor").to("bob")
+                    .grant("editor").to("user:bob")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(2);
@@ -1557,10 +1557,10 @@ class TypedClassesTest {
 
         @Test
         void multiScope_on_string() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
+            var builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1"))
-                    .grant("viewer").to("alice")
-                    .on("document", "doc-2").grant("editor").to("bob")
+                    .grant("viewer").to("user:alice")
+                    .on("document", "doc-2").grant("editor").to("user:bob")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(2);
@@ -1568,20 +1568,20 @@ class TypedClassesTest {
 
         @Test
         void multiScope_execute_and_commit() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            BatchResult r1 = builder.onAll(DOC_TYPE, List.of("doc-1")).grant("viewer").to("alice").execute();
+            var builder = new CrossResourceBatchBuilder(transport);
+            BatchResult r1 = builder.onAll(DOC_TYPE, List.of("doc-1")).grant("viewer").to("user:alice").execute();
             assertThat(r1.zedToken()).isNotNull();
 
-            var builder2 = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            BatchResult r2 = builder2.onAll(DOC_TYPE, List.of("doc-2")).grant("viewer").to("bob").commit();
+            var builder2 = new CrossResourceBatchBuilder(transport);
+            BatchResult r2 = builder2.onAll(DOC_TYPE, List.of("doc-2")).grant("viewer").to("user:bob").commit();
             assertThat(r2.zedToken()).isNotNull();
         }
 
         @Test
         void scope_onAll_from_resourceScope() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on("document", "doc-1").grant("editor").to("alice")
-                    .onAll(DOC_TYPE, List.of("doc-2", "doc-3")).grant("viewer").to("bob")
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on("document", "doc-1").grant("editor").to("user:alice")
+                    .onAll(DOC_TYPE, List.of("doc-2", "doc-3")).grant("viewer").to("user:bob")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(3);
@@ -1589,9 +1589,9 @@ class TypedClassesTest {
 
         @Test
         void scope_onAll_string_from_resourceScope() {
-            var builder = new CrossResourceBatchBuilder(transport, DEFAULT_SUBJECT);
-            builder.on("document", "doc-1").grant("editor").to("alice")
-                    .onAll("document", List.of("doc-2")).grant("viewer").to("bob")
+            var builder = new CrossResourceBatchBuilder(transport);
+            builder.on("document", "doc-1").grant("editor").to("user:alice")
+                    .onAll("document", List.of("doc-2")).grant("viewer").to("user:bob")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(2);

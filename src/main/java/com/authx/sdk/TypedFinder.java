@@ -18,7 +18,7 @@ import java.util.Set;
  * static method on the resource type's constants class.
  *
  * <pre>
- * List&lt;String&gt; myDocs = Document.findBy(client, SubjectRef.user("alice"))
+ * List&lt;String&gt; myDocs = Document.findBy(client, SubjectRef.of("user", "alice"))
  *     .limit(100)
  *     .can(Document.Perm.VIEW);
  * </pre>

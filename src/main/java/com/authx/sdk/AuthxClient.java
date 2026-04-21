@@ -156,7 +156,7 @@ public class AuthxClient implements AutoCloseable {
 
     /** Start a cross-resource batch builder for atomic operations across multiple resources. */
     public CrossResourceBatchBuilder batch() {
-        return new CrossResourceBatchBuilder(transport, config.defaultSubjectType());
+        return new CrossResourceBatchBuilder(transport);
     }
 
     /**
