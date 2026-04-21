@@ -140,6 +140,6 @@ public class ResourceHandle {
 
     /** Start a batch builder to combine multiple grant/revoke operations into a single RPC. */
     public BatchBuilder batch() {
-        return new BatchBuilder(resourceType, resourceId, transport);
+        return new BatchBuilder(resourceType, resourceId, transport, schemaCache);
     }
 }
