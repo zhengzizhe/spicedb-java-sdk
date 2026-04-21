@@ -78,7 +78,7 @@ public class ResourceHandle {
 
     /** Start a revoke action to remove specific relations from subjects. */
     public RevokeAction revoke(String... relations) {
-        return new RevokeAction(resourceType, resourceId, transport, relations);
+        return new RevokeAction(resourceType, resourceId, transport, relations, schemaCache);
     }
 
     /** Revoke all relationships on this resource using filter-based delete. */
