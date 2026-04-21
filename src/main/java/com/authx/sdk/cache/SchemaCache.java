@@ -99,4 +99,64 @@ public class SchemaCache {
     public Set<String> getCaveatNames() { return caveats.get().keySet(); }
 
     public @Nullable CaveatDef getCaveat(String name) { return caveats.get().get(name); }
+
+    /**
+     * Validate that {@code subjectRef} is an allowed subject for
+     * {@code resourceType.relation}.
+     *
+     * <p><b>Fail-open</b> when the schema is not loaded, or when the
+     * {@code resourceType} / {@code relation} is not in the cache, or when
+     * the relation has no declared subject types. Those cases are left to
+     * other validators (e.g. {@link com.authx.sdk.builtin.ValidationInterceptor})
+     * so the same condition is not double-rejected with a confusing error.
+     *
+     * <p><b>Fail-fast</b> with {@link com.authx.sdk.exception.InvalidRelationException}
+     * when the subject reference does not parse as {@code type:id} / {@code type:id#relation}
+     * / {@code type:*}, or when the parsed subject does not match any
+     * declared {@link SubjectType} on the relation. The error message
+     * lists every allowed shape so the caller can correct the call site
+     * without reading the schema by hand.
+     */
+    public void validateSubject(String resourceType, String relation, String subjectRef) {
+        var d = defs.get().get(resourceType);
+        if (d == null) return;                                  // fail-open
+        var allowed = d.relationSubjectTypes().get(relation);
+        if (allowed == null || allowed.isEmpty()) return;       // fail-open
+
+        int colon = subjectRef.indexOf(':');
+        if (colon < 0) {
+            throw new com.authx.sdk.exception.InvalidRelationException(
+                    "Invalid subject reference \"" + subjectRef
+                            + "\": expected \"type:id\" or \"type:id#relation\" form");
+        }
+        String type = subjectRef.substring(0, colon);
+        String idPart = subjectRef.substring(colon + 1);
+        String subRelation = "";
+        int hash = idPart.indexOf('#');
+        if (hash >= 0) {
+            subRelation = idPart.substring(hash + 1);
+            idPart = idPart.substring(0, hash);
+        }
+        boolean isWildcard = "*".equals(idPart);
+
+        for (SubjectType st : allowed) {
+            if (!st.type().equals(type)) continue;
+            if (isWildcard) {
+                if (st.wildcard()) return;
+                continue;
+            }
+            if (st.wildcard()) continue;
+            String declared = st.relation() == null ? "" : st.relation();
+            if (declared.equals(subRelation)) return;
+        }
+
+        String shapes = allowed.stream()
+                .map(SubjectType::toRef)
+                .distinct()
+                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
+        throw new com.authx.sdk.exception.InvalidRelationException(
+                resourceType + "." + relation + " does not accept subject \""
+                        + subjectRef + "\". Allowed subject types: " + shapes
+                        + ". Check your schema, or use a different relation.");
+    }
 }
