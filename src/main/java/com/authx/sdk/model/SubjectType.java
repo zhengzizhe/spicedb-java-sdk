@@ -2,7 +2,9 @@ package com.authx.sdk.model;
 
 import org.jspecify.annotations.Nullable;
 
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Declared subject shape allowed on a relation, as reported by
@@ -66,5 +68,35 @@ public record SubjectType(String type, @Nullable String relation, boolean wildca
         if (wildcard) return type + ":*";
         if (relation != null && !relation.isEmpty()) return type + "#" + relation;
         return type;
+    }
+
+    /**
+     * If exactly one non-wildcard {@link SubjectType} is declared in the
+     * given list, return it. Otherwise return empty. Wildcards are
+     * ignored for the uniqueness count — a relation that allows
+     * {@code user | user:*} infers as {@code user}. Wildcard-only
+     * declarations return empty (you cannot infer a concrete id from
+     * {@code user:*}).
+     *
+     * <p>Used by {@code GrantAction.to(String id)} (and the revoke
+     * mirror) to decide whether a bare id can be wrapped into a
+     * canonical {@code type:id} subject without forcing the caller to
+     * name the type. Multi-type relations — the majority in practice —
+     * return empty, and the caller is expected to fall back to
+     * {@code to(ResourceType, id)}.
+     *
+     * @param candidates declared subject shapes for a relation; safe to
+     *                   pass an empty list (returns empty).
+     * @return the sole non-wildcard subject type, or {@link Optional#empty()}
+     *         when zero, multiple, or only-wildcard are declared.
+     */
+    public static Optional<SubjectType> inferSingleType(List<SubjectType> candidates) {
+        SubjectType sole = null;
+        for (SubjectType st : candidates) {
+            if (st.wildcard) continue;
+            if (sole != null) return Optional.empty();
+            sole = st;
+        }
+        return Optional.ofNullable(sole);
     }
 }

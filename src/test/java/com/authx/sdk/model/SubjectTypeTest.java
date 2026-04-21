@@ -2,6 +2,9 @@ package com.authx.sdk.model;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -62,5 +65,51 @@ class SubjectTypeTest {
         for (String ref : new String[]{"user", "group#member", "user:*", "department#all_members"}) {
             assertThat(SubjectType.parse(ref).toRef()).isEqualTo(ref);
         }
+    }
+
+    // ---- inferSingleType ----
+
+    @Test
+    void inferSingleType_returnsItWhenOnlyOneNonWildcard() {
+        Optional<SubjectType> inferred = SubjectType.inferSingleType(
+                List.of(SubjectType.of("folder")));
+        assertThat(inferred).contains(SubjectType.of("folder"));
+    }
+
+    @Test
+    void inferSingleType_returnsEmptyAmongMany() {
+        Optional<SubjectType> inferred = SubjectType.inferSingleType(List.of(
+                SubjectType.of("user"),
+                SubjectType.of("group", "member")));
+        assertThat(inferred).isEmpty();
+    }
+
+    @Test
+    void inferSingleType_wildcardSiblingIgnored() {
+        // Common pattern: viewer = user | user:* — one non-wildcard, inferable.
+        Optional<SubjectType> inferred = SubjectType.inferSingleType(List.of(
+                SubjectType.of("user"),
+                SubjectType.wildcard("user")));
+        assertThat(inferred).contains(SubjectType.of("user"));
+    }
+
+    @Test
+    void inferSingleType_pureWildcardReturnsEmpty() {
+        Optional<SubjectType> inferred = SubjectType.inferSingleType(
+                List.of(SubjectType.wildcard("user")));
+        assertThat(inferred).isEmpty();
+    }
+
+    @Test
+    void inferSingleType_emptyListReturnsEmpty() {
+        assertThat(SubjectType.inferSingleType(List.of())).isEmpty();
+    }
+
+    @Test
+    void inferSingleType_subjectRelationKeepsIt() {
+        // group#member is still a "single type" — the returned value retains #member.
+        Optional<SubjectType> inferred = SubjectType.inferSingleType(
+                List.of(SubjectType.of("group", "member")));
+        assertThat(inferred).contains(SubjectType.of("group", "member"));
     }
 }
