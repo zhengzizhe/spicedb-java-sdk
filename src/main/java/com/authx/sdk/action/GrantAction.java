@@ -1,8 +1,10 @@
 package com.authx.sdk.action;
 
+import com.authx.sdk.ResourceType;
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.CaveatRef;
 import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
@@ -194,6 +196,21 @@ public class GrantAction {
                 .map(SubjectType::toRef)
                 .distinct()
                 .collect(Collectors.joining(", ", "[", "]"));
+    }
+
+    /**
+     * Typed subject form: {@code grant(...).to(User.TYPE, "alice")} —
+     * constructs the canonical {@code "user:alice"} ref and routes through
+     * {@link #to(String...)} so the schema validation runs as normal.
+     *
+     * <p>Use this when the schema has multiple declared subject types on
+     * the relation (so bare-id inference refuses to guess) and you want
+     * to be explicit about which one you mean without hand-crafting a
+     * canonical string.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    GrantResult to(ResourceType<R, P> subjectType, String id) {
+        return to(new String[]{subjectType.name() + ":" + id});
     }
 
     /**

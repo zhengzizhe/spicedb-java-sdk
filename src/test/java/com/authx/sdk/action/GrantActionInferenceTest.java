@@ -1,6 +1,9 @@
 package com.authx.sdk.action;
 
+import com.authx.sdk.ResourceType;
 import com.authx.sdk.cache.SchemaCache;
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.InMemoryTransport;
 import org.junit.jupiter.api.Test;
@@ -115,5 +118,53 @@ class GrantActionInferenceTest {
         assertThatThrownBy(() -> a.to("x-1"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("differing declared types");
+    }
+
+    // ---- Typed overloads: to(ResourceType, id) ----
+
+    /** Stand-in relation enum for typed tests. */
+    enum R implements Relation.Named {
+        NOOP("noop");
+        private final String v;
+        R(String v) { this.v = v; }
+        @Override public String relationName() { return v; }
+    }
+
+    /** Stand-in permission enum for typed tests. */
+    enum P implements Permission.Named {
+        NOOP("noop");
+        private final String v;
+        P(String v) { this.v = v; }
+        @Override public String permissionName() { return v; }
+    }
+
+    @Test
+    void typedOverloadBuildsCanonicalRef() {
+        // Schema declares viewer accepts only user — the typed overload
+        // should pass the subject validator because it constructs user:alice.
+        var cache = new SchemaCache();
+        cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
+                Set.of("viewer"), Set.of(),
+                Map.of("viewer", List.of(SubjectType.of("user"))))));
+        var a = new GrantAction("document", "d-1", new InMemoryTransport(),
+                new String[]{"viewer"}, cache);
+        var userType = ResourceType.of("user", R.class, P.class);
+        a.to(userType, "alice"); // no throw
+    }
+
+    @Test
+    void typedOverloadStillValidatesAgainstSchema() {
+        // Schema declares viewer accepts only user — passing folder via the
+        // typed overload must fail-fast (routes through writeRelationships
+        // which runs schemaCache.validateSubject).
+        var cache = new SchemaCache();
+        cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
+                Set.of("viewer"), Set.of(),
+                Map.of("viewer", List.of(SubjectType.of("user"))))));
+        var a = new GrantAction("document", "d-1", new InMemoryTransport(),
+                new String[]{"viewer"}, cache);
+        var folderType = ResourceType.of("folder", R.class, P.class);
+        assertThatThrownBy(() -> a.to(folderType, "f-1"))
+                .isInstanceOf(com.authx.sdk.exception.InvalidRelationException.class);
     }
 }
