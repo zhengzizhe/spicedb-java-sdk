@@ -22,6 +22,18 @@ src/main/java/com/authx/sdk/
 ├── ResourceFactory/Handle/Type.java   # Resource navigation (typed chain uses these)
 ├── Typed*.java               # Typed fluent chain (tightly coupled with
 │                              #   ResourceFactory package-private internals — stays here)
+├── SchemaClient.java         # Public wrapper over schema metadata (resource
+│                              #   types, relations, permissions, caveats, per-
+│                              #   relation subject types). Exposed as
+│                              #   AuthxClient.schema().
+├── AuthxCodegen.java         # Static generator — emits typed schema classes
+│                              #   (Document.Rel, Document.Perm, Document.TYPE,
+│                              #   IpAllowlist.ref(), Caveats, ResourceTypes)
+│                              #   from a live client's schema.
+├── cache/                     # Metadata caches only. SchemaCache (definitions +
+│                              #   caveats + per-relation subject types) used by
+│                              #   codegen and runtime fail-fast subject
+│                              #   validation. NO decision cache (ADR 2026-04-18).
 ├── internal/                  # Internal plumbing: SdkConfig, SdkInfrastructure,
 │                              #   SdkObservability. Not public API — do not depend on.
 ├── action/                    # Untyped fluent chain actions: Grant/Revoke/Check/
