@@ -34,7 +34,7 @@ Traceability tags `[SR:req-N]` reference requirement IDs in `spec.md`. Tasks mar
 - [X] T012 [SR:req-8] Wire nullable `SchemaCache` through `ResourceFactory` → `ResourceHandle` → `GrantAction`; call `validateSubject` per `(relation, subjectRef)` pair before `writeRelationships`; keep legacy ctor delegating with `null` — `src/main/java/com/authx/sdk/ResourceFactory.java`, `src/main/java/com/authx/sdk/ResourceHandle.java`, `src/main/java/com/authx/sdk/action/GrantAction.java`, `src/test/java/com/authx/sdk/action/GrantActionValidateSubjectTest.java`
 - [X] T013 [P] [SR:req-8] Same validation plumbing on `RevokeAction` — `src/main/java/com/authx/sdk/action/RevokeAction.java`, `src/test/java/com/authx/sdk/action/RevokeActionValidateSubjectTest.java`
 - [X] T014 [P] [SR:req-8] Same validation plumbing on `BatchGrantAction` + `BatchRevokeAction` — `src/main/java/com/authx/sdk/action/BatchGrantAction.java`, `src/main/java/com/authx/sdk/action/BatchRevokeAction.java`, `src/test/java/com/authx/sdk/action/BatchActionsValidateSubjectTest.java`
-- [ ] T015 [P] [SR:req-9] Typed-chain inheritance smoke test — `TypedGrantAction` / `TypedRevokeAction` call sites still get validated through underlying `GrantAction` / `RevokeAction` — `src/test/java/com/authx/sdk/TypedChainValidationSmokeTest.java`
+- [X] T015 [P] [SR:req-9] Typed-chain inheritance smoke test — `TypedGrantAction` / `TypedRevokeAction` call sites still get validated through underlying `GrantAction` / `RevokeAction` — `src/test/java/com/authx/sdk/TypedChainValidationSmokeTest.java`
 
 **Phase 2 gate:** `./gradlew test -x :test-app:test -x :cluster-test:test` green. PR-B opens against merged PR-A.
 
