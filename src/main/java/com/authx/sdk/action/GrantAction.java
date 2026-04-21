@@ -6,6 +6,7 @@ import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
+import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
@@ -19,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Fluent action for granting one or more relations on a resource to subjects.
@@ -107,6 +109,91 @@ public class GrantAction {
     /** Collection overload of {@link #to(SubjectRef...)}. */
     public GrantResult to(Collection<SubjectRef> subjects) {
         return writeRelationships(List.copyOf(subjects));
+    }
+
+    /**
+     * Bare-id form with single-type inference. Resolves as follows:
+     *
+     * <ol>
+     *   <li>If {@code id} contains {@code ':'} it is treated as canonical
+     *       and forwarded to {@link #to(String...)}.</li>
+     *   <li>Otherwise — and only when a {@link SchemaCache} is attached —
+     *       the SDK inspects each target relation's declared subject
+     *       types. When <b>every</b> relation declares exactly one
+     *       non-wildcard type (wildcards are ignored) <i>and</i> all
+     *       relations agree on the same type, the id is wrapped as
+     *       {@code inferredType:id}.</li>
+     *   <li>If inference is ambiguous (multi-type relation) the call
+     *       throws with a message naming the allowed shapes and
+     *       pointing at {@link #to(com.authx.sdk.ResourceType, String)}.</li>
+     *   <li>If the relation is wildcard-only the call throws pointing
+     *       at {@link #toWildcard(com.authx.sdk.ResourceType)}.</li>
+     *   <li>When no cache is attached (e.g. {@code loadSchemaOnStart(false)})
+     *       the bare id falls through to the canonical-parse path and is
+     *       rejected by {@link SubjectRef#parse(String)} for lack of a
+     *       type prefix.</li>
+     * </ol>
+     *
+     * <p>This overload is the "sugar" path for business code that knows
+     * the relation locks the subject type. It is intentionally <b>not</b>
+     * a fallback — inference refuses to guess a default subject type so
+     * call sites stay honest.
+     *
+     * @throws IllegalArgumentException when inference is impossible
+     *         (ambiguous / wildcard-only) or when the id is a bare string
+     *         with no schema to infer from.
+     */
+    public GrantResult to(String id) {
+        // 1) Canonical form → hand to the varargs path directly.
+        if (id.indexOf(':') >= 0) {
+            return to(new String[]{id});
+        }
+        // 2) No schema → nothing to infer from. Delegate to the
+        //    canonical path which will reject the bare id.
+        if (schemaCache == null) {
+            return to(new String[]{id});
+        }
+        SubjectType inferred = null;
+        for (String rel : relations) {
+            List<SubjectType> sts = schemaCache.getSubjectTypes(resourceType, rel);
+            if (sts.isEmpty()) {
+                // No declared shape — nothing to infer from. Fall through
+                // to canonical parse (which will throw for a bare id).
+                return to(new String[]{id});
+            }
+            if (sts.stream().allMatch(SubjectType::wildcard)) {
+                throw new IllegalArgumentException(
+                        resourceType + "." + rel + " only accepts wildcards (" + shapes(sts)
+                                + "); use toWildcard(ResourceType) instead");
+            }
+            var single = SubjectType.inferSingleType(sts);
+            if (single.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "ambiguous subject type for " + resourceType + "." + rel
+                                + " (allowed: " + shapes(sts)
+                                + "); use to(ResourceType, id) instead");
+            }
+            if (inferred == null) {
+                inferred = single.get();
+            } else if (!inferred.type().equals(single.get().type())) {
+                throw new IllegalArgumentException(
+                        "cannot infer single subject type across " + relations.length
+                                + " relations with differing declared types ("
+                                + inferred.type() + " vs " + single.get().type()
+                                + "); use to(ResourceType, id) instead");
+            }
+        }
+        // inferred is guaranteed non-null here (relations is non-empty and
+        // the `sts.isEmpty()` / empty early-returns would have fired above).
+        String canonical = inferred.type() + ":" + id;
+        return to(new String[]{canonical});
+    }
+
+    private static String shapes(List<SubjectType> sts) {
+        return sts.stream()
+                .map(SubjectType::toRef)
+                .distinct()
+                .collect(Collectors.joining(", ", "[", "]"));
     }
 
     /**
