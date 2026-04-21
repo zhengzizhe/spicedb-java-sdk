@@ -1,6 +1,7 @@
 package com.authx.testapp;
 
 import com.authx.sdk.AuthxClient;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.trace.LogCtx;
 import com.authx.sdk.trace.LogFields;
 import com.authx.sdk.trace.Slf4jMdcBridge;
@@ -20,6 +21,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.Closeable;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -41,6 +44,11 @@ public class LogDemoController {
     private static final Logger LOG = LoggerFactory.getLogger("com.authx.sdk.demo");
 
     private final AuthxClient client;
+    private final Executor asyncExec = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "logdemo-listener");
+        t.setDaemon(true);
+        return t;
+    });
 
     public LogDemoController(AuthxClient client) {
         this.client = client;
@@ -141,6 +149,59 @@ public class LogDemoController {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    // ---- /logdemo/listener — Write Listener API (sync + async + async-throws) ----
+
+    /**
+     * Demonstrates the three flavors of {@link com.authx.sdk.action.GrantCompletion}
+     * listener:
+     *
+     * <ol>
+     *   <li><b>Sync</b> {@code .listener(cb)} — cb runs on the caller thread
+     *       immediately after grant, before {@code listener(...)} returns.</li>
+     *   <li><b>Async success</b> {@code .listenerAsync(cb, exec)} — cb runs
+     *       on a separate executor (here the {@code logdemo-listener} thread).</li>
+     *   <li><b>Async failure</b> {@code .listenerAsync(badCb, exec)} — cb
+     *       throws, SDK catches it in {@code GrantCompletionImpl} and logs
+     *       a single WARN ("Async grant listener threw ..."). The caller is
+     *       NOT notified of the failure — this is the SG-1 zero-throw
+     *       guarantee for listener bugs.</li>
+     * </ol>
+     */
+    @GetMapping("/listener")
+    public Map<String, Object> listenerDemo(@RequestParam(defaultValue = "gary") String user,
+                                              @RequestParam(defaultValue = "doc-42") String doc) {
+        var completion = client.on(Document.TYPE)
+                .select(doc)
+                .grant(Document.Rel.VIEWER)
+                .to(SubjectRef.of("user", user));
+
+        LOG.info(LogCtx.fmt("grant returned — zedToken={0}, count={1}",
+                completion.result().zedToken(), completion.result().count()));
+
+        // (1) sync listener — runs inline
+        completion.listener(r ->
+                LOG.info(LogCtx.fmt("SYNC  listener fired on thread={0}, token={1}",
+                        Thread.currentThread().getName(), r.zedToken())));
+
+        // (2) async listener (succeeds) — runs on logdemo-listener thread
+        completion.listenerAsync(r ->
+                LOG.info(LogCtx.fmt("ASYNC listener fired on thread={0}, token={1}",
+                        Thread.currentThread().getName(), r.zedToken())),
+                asyncExec);
+
+        // (3) async listener (throws) — SDK swallows + logs WARN, caller unaffected
+        completion.listenerAsync(r -> {
+            throw new RuntimeException("simulated listener bug");
+        }, asyncExec);
+
+        return Map.of(
+                "user", user,
+                "doc", doc,
+                "zedToken", String.valueOf(completion.result().zedToken()),
+                "count", completion.result().count(),
+                "status", "grant committed; 3 listeners fired (1 sync, 2 async — 1 throws)");
     }
 
     // ---- /logdemo/all — one hit triggers every level for a side-by-side view ----

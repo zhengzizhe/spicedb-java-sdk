@@ -2,7 +2,8 @@
 <configuration>
 
     <!--
-      AuthX SDK logging demo.
+      AuthX SDK logging demo — SDK-only output.
+
       Pattern shows, for every line:
         - timestamp + level
         - [trace=...] prefix (added by LogCtx when a span is active)
@@ -10,6 +11,9 @@
         - logger name (short)
         - message body
       MDC placeholders use "-" as default so lines without SDK context still align.
+
+      Framework noise (Spring Boot, Tomcat, gRPC, Netty) is routed to /dev/null
+      via root=OFF. Only loggers under com.authx.sdk reach the console.
     -->
     <property name="PATTERN"
               value="%d{HH:mm:ss.SSS} %-5level [%X{authx.action:--} %X{authx.resourceType:--}:%X{authx.resourceId:--} subj=%X{authx.subject:--} consistency=%X{authx.consistency:--}] %logger{30} - %msg%n"/>
@@ -20,16 +24,15 @@
         </encoder>
     </appender>
 
-    <!-- SDK own lines at DEBUG so retry / bulk-item DEBUG lines show up in the demo -->
-    <logger name="com.authx.sdk" level="DEBUG"/>
-
-    <!-- Keep framework noise reasonable -->
-    <logger name="org.springframework" level="INFO"/>
-    <logger name="io.grpc" level="INFO"/>
-    <logger name="io.netty" level="INFO"/>
-
-    <root level="INFO">
+    <!--
+      Only SDK lines reach the console.
+      additivity="false" prevents them bubbling up to root (which is OFF anyway).
+    -->
+    <logger name="com.authx.sdk" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE"/>
-    </root>
+    </logger>
+
+    <!-- Everything else silenced. -->
+    <root level="OFF"/>
 
 </configuration>
