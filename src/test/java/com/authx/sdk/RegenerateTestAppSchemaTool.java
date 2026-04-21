@@ -96,6 +96,19 @@ class RegenerateTestAppSchemaTool {
                                 "link_viewer", wildcardOnly,
                                 "link_editor", wildcardOnly)))));
 
+        // Caveats — mirrors deploy/schema.zed's `caveat ip_allowlist`.
+        // Parameter types use SpiceDB type names (list<string>, string, ...)
+        // which AuthxCodegen maps to Java (List<String>, String, ...) in the
+        // generated IpAllowlist.java doc strings.
+        cache.updateCaveats(Map.of(
+                "ip_allowlist", new SchemaCache.CaveatDef(
+                        "ip_allowlist",
+                        new java.util.LinkedHashMap<>(Map.of(
+                                "cidrs", "list<string>",
+                                "client_ip", "string")),
+                        "cidrs.exists(c, client_ip.startsWith(c))",
+                        "IP allowlist — grants only fire when client_ip matches one of cidrs.")));
+
         AuthxCodegen.generate(new SchemaClient(cache),
                 "test-app/src/main/java", "com.authx.testapp.schema");
     }
