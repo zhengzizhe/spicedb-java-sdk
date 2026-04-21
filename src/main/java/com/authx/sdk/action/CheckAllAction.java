@@ -110,4 +110,11 @@ public class CheckAllAction {
         for (int i = 0; i < subjectRefs.length; i++) parsed[i] = SubjectRef.parse(subjectRefs[i]);
         return byAll(parsed);
     }
+
+    /** {@link Iterable} overload of {@link #byAll(String...)}. */
+    public PermissionMatrix byAll(Iterable<String> subjectRefs) {
+        List<SubjectRef> parsed = new ArrayList<>();
+        for (String ref : subjectRefs) parsed.add(SubjectRef.parse(ref));
+        return byAll(parsed);
+    }
 }

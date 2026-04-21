@@ -101,14 +101,28 @@ public class GrantAction {
      * There is no default subject type — {@code "alice"} is rejected;
      * write {@code "user:alice"}.
      *
-     * <p>For a {@code Collection<String>}, convert first:
-     * {@code .to(list.toArray(String[]::new))} or
-     * {@code .to(list.stream().map(SubjectRef::parse).toList())}.
-     *
      * @throws IllegalArgumentException if any string is not a valid subject ref
      */
     public GrantResult to(String... subjectRefs) {
         return writeRelationships(Arrays.stream(subjectRefs).map(SubjectRef::parse).toList());
+    }
+
+    /**
+     * {@link Iterable} overload of {@link #to(String...)} — accepts
+     * {@code List<String>} / {@code Set<String>} / any other
+     * {@code Iterable<String>} without the caller having to convert to
+     * an array.
+     *
+     * <p>Uses {@code Iterable<String>} (not {@code Collection<String>})
+     * so this overload's erasure does not clash with
+     * {@link #to(Collection)} — see javadoc there.
+     *
+     * @throws IllegalArgumentException if any string is not a valid subject ref
+     */
+    public GrantResult to(Iterable<String> subjectRefs) {
+        List<SubjectRef> subjects = new ArrayList<>();
+        for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
+        return writeRelationships(subjects);
     }
 
     private GrantResult writeRelationships(List<SubjectRef> subjects) {

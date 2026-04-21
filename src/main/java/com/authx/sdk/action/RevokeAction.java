@@ -55,6 +55,17 @@ public class RevokeAction {
         return deleteRelationships(Arrays.stream(subjectRefs).map(SubjectRef::parse).toList());
     }
 
+    /**
+     * {@link Iterable} overload of {@link #from(String...)} — accepts
+     * {@code List<String>} / {@code Set<String>} / any other
+     * {@code Iterable<String>} without array conversion at the call site.
+     */
+    public RevokeResult from(Iterable<String> subjectRefs) {
+        List<SubjectRef> subjects = new ArrayList<>();
+        for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
+        return deleteRelationships(subjects);
+    }
+
     private RevokeResult deleteRelationships(List<SubjectRef> subjects) {
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         List<RelationshipUpdate> updates = new ArrayList<>();

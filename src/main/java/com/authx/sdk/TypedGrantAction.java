@@ -150,6 +150,14 @@ public class TypedGrantAction<R extends Relation.Named> {
         return write(subjectRefs);
     }
 
+    /** {@link Iterable} overload of {@link #to(String...)}. */
+    public GrantCompletion to(Iterable<String> subjectRefs) {
+        java.util.List<String> list = new java.util.ArrayList<>();
+        for (String ref : subjectRefs) list.add(ref);
+        if (list.isEmpty()) return GrantCompletion.of(new GrantResult(null, 0));
+        return write(list.toArray(String[]::new));
+    }
+
     // ════════════════════════════════════════════════════════════════
     //  Internals
     // ════════════════════════════════════════════════════════════════

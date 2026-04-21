@@ -103,7 +103,7 @@ public class DocumentSharingService {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(relFor(level))
-                .to(userIds.stream().map(u -> "user:" + u).toArray(String[]::new));
+                .to(userIds.stream().map(u -> "user:" + u).toList());
     }
 
     /** 分享给一个组 (group#member subject). */
@@ -232,7 +232,7 @@ public class DocumentSharingService {
         client.on(Document.TYPE)
                 .select(docId)
                 .revoke(Document.Rel.VIEWER, Document.Rel.COMMENTER, Document.Rel.EDITOR)
-                .from(userIds.stream().map(u -> "user:" + u).toArray(String[]::new));
+                .from(userIds.stream().map(u -> "user:" + u).toList());
     }
 
     // ─── internal ────────────────────────────────────────────────

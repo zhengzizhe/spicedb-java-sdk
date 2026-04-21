@@ -744,7 +744,7 @@ class TypedClassesTest {
         @Test
         void toSubjectRefs_emptyCollection_noop() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.to(List.of());
+            action.to(java.util.List.<SubjectRef>of());
             assertThat(transport.size()).isEqualTo(0);
         }
 
@@ -880,7 +880,7 @@ class TypedClassesTest {
         @Test
         void fromSubjectRefs_emptyCollection_noop() {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.from(List.of());
+            action.from(java.util.List.<SubjectRef>of());
             assertThat(transport.size()).isEqualTo(3);
         }
     }

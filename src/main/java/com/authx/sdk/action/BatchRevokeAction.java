@@ -53,4 +53,16 @@ public class BatchRevokeAction {
         }
         return batch;
     }
+
+    /** {@link Iterable} overload of {@link #from(String...)}. */
+    public BatchBuilder from(Iterable<String> subjectRefs) {
+        ResourceRef resource = ResourceRef.of(resourceType, resourceId);
+        for (String rel : relations) {
+            for (String ref : subjectRefs) {
+                batch.addUpdate(new RelationshipUpdate(
+                        Operation.DELETE, resource, Relation.of(rel), SubjectRef.parse(ref)));
+            }
+        }
+        return batch;
+    }
 }
