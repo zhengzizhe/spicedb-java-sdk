@@ -229,6 +229,35 @@ public class GrantAction {
     }
 
     /**
+     * Wildcard form for relations that accept {@code type:*}:
+     * {@code grant(...).toWildcard(User.TYPE)} constructs {@code "user:*"}.
+     *
+     * <p>Still routes through {@link #to(String...)} so schema validation
+     * fires — if the relation does not declare a matching {@code user:*}
+     * allowance, the call throws.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    GrantResult toWildcard(ResourceType<R, P> subjectType) {
+        return to(new String[]{subjectType.name() + ":*"});
+    }
+
+    /**
+     * Typed batch form: same subject type, many ids. Useful for bulk
+     * onboarding flows where you hold a {@code Collection<String>} of
+     * user ids. Each id is wrapped as {@code "type:id"} before being
+     * routed through {@link #to(String...)} for validation.
+     *
+     * <p>Accepts {@link Iterable} so any {@code List} / {@code Set} /
+     * {@code Collection} of ids works without conversion.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    GrantResult to(ResourceType<R, P> subjectType, Iterable<String> ids) {
+        List<String> refs = new ArrayList<>();
+        for (String id : ids) refs.add(subjectType.name() + ":" + id);
+        return to(refs.toArray(String[]::new));
+    }
+
+    /**
      * Grant the relation(s) to the given canonical subject strings and
      * execute the write.
      *

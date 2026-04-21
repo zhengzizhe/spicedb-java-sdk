@@ -197,4 +197,59 @@ class GrantActionInferenceTest {
         assertThatThrownBy(() -> a.to(groupType, "eng", "owner"))
                 .isInstanceOf(com.authx.sdk.exception.InvalidRelationException.class);
     }
+
+    @Test
+    void toWildcardBuildsStarRef() {
+        // Schema declares viewer accepts user:* — toWildcard(user) writes
+        // "user:*" (which passes wildcard validation).
+        var cache = new SchemaCache();
+        cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
+                Set.of("viewer"), Set.of(),
+                Map.of("viewer", List.of(SubjectType.wildcard("user"))))));
+        var a = new GrantAction("document", "d-1", new InMemoryTransport(),
+                new String[]{"viewer"}, cache);
+        var userType = ResourceType.of("user", R.class, P.class);
+        a.toWildcard(userType); // no throw
+    }
+
+    @Test
+    void toWildcardRejectedWhenSchemaDisallowsWildcard() {
+        // Schema declares only typed user (no user:*) — wildcard must fail.
+        var cache = new SchemaCache();
+        cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
+                Set.of("viewer"), Set.of(),
+                Map.of("viewer", List.of(SubjectType.of("user"))))));
+        var a = new GrantAction("document", "d-1", new InMemoryTransport(),
+                new String[]{"viewer"}, cache);
+        var userType = ResourceType.of("user", R.class, P.class);
+        assertThatThrownBy(() -> a.toWildcard(userType))
+                .isInstanceOf(com.authx.sdk.exception.InvalidRelationException.class);
+    }
+
+    @Test
+    void iterableTypedOverloadWritesN() {
+        // Batch typed subjects: same subject type, many ids.
+        var cache = new SchemaCache();
+        cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
+                Set.of("viewer"), Set.of(),
+                Map.of("viewer", List.of(SubjectType.of("user"))))));
+        var a = new GrantAction("document", "d-1", new InMemoryTransport(),
+                new String[]{"viewer"}, cache);
+        var userType = ResourceType.of("user", R.class, P.class);
+        var result = a.to(userType, List.of("alice", "bob", "carol"));
+        assertThat(result.count()).isEqualTo(3);
+    }
+
+    @Test
+    void iterableTypedOverloadEmptyYieldsZero() {
+        var cache = new SchemaCache();
+        cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
+                Set.of("viewer"), Set.of(),
+                Map.of("viewer", List.of(SubjectType.of("user"))))));
+        var a = new GrantAction("document", "d-1", new InMemoryTransport(),
+                new String[]{"viewer"}, cache);
+        var userType = ResourceType.of("user", R.class, P.class);
+        var result = a.to(userType, List.<String>of());
+        assertThat(result.count()).isZero();
+    }
 }
