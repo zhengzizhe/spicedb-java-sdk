@@ -1,10 +1,13 @@
 package com.authx.sdk.action;
 
+import com.authx.sdk.ResourceType;
 import com.authx.sdk.cache.SchemaCache;
+import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.RevokeResult;
 import com.authx.sdk.model.SubjectRef;
+import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
@@ -15,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Fluent action for revoking specific relations from subjects.
@@ -60,6 +64,100 @@ public class RevokeAction {
     /** Collection overload of {@link #from(SubjectRef...)}. */
     public RevokeResult from(Collection<SubjectRef> subjects) {
         return deleteRelationships(List.copyOf(subjects));
+    }
+
+    /**
+     * Bare-id form with single-type inference. Mirrors
+     * {@link GrantAction#to(String)}:
+     *
+     * <ul>
+     *   <li>{@code id} contains {@code ':'} → canonical, forwarded to {@link #from(String...)}</li>
+     *   <li>single non-wildcard subject type declared → wrap as {@code type:id}</li>
+     *   <li>multi-type / cross-relation disagreement → throw pointing at
+     *       {@link #from(ResourceType, String)}</li>
+     *   <li>wildcard-only → throw pointing at {@link #fromWildcard(ResourceType)}</li>
+     *   <li>no cache / no declared shapes → fall through to canonical parse
+     *       which rejects bare ids</li>
+     * </ul>
+     *
+     * @throws IllegalArgumentException when inference is impossible or the
+     *         id is a bare string with no schema to infer from.
+     */
+    public RevokeResult from(String id) {
+        if (id.indexOf(':') >= 0) {
+            return from(new String[]{id});
+        }
+        if (schemaCache == null) {
+            return from(new String[]{id});
+        }
+        SubjectType inferred = null;
+        for (String rel : relations) {
+            List<SubjectType> sts = schemaCache.getSubjectTypes(resourceType, rel);
+            if (sts.isEmpty()) {
+                return from(new String[]{id});
+            }
+            if (sts.stream().allMatch(SubjectType::wildcard)) {
+                throw new IllegalArgumentException(
+                        resourceType + "." + rel + " only accepts wildcards (" + shapes(sts)
+                                + "); use fromWildcard(ResourceType) instead");
+            }
+            var single = SubjectType.inferSingleType(sts);
+            if (single.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "ambiguous subject type for " + resourceType + "." + rel
+                                + " (allowed: " + shapes(sts)
+                                + "); use from(ResourceType, id) instead");
+            }
+            if (inferred == null) {
+                inferred = single.get();
+            } else if (!inferred.type().equals(single.get().type())) {
+                throw new IllegalArgumentException(
+                        "cannot infer single subject type across " + relations.length
+                                + " relations with differing declared types ("
+                                + inferred.type() + " vs " + single.get().type()
+                                + "); use from(ResourceType, id) instead");
+            }
+        }
+        return from(new String[]{inferred.type() + ":" + id});
+    }
+
+    private static String shapes(List<SubjectType> sts) {
+        return sts.stream()
+                .map(SubjectType::toRef)
+                .distinct()
+                .collect(Collectors.joining(", ", "[", "]"));
+    }
+
+    /** Typed subject form: {@code revoke(...).from(User.TYPE, "alice")}. */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    RevokeResult from(ResourceType<R, P> subjectType, String id) {
+        return from(new String[]{subjectType.name() + ":" + id});
+    }
+
+    /**
+     * Typed subject with sub-relation:
+     * {@code revoke(...).from(Group.TYPE, "eng", "member")}.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    RevokeResult from(ResourceType<R, P> subjectType, String id, String subjectRelation) {
+        return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+    }
+
+    /** Wildcard typed form: {@code revoke(...).fromWildcard(User.TYPE)}. */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    RevokeResult fromWildcard(ResourceType<R, P> subjectType) {
+        return from(new String[]{subjectType.name() + ":*"});
+    }
+
+    /**
+     * Typed batch form: same subject type, many ids. Mirrors
+     * {@link GrantAction#to(ResourceType, Iterable)}.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    RevokeResult from(ResourceType<R, P> subjectType, Iterable<String> ids) {
+        List<String> refs = new ArrayList<>();
+        for (String id : ids) refs.add(subjectType.name() + ":" + id);
+        return from(refs.toArray(String[]::new));
     }
 
     /**
