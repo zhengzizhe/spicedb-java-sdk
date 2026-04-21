@@ -81,6 +81,27 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
         return new TypedFinder<>(factory, SubjectRef.parse(subjectRef));
     }
 
+    /**
+     * Typed subject form: {@code client.on(Document.TYPE).findBy(User.TYPE, "alice")}.
+     * Constructs the canonical subject ref before building the finder.
+     */
+    public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
+    TypedFinder<P> findBy(ResourceType<SR, SP> subjectType, String id) {
+        return findBy(subjectType.name() + ":" + id);
+    }
+
+    /**
+     * Typed batch subject form:
+     * {@code client.on(Document.TYPE).findBy(User.TYPE, List.of("alice", "bob"))}.
+     * Wraps each id as {@code type:id} and dispatches as a multi-subject lookup.
+     */
+    public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
+    MultiFinder<R, P> findBy(ResourceType<SR, SP> subjectType, Iterable<String> ids) {
+        java.util.List<String> refs = new java.util.ArrayList<>();
+        for (String id : ids) refs.add(subjectType.name() + ":" + id);
+        return findBy(refs);
+    }
+
     // ────────────────────────────────────────────────────────────────
     //  Multi-subject finder — terminal runs one lookupResources per subject
     // ────────────────────────────────────────────────────────────────

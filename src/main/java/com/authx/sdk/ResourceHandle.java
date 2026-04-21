@@ -129,6 +129,17 @@ public class ResourceHandle {
         return new WhoBuilder(resourceType, resourceId, transport, subjectType, asyncExecutor);
     }
 
+    /**
+     * Typed version of {@link #who(String)} — takes a {@link ResourceType}
+     * descriptor (e.g. {@code User.TYPE}) so business code can avoid
+     * hand-writing the type name string.
+     */
+    public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,
+            P extends Enum<P> & Permission.Named>
+    WhoBuilder who(ResourceType<R, P> subjectType) {
+        return who(subjectType.name());
+    }
+
     // ---- Relations ----
 
     /** Read relationships on this resource, optionally filtered by relation names. */
