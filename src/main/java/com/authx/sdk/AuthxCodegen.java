@@ -73,7 +73,11 @@ public final class AuthxCodegen {
         for (String type : types) {
             Set<String> relations = schema.relationsOf(type);
             Set<String> permissions = schema.permissionsOf(type);
-            if (relations.isEmpty() && permissions.isEmpty()) continue;
+            // Emit a class for every declared type, even subject-only ones
+            // such as {@code user} (no relations / no permissions). These
+            // still need a {@code TYPE} descriptor so business code can
+            // pass {@code User.TYPE} to the typed subject overloads on
+            // Grant/Revoke/Check/Lookup.
 
             var relSTs = schema.allSubjectTypes(type);
             String file = emitTypeClass(type, relations, permissions, relSTs, packageName);
