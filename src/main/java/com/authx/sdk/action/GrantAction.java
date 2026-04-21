@@ -1,5 +1,6 @@
 package com.authx.sdk.action;
 
+import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.CaveatRef;
 import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.Relation;
@@ -8,6 +9,8 @@ import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
+
+import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -37,16 +40,30 @@ public class GrantAction {
     private final String resourceId;
     private final SdkTransport transport;
     private final String[] relations;
+    private final @Nullable SchemaCache schemaCache;
     private Instant expiresAt;
     private CaveatRef caveat;
 
     /** Internal — use {@link com.authx.sdk.ResourceHandle} entry points. */
     public GrantAction(String resourceType, String resourceId, SdkTransport transport,
                        String[] relations) {
+        this(resourceType, resourceId, transport, relations, null);
+    }
+
+    /**
+     * Internal — constructor used by {@link com.authx.sdk.ResourceHandle} when
+     * schema-aware subject validation is available. When {@code schemaCache}
+     * is {@code null} or empty, validation is skipped (fail-open) — the
+     * action behaves exactly like the 4-arg constructor and the wire call
+     * proceeds unchanged.
+     */
+    public GrantAction(String resourceType, String resourceId, SdkTransport transport,
+                       String[] relations, @Nullable SchemaCache schemaCache) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
         this.relations = relations;
+        this.schemaCache = schemaCache;
     }
 
     /** Set expiration time for the granted relationships. */
@@ -126,6 +143,16 @@ public class GrantAction {
     }
 
     private GrantResult writeRelationships(List<SubjectRef> subjects) {
+        // Schema-aware subject validation — fail-fast before the RPC so
+        // the caller sees a descriptive error, not a gRPC INVALID_ARGUMENT
+        // with just the offending relation name.
+        if (schemaCache != null) {
+            for (String rel : relations) {
+                for (SubjectRef sub : subjects) {
+                    schemaCache.validateSubject(resourceType, rel, sub.toRefString());
+                }
+            }
+        }
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         List<RelationshipUpdate> updates = new ArrayList<>();
         for (String rel : relations) {

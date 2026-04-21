@@ -332,7 +332,11 @@ public class AuthxClientBuilder {
             }
             var schemaClient = new SchemaClient(schemaCache);
 
-            var client = new AuthxClient(transport, infraObj, observabilityObj, configObj, probe, schemaClient);
+            // Hand the cache to AuthxClient so ResourceFactory/Handle/GrantAction
+            // can consume it for runtime subject-type validation. The
+            // SchemaClient public accessor wraps the same instance.
+            var client = new AuthxClient(transport, infraObj, observabilityObj, configObj, probe,
+                    schemaClient, schemaCache);
 
             if (registerShutdownHook) {
                 var hook = new Thread(client::close, "authx-sdk-shutdown");

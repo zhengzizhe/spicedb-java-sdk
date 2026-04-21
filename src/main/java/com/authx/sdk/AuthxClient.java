@@ -1,5 +1,6 @@
 package com.authx.sdk;
 
+import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.event.DefaultTypedEventBus;
 import com.authx.sdk.event.SdkTypedEvent;
 import com.authx.sdk.event.TypedEventBus;
@@ -12,6 +13,8 @@ import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.spi.HealthProbe;
 import com.authx.sdk.transport.InMemoryTransport;
 import com.authx.sdk.transport.SdkTransport;
+
+import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -36,20 +39,21 @@ public class AuthxClient implements AutoCloseable {
     private final SdkConfig config;
     private final HealthProbe healthProbe;
     private final SchemaClient schemaClient;
+    private final @Nullable SchemaCache schemaCache;
     private final ConcurrentHashMap<String, ResourceFactory> factories = new ConcurrentHashMap<>();
 
     /**
      * Legacy constructor — delegates with a null-backed {@link SchemaClient}
      * so existing callers (and the {@link #inMemory()} factory below) do not
-     * need to be updated atomically. The builder uses the 6-arg form to
-     * pass a populated {@code SchemaClient}.
+     * need to be updated atomically. The builder uses the 7-arg form to
+     * pass a populated {@code SchemaClient} and the cache it wraps.
      */
     AuthxClient(SdkTransport transport,
                    SdkInfrastructure infra,
                    SdkObservability observability,
                    SdkConfig config,
                    HealthProbe healthProbe) {
-        this(transport, infra, observability, config, healthProbe, null);
+        this(transport, infra, observability, config, healthProbe, null, null);
     }
 
     AuthxClient(SdkTransport transport,
@@ -58,6 +62,16 @@ public class AuthxClient implements AutoCloseable {
                    SdkConfig config,
                    HealthProbe healthProbe,
                    SchemaClient schemaClient) {
+        this(transport, infra, observability, config, healthProbe, schemaClient, null);
+    }
+
+    AuthxClient(SdkTransport transport,
+                   SdkInfrastructure infra,
+                   SdkObservability observability,
+                   SdkConfig config,
+                   HealthProbe healthProbe,
+                   @Nullable SchemaClient schemaClient,
+                   @Nullable SchemaCache schemaCache) {
         this.transport = Objects.requireNonNull(transport);
         this.infra = Objects.requireNonNull(infra);
         this.observability = Objects.requireNonNull(observability);
@@ -65,6 +79,10 @@ public class AuthxClient implements AutoCloseable {
         this.healthProbe = Objects.requireNonNull(healthProbe, "healthProbe");
         // Always non-null at the accessor — callers don't need a null check.
         this.schemaClient = schemaClient != null ? schemaClient : new SchemaClient(null);
+        // Nullable — only wired when the builder populated it via ReflectSchema.
+        // Factories pass this to ResourceHandle → GrantAction for runtime
+        // subject-type validation. When null, validation is a no-op (fail-open).
+        this.schemaCache = schemaCache;
     }
 
     /** Create a new builder for configuring and constructing an {@link AuthxClient}. */
@@ -104,7 +122,7 @@ public class AuthxClient implements AutoCloseable {
      */
     public ResourceFactory on(String resourceType) {
         return factories.computeIfAbsent(resourceType, type ->
-                new ResourceFactory(type, transport, infra.asyncExecutor()));
+                new ResourceFactory(type, transport, infra.asyncExecutor(), schemaCache));
     }
 
     /**
@@ -162,7 +180,7 @@ public class AuthxClient implements AutoCloseable {
 
     /** Create a one-off resource handle for the given type and id. */
     public ResourceHandle resource(String type, String id) {
-        return new ResourceHandle(type, id, transport, infra.asyncExecutor());
+        return new ResourceHandle(type, id, transport, infra.asyncExecutor(), schemaCache);
     }
 
     /** Start a cross-resource lookup query (find all resources a subject can access). */

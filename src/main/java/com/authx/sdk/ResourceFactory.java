@@ -1,9 +1,12 @@
 package com.authx.sdk;
 
+import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.RevokeResult;
 import com.authx.sdk.transport.SdkTransport;
+
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -40,6 +43,7 @@ public class ResourceFactory {
     private volatile String resourceType;
     private volatile SdkTransport transport;
     private volatile Executor asyncExecutor = Runnable::run;
+    private volatile @Nullable SchemaCache schemaCache;
 
     protected ResourceFactory() {}
 
@@ -54,6 +58,14 @@ public class ResourceFactory {
         this.asyncExecutor = asyncExecutor;
     }
 
+    ResourceFactory(String resourceType, SdkTransport transport, Executor asyncExecutor,
+                    @Nullable SchemaCache schemaCache) {
+        this.resourceType = resourceType;
+        this.transport = transport;
+        this.asyncExecutor = asyncExecutor;
+        this.schemaCache = schemaCache;
+    }
+
     void init(String resourceType, SdkTransport transport) {
         this.resourceType = resourceType;
         this.transport = transport;
@@ -63,6 +75,14 @@ public class ResourceFactory {
         this.resourceType = resourceType;
         this.transport = transport;
         this.asyncExecutor = asyncExecutor;
+    }
+
+    void init(String resourceType, SdkTransport transport, Executor asyncExecutor,
+              @Nullable SchemaCache schemaCache) {
+        this.resourceType = resourceType;
+        this.transport = transport;
+        this.asyncExecutor = asyncExecutor;
+        this.schemaCache = schemaCache;
     }
 
     /** Package-private accessor for the transport chain, used by typed action classes. */
@@ -75,7 +95,7 @@ public class ResourceFactory {
 
     /** Get a handle for advanced operations: batch, expand, who, relations. */
     public ResourceHandle resource(String id) {
-        return new ResourceHandle(resourceType, id, transport, asyncExecutor);
+        return new ResourceHandle(resourceType, id, transport, asyncExecutor, schemaCache);
     }
 
     /** Reverse lookup: find all resources of this type a subject can access. */
