@@ -91,6 +91,13 @@ public class ResourceFactory {
     /** Package-private accessor for the async executor used by typed action classes. */
     Executor asyncExecutor() { return asyncExecutor; }
 
+    /**
+     * Package-private accessor for the schema cache (may be {@code null}).
+     * Used by typed action classes that need schema-aware subject inference
+     * (e.g. {@link TypedGrantAction#to(String)} bare-id single-type inference).
+     */
+    @Nullable SchemaCache schemaCache() { return schemaCache; }
+
     // ---- Entry points ----
 
     /** Get a handle for advanced operations: batch, expand, who, relations. */

@@ -1,15 +1,21 @@
 package com.authx.sdk;
 
 import com.authx.sdk.action.GrantCompletion;
+import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.CaveatRef;
 import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectRef;
+import com.authx.sdk.model.SubjectType;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Typed grant action — grants one or more relations on one or more resources
@@ -137,6 +143,113 @@ public class TypedGrantAction<R extends Relation.Named> {
     /** Collection overload of {@link #to(SubjectRef...)}. */
     public GrantCompletion to(Collection<SubjectRef> subjects) {
         return to(subjects.toArray(SubjectRef[]::new));
+    }
+
+    /**
+     * Bare-id form with single-type inference. Mirrors
+     * {@link com.authx.sdk.action.GrantAction#to(String)}.
+     *
+     * <p>When the target relation(s) declare a single non-wildcard subject
+     * type (e.g. {@code document.folder} only accepts {@code folder}), a
+     * bare id is wrapped into {@code type:id} without the caller having
+     * to name the type. For multi-type relations — the majority in
+     * practice — inference refuses to guess and throws pointing at
+     * {@link #to(ResourceType, String)}.
+     *
+     * @throws IllegalArgumentException when inference is impossible
+     *         (ambiguous / wildcard-only) or when the id is bare and no
+     *         schema is attached.
+     */
+    public GrantCompletion to(String id) {
+        if (id.indexOf(':') >= 0) {
+            return to(new String[]{id});
+        }
+        SchemaCache cache = factory.schemaCache();
+        if (cache == null) {
+            return to(new String[]{id});
+        }
+        String resourceType = factory.resourceType();
+        SubjectType inferred = null;
+        for (R rel : relations) {
+            String relName = rel.relationName();
+            List<SubjectType> sts = cache.getSubjectTypes(resourceType, relName);
+            if (sts.isEmpty()) {
+                return to(new String[]{id});
+            }
+            if (sts.stream().allMatch(SubjectType::wildcard)) {
+                throw new IllegalArgumentException(
+                        resourceType + "." + relName + " only accepts wildcards ("
+                                + shapes(sts) + "); use toWildcard(ResourceType) instead");
+            }
+            var single = SubjectType.inferSingleType(sts);
+            if (single.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "ambiguous subject type for " + resourceType + "." + relName
+                                + " (allowed: " + shapes(sts)
+                                + "); use to(ResourceType, id) instead");
+            }
+            if (inferred == null) {
+                inferred = single.get();
+            } else if (!inferred.type().equals(single.get().type())) {
+                throw new IllegalArgumentException(
+                        "cannot infer single subject type across " + relations.length
+                                + " relations with differing declared types ("
+                                + inferred.type() + " vs " + single.get().type()
+                                + "); use to(ResourceType, id) instead");
+            }
+        }
+        return to(new String[]{inferred.type() + ":" + id});
+    }
+
+    private static String shapes(List<SubjectType> sts) {
+        return sts.stream()
+                .map(SubjectType::toRef)
+                .distinct()
+                .collect(Collectors.joining(", ", "[", "]"));
+    }
+
+    /**
+     * Typed subject form: {@code grant(...).to(User.TYPE, "alice")} —
+     * constructs the canonical {@code "user:alice"} ref and routes through
+     * {@link #to(String...)} so the per-relation validation on the
+     * underlying {@link com.authx.sdk.action.GrantAction} still runs.
+     */
+    public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
+    GrantCompletion to(ResourceType<R2, P2> subjectType, String id) {
+        return to(new String[]{subjectType.name() + ":" + id});
+    }
+
+    /**
+     * Typed subject with a sub-relation:
+     * {@code grant(...).to(Group.TYPE, "eng", "member")} constructs
+     * {@code "group:eng#member"}.
+     */
+    public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
+    GrantCompletion to(ResourceType<R2, P2> subjectType, String id, String subjectRelation) {
+        return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+    }
+
+    /**
+     * Wildcard form: {@code grant(...).toWildcard(User.TYPE)} constructs
+     * {@code "user:*"}. Still routes through {@link #to(String...)} so
+     * schema validation fires — if the relation does not declare a
+     * matching {@code user:*} allowance, the call throws.
+     */
+    public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
+    GrantCompletion toWildcard(ResourceType<R2, P2> subjectType) {
+        return to(new String[]{subjectType.name() + ":*"});
+    }
+
+    /**
+     * Typed batch: same subject type, many ids. Each id is wrapped as
+     * {@code "type:id"} before being routed through {@link #to(String...)}
+     * for schema validation.
+     */
+    public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
+    GrantCompletion to(ResourceType<R2, P2> subjectType, Iterable<String> ids) {
+        List<String> refs = new ArrayList<>();
+        for (String id : ids) refs.add(subjectType.name() + ":" + id);
+        return to(refs.toArray(String[]::new));
     }
 
     /**

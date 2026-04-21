@@ -98,6 +98,72 @@ class IterableOverloadCoverageTest {
                 "fromWildcard", ResourceType.class)).isTrue();
     }
 
+    // ---- Typed chain mirrors (TypedGrantAction / TypedRevokeAction) ----
+    // The typed chain is what business code enters via
+    //   client.on(ResourceType).select(...).grant(Rel)
+    // so every user-facing typed overload on the untyped action classes
+    // must also exist here, or the typed chain goes stale.
+
+    @Test
+    void typedGrantActionHasTypedTo() {
+        assertThat(methodExists(TypedGrantAction.class,
+                "to", ResourceType.class, String.class)).isTrue();
+    }
+
+    @Test
+    void typedGrantActionHasTypedToSubRelation() {
+        assertThat(methodExists(TypedGrantAction.class,
+                "to", ResourceType.class, String.class, String.class)).isTrue();
+    }
+
+    @Test
+    void typedGrantActionHasTypedToWildcard() {
+        assertThat(methodExists(TypedGrantAction.class,
+                "toWildcard", ResourceType.class)).isTrue();
+    }
+
+    @Test
+    void typedGrantActionHasTypedIterableTo() {
+        assertThat(methodExists(TypedGrantAction.class,
+                "to", ResourceType.class, Iterable.class)).isTrue();
+    }
+
+    @Test
+    void typedGrantActionHasBareIdTo() {
+        assertThat(methodExists(TypedGrantAction.class,
+                "to", String.class)).isTrue();
+    }
+
+    @Test
+    void typedRevokeActionHasTypedFrom() {
+        assertThat(methodExists(TypedRevokeAction.class,
+                "from", ResourceType.class, String.class)).isTrue();
+    }
+
+    @Test
+    void typedRevokeActionHasTypedFromSubRelation() {
+        assertThat(methodExists(TypedRevokeAction.class,
+                "from", ResourceType.class, String.class, String.class)).isTrue();
+    }
+
+    @Test
+    void typedRevokeActionHasTypedFromWildcard() {
+        assertThat(methodExists(TypedRevokeAction.class,
+                "fromWildcard", ResourceType.class)).isTrue();
+    }
+
+    @Test
+    void typedRevokeActionHasTypedIterableFrom() {
+        assertThat(methodExists(TypedRevokeAction.class,
+                "from", ResourceType.class, Iterable.class)).isTrue();
+    }
+
+    @Test
+    void typedRevokeActionHasBareIdFrom() {
+        assertThat(methodExists(TypedRevokeAction.class,
+                "from", String.class)).isTrue();
+    }
+
     private boolean methodExists(Class<?> c, String name, Class<?>... paramTypes) {
         for (Method m : c.getMethods()) {
             if (!m.getName().equals(name)) continue;
