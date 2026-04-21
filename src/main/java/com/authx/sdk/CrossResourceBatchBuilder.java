@@ -29,12 +29,10 @@ import java.util.List;
 public class CrossResourceBatchBuilder {
 
     private final SdkTransport transport;
-    private final String defaultSubjectType;
     private final List<RelationshipUpdate> updates = new ArrayList<>();
 
-    CrossResourceBatchBuilder(SdkTransport transport, String defaultSubjectType) {
+    CrossResourceBatchBuilder(SdkTransport transport) {
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
     }
 
     /** Target a specific resource for the next operations. */
@@ -191,40 +189,24 @@ public class CrossResourceBatchBuilder {
             this.relations = relations;
         }
 
-        /** Grant the relation(s) to the given user ids. */
-        public ResourceScope to(String... userIds) {
-            return to(Arrays.asList(userIds));
-        }
-
-        /** Grant the relation(s) to the given user ids. */
-        public ResourceScope to(Collection<String> userIds) {
+        /** Grant the relation(s) to the given {@link SubjectRef subjects}. */
+        public ResourceScope to(SubjectRef... subjects) {
             ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
             for (String rel : relations) {
-                for (String uid : userIds) {
+                for (SubjectRef sub : subjects) {
                     scope.batch.addUpdate(new RelationshipUpdate(
-                            Operation.TOUCH,
-                            resource,
-                            Relation.of(rel),
-                            SubjectRef.of(scope.batch.defaultSubjectType, uid, null)));
+                            Operation.TOUCH, resource, Relation.of(rel), sub));
                 }
             }
             return scope;
         }
 
-        /** Grant the relation(s) to the given subject refs. */
-        public ResourceScope toSubjects(String... subjectRefs) {
-            ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
-            for (String rel : relations) {
-                for (String ref : subjectRefs) {
-                    SubjectRef parsed = SubjectRef.parse(ref);
-                    scope.batch.addUpdate(new RelationshipUpdate(
-                            Operation.TOUCH,
-                            resource,
-                            Relation.of(rel),
-                            parsed));
-                }
-            }
-            return scope;
+        /** Grant the relation(s) to the given canonical subject strings
+         *  ({@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}). */
+        public ResourceScope to(String... subjectRefs) {
+            SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
+            for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
+            return to(subjects);
         }
     }
 
@@ -290,38 +272,25 @@ public class CrossResourceBatchBuilder {
             this.relations = relations;
         }
 
-        public MultiResourceScope to(String... userIds) {
-            return to(Arrays.asList(userIds));
-        }
-
-        public MultiResourceScope to(Collection<String> userIds) {
+        /** Grant the relation(s) to the given {@link SubjectRef subjects}, fanned across all resource ids. */
+        public MultiResourceScope to(SubjectRef... subjects) {
             for (String id : scope.resourceIds) {
                 ResourceRef resource = ResourceRef.of(scope.resourceType, id);
                 for (String rel : relations) {
-                    for (String uid : userIds) {
+                    for (SubjectRef sub : subjects) {
                         scope.batch.addUpdate(new RelationshipUpdate(
-                                Operation.TOUCH,
-                                resource,
-                                Relation.of(rel),
-                                SubjectRef.of(scope.batch.defaultSubjectType, uid, null)));
+                                Operation.TOUCH, resource, Relation.of(rel), sub));
                     }
                 }
             }
             return scope;
         }
 
-        public MultiResourceScope toSubjects(String... subjectRefs) {
-            for (String id : scope.resourceIds) {
-                ResourceRef resource = ResourceRef.of(scope.resourceType, id);
-                for (String rel : relations) {
-                    for (String ref : subjectRefs) {
-                        SubjectRef parsed = SubjectRef.parse(ref);
-                        scope.batch.addUpdate(new RelationshipUpdate(
-                                Operation.TOUCH, resource, Relation.of(rel), parsed));
-                    }
-                }
-            }
-            return scope;
+        /** Grant the relation(s) to the given canonical subject strings, fanned across all resource ids. */
+        public MultiResourceScope to(String... subjectRefs) {
+            SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
+            for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
+            return to(subjects);
         }
     }
 
@@ -334,24 +303,25 @@ public class CrossResourceBatchBuilder {
             this.relations = relations;
         }
 
-        public MultiResourceScope from(String... userIds) {
-            return from(Arrays.asList(userIds));
-        }
-
-        public MultiResourceScope from(Collection<String> userIds) {
+        /** Revoke the relation(s) from the given {@link SubjectRef subjects}, fanned across all resource ids. */
+        public MultiResourceScope from(SubjectRef... subjects) {
             for (String id : scope.resourceIds) {
                 ResourceRef resource = ResourceRef.of(scope.resourceType, id);
                 for (String rel : relations) {
-                    for (String uid : userIds) {
+                    for (SubjectRef sub : subjects) {
                         scope.batch.addUpdate(new RelationshipUpdate(
-                                Operation.DELETE,
-                                resource,
-                                Relation.of(rel),
-                                SubjectRef.of(scope.batch.defaultSubjectType, uid, null)));
+                                Operation.DELETE, resource, Relation.of(rel), sub));
                     }
                 }
             }
             return scope;
+        }
+
+        /** Revoke the relation(s) from the given canonical subject strings, fanned across all resource ids. */
+        public MultiResourceScope from(String... subjectRefs) {
+            SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
+            for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
+            return from(subjects);
         }
     }
 
@@ -365,24 +335,23 @@ public class CrossResourceBatchBuilder {
             this.relations = relations;
         }
 
-        /** Revoke the relation(s) from the given user ids. */
-        public ResourceScope from(String... userIds) {
-            return from(Arrays.asList(userIds));
-        }
-
-        /** Revoke the relation(s) from the given user ids. */
-        public ResourceScope from(Collection<String> userIds) {
+        /** Revoke the relation(s) from the given {@link SubjectRef subjects}. */
+        public ResourceScope from(SubjectRef... subjects) {
             ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
             for (String rel : relations) {
-                for (String uid : userIds) {
+                for (SubjectRef sub : subjects) {
                     scope.batch.addUpdate(new RelationshipUpdate(
-                            Operation.DELETE,
-                            resource,
-                            Relation.of(rel),
-                            SubjectRef.of(scope.batch.defaultSubjectType, uid, null)));
+                            Operation.DELETE, resource, Relation.of(rel), sub));
                 }
             }
             return scope;
+        }
+
+        /** Revoke the relation(s) from the given canonical subject strings. */
+        public ResourceScope from(String... subjectRefs) {
+            SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
+            for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
+            return from(subjects);
         }
     }
 }

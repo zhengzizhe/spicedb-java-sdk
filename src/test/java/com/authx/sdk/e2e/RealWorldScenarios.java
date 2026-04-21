@@ -189,7 +189,7 @@ public class RealWorldScenarios {
 
         // 给整个部门授权（通过 group#member 引用）
         client.resource("document", "arch-design")
-                .grant("viewer").toSubjects("group:engineering#member");
+                .grant("viewer").to("group:engineering#member");
 
         System.out.println("  arch-design 的 viewer subjects: " +
                 client.resource("document", "arch-design").relations("viewer").fetchSubjectIds());

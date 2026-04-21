@@ -19,23 +19,33 @@ import java.util.Map;
 
 /**
  * Fluent action for granting one or more relations on a resource to subjects.
+ *
+ * <h2>Subject input forms</h2>
+ *
+ * <ul>
+ *   <li>{@link #to(SubjectRef...)} — programmatic subjects (from variables,
+ *       typed identifiers, or {@link SubjectRef#of(String, String)})</li>
+ *   <li>{@link #to(String...)} — canonical subject strings:
+ *       {@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}</li>
+ * </ul>
+ *
+ * Strings are always in canonical {@code type:id} / {@code type:id#relation}
+ * format — the SDK does not assume a default subject type.
  */
 public class GrantAction {
     private final String resourceType;
     private final String resourceId;
     private final SdkTransport transport;
-    private final String defaultSubjectType;
     private final String[] relations;
     private Instant expiresAt;
     private CaveatRef caveat;
 
     /** Internal — use {@link com.authx.sdk.ResourceHandle} entry points. */
     public GrantAction(String resourceType, String resourceId, SdkTransport transport,
-                       String defaultSubjectType, String[] relations) {
+                       String[] relations) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
         this.relations = relations;
     }
 
@@ -69,26 +79,36 @@ public class GrantAction {
     /** Alias for {@link #withCaveat(String, Map)} — reads as "grant member onlyIf ...". */
     public GrantAction onlyIf(String caveatName, Map<String, Object> context) { return withCaveat(caveatName, context); }
 
-    /** Grant the relation(s) to the given user ids and execute the write. */
-    public GrantResult to(String... userIds) {
-        return to(Arrays.asList(userIds));
+    /**
+     * Grant the relation(s) to the given {@link SubjectRef subjects} and
+     * execute the write.
+     */
+    public GrantResult to(SubjectRef... subjects) {
+        return to(Arrays.asList(subjects));
     }
 
-    /** Grant the relation(s) to the given user ids and execute the write. */
-    public GrantResult to(Collection<String> userIds) {
-        return writeRelationships(userIds.stream()
-                .map(id -> SubjectRef.of(defaultSubjectType, id, null))
-                .toList());
+    /** Collection overload of {@link #to(SubjectRef...)}. */
+    public GrantResult to(Collection<SubjectRef> subjects) {
+        return writeRelationships(List.copyOf(subjects));
     }
 
-    /** Grant the relation(s) to the given subject refs (e.g., {@code "department:eng#all_members"}). */
-    public GrantResult toSubjects(String... subjectRefs) {
-        return toSubjects(Arrays.asList(subjectRefs));
-    }
-
-    /** Grant the relation(s) to the given subject refs (e.g., {@code "department:eng#all_members"}). */
-    public GrantResult toSubjects(Collection<String> subjectRefs) {
-        return writeRelationships(subjectRefs.stream().map(SubjectRef::parse).toList());
+    /**
+     * Grant the relation(s) to the given canonical subject strings and
+     * execute the write.
+     *
+     * <p>Each string must be in SpiceDB canonical format:
+     * {@code "type:id"}, {@code "type:id#relation"}, or {@code "type:*"}.
+     * There is no default subject type — {@code "alice"} is rejected;
+     * write {@code "user:alice"}.
+     *
+     * <p>For a {@code Collection<String>}, convert first:
+     * {@code .to(list.toArray(String[]::new))} or
+     * {@code .to(list.stream().map(SubjectRef::parse).toList())}.
+     *
+     * @throws IllegalArgumentException if any string is not a valid subject ref
+     */
+    public GrantResult to(String... subjectRefs) {
+        return writeRelationships(Arrays.stream(subjectRefs).map(SubjectRef::parse).toList());
     }
 
     private GrantResult writeRelationships(List<SubjectRef> subjects) {

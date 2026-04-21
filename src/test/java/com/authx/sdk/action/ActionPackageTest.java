@@ -47,8 +47,8 @@ class ActionPackageTest {
 
         @Test
         void grant_singleUser() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"});
-            GrantResult result = grant.to("alice");
+            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            GrantResult result = grant.to("user:alice");
 
             assertThat(result.count()).isEqualTo(1);
             assertThat(result.zedToken()).isNotNull();
@@ -57,8 +57,8 @@ class ActionPackageTest {
 
         @Test
         void grant_multipleUsers() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"});
-            GrantResult result = grant.to("alice", "bob", "carol");
+            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            GrantResult result = grant.to("user:alice", "user:bob", "user:carol");
 
             assertThat(result.count()).isEqualTo(3);
             assertThat(transport.size()).isEqualTo(3);
@@ -66,8 +66,8 @@ class ActionPackageTest {
 
         @Test
         void grant_multipleRelations_multipleUsers() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor", "viewer"});
-            GrantResult result = grant.to("alice", "bob");
+            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor", "viewer"});
+            GrantResult result = grant.to("user:alice", "user:bob");
 
             // 2 relations x 2 users = 4 updates
             assertThat(result.count()).isEqualTo(4);
@@ -76,16 +76,16 @@ class ActionPackageTest {
 
         @Test
         void grant_toCollection() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"});
-            GrantResult result = grant.to(List.of("alice", "bob"));
+            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            GrantResult result = grant.to("user:alice", "user:bob");
 
             assertThat(result.count()).isEqualTo(2);
         }
 
         @Test
         void grant_toSubjects_parsesRef() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"});
-            grant.toSubjects("department:eng#member");
+            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            grant.to("department:eng#member");
 
             var tuples = transport.allTuples();
             assertThat(tuples).hasSize(1);
@@ -97,17 +97,17 @@ class ActionPackageTest {
 
         @Test
         void grant_toSubjects_collection() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"});
-            grant.toSubjects(List.of("user:alice", "group:eng#member"));
+            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            grant.to("user:alice", "group:eng#member");
 
             assertThat(transport.size()).isEqualTo(2);
         }
 
         @Test
         void grant_withCaveat() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"});
+            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             grant.withCaveat("ip_range", Map.of("allowed_cidr", "10.0.0.0/8"));
-            GrantResult result = grant.to("alice");
+            GrantResult result = grant.to("user:alice");
 
             assertThat(result.count()).isEqualTo(1);
         }
@@ -122,10 +122,10 @@ class ActionPackageTest {
 
         @BeforeEach
         void grantSome() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"})
-                    .to("alice");
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"})
-                    .to("alice", "bob");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"})
+                    .to("user:alice");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
+                    .to("user:alice", "user:bob");
         }
 
         @Test
@@ -191,10 +191,10 @@ class ActionPackageTest {
 
         @BeforeEach
         void grantSome() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"})
-                    .to("alice");
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"})
-                    .to("alice", "bob");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"})
+                    .to("user:alice");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
+                    .to("user:alice", "user:bob");
         }
 
         @Test
@@ -251,14 +251,14 @@ class ActionPackageTest {
 
         @BeforeEach
         void grantSome() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"})
-                    .to("alice", "bob");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"})
+                    .to("user:alice", "user:bob");
         }
 
         @Test
         void revoke_from_singleUser() {
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"});
-            RevokeResult result = revoke.from("alice");
+            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            RevokeResult result = revoke.from("user:alice");
 
             assertThat(result.count()).isEqualTo(1);
             // alice removed, bob still there
@@ -267,8 +267,8 @@ class ActionPackageTest {
 
         @Test
         void revoke_from_multipleUsers() {
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"});
-            RevokeResult result = revoke.from("alice", "bob");
+            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            RevokeResult result = revoke.from("user:alice", "user:bob");
 
             assertThat(result.count()).isEqualTo(2);
             assertThat(transport.size()).isEqualTo(0);
@@ -276,8 +276,8 @@ class ActionPackageTest {
 
         @Test
         void revoke_from_collection() {
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"});
-            RevokeResult result = revoke.from(List.of("alice"));
+            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            RevokeResult result = revoke.from("user:alice");
 
             assertThat(result.count()).isEqualTo(1);
         }
@@ -285,11 +285,11 @@ class ActionPackageTest {
         @Test
         void revoke_fromSubjects() {
             // Grant a subject ref first
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"})
-                    .toSubjects("department:eng#member");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
+                    .to("department:eng#member");
 
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"});
-            revoke.fromSubjects("department:eng#member");
+            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            revoke.from("department:eng#member");
 
             // Only the two editor grants should remain
             assertThat(transport.size()).isEqualTo(2);
@@ -297,21 +297,21 @@ class ActionPackageTest {
 
         @Test
         void revoke_fromSubjects_collection() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"})
-                    .toSubjects("group:eng#member");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
+                    .to("group:eng#member");
 
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"});
-            revoke.fromSubjects(List.of("group:eng#member"));
+            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            revoke.from("group:eng#member");
 
             assertThat(transport.size()).isEqualTo(2);
         }
 
         @Test
         void revoke_multipleRelations() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"})
-                    .to("alice");
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor", "viewer"});
-            revoke.from("alice");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
+                    .to("user:alice");
+            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor", "viewer"});
+            revoke.from("user:alice");
 
             // Both editor and viewer removed for alice; bob's editor remains
             assertThat(transport.size()).isEqualTo(1);
@@ -327,15 +327,15 @@ class ActionPackageTest {
 
         @BeforeEach
         void grantSome() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"}).to("alice");
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"}).to("alice");
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"owner"}).to("alice");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"}).to("user:alice");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"}).to("user:alice");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"owner"}).to("user:alice");
         }
 
         @Test
         void revokeAll_noRelations_removesAll() {
-            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, null);
-            RevokeResult result = action.from("alice");
+            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, null);
+            RevokeResult result = action.from("user:alice");
 
             assertThat(result.count()).isEqualTo(3);
             assertThat(transport.size()).isEqualTo(0);
@@ -343,8 +343,8 @@ class ActionPackageTest {
 
         @Test
         void revokeAll_emptyRelations_removesAll() {
-            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{});
-            RevokeResult result = action.from("alice");
+            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, new String[]{});
+            RevokeResult result = action.from("user:alice");
 
             assertThat(result.count()).isEqualTo(3);
             assertThat(transport.size()).isEqualTo(0);
@@ -352,9 +352,9 @@ class ActionPackageTest {
 
         @Test
         void revokeAll_specificRelations_removesOnlyMatching() {
-            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT,
+            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport,
                     new String[]{"editor", "viewer"});
-            RevokeResult result = action.from("alice");
+            RevokeResult result = action.from("user:alice");
 
             assertThat(result.count()).isEqualTo(2);
             // owner remains
@@ -363,9 +363,9 @@ class ActionPackageTest {
 
         @Test
         void revokeAll_multipleUsers() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"}).to("bob");
-            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, null);
-            action.from("alice", "bob");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"}).to("user:bob");
+            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, null);
+            action.from("user:alice", "user:bob");
 
             assertThat(transport.size()).isEqualTo(0);
         }
@@ -381,12 +381,12 @@ class ActionPackageTest {
         @Test
         void batch_grant_and_revoke_atomic() {
             // Pre-grant
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"owner"}).to("alice");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"owner"}).to("user:alice");
 
-            BatchResult result = new BatchBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT)
-                    .grant("editor").to("bob")
-                    .revoke("owner").from("alice")
-                    .grant("viewer").to("carol", "dave")
+            BatchResult result = new BatchBuilder(RES_TYPE, RES_ID, transport)
+                    .grant("editor").to("user:bob")
+                    .revoke("owner").from("user:alice")
+                    .grant("viewer").to("user:carol", "user:dave")
                     .execute();
 
             assertThat(result.zedToken()).isNotNull();
@@ -404,15 +404,15 @@ class ActionPackageTest {
 
         @Test
         void batch_empty_execute() {
-            BatchResult result = new BatchBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT).execute();
+            BatchResult result = new BatchBuilder(RES_TYPE, RES_ID, transport).execute();
 
             assertThat(result.zedToken()).isNull();
         }
 
         @Test
         void batchGrant_toSubjects() {
-            BatchResult result = new BatchBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT)
-                    .grant("viewer").toSubjects("department:eng#member")
+            BatchResult result = new BatchBuilder(RES_TYPE, RES_ID, transport)
+                    .grant("viewer").to("department:eng#member")
                     .execute();
 
             assertThat(result.zedToken()).isNotNull();
@@ -421,11 +421,11 @@ class ActionPackageTest {
 
         @Test
         void batchRevoke_fromSubjects() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"})
-                    .toSubjects("group:eng#member");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
+                    .to("group:eng#member");
 
-            new BatchBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT)
-                    .revoke("viewer").fromSubjects("group:eng#member")
+            new BatchBuilder(RES_TYPE, RES_ID, transport)
+                    .revoke("viewer").from("group:eng#member")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(0);
@@ -433,8 +433,8 @@ class ActionPackageTest {
 
         @Test
         void batch_grant_multipleRelations() {
-            new BatchBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT)
-                    .grant("editor", "viewer").to("alice")
+            new BatchBuilder(RES_TYPE, RES_ID, transport)
+                    .grant("editor", "viewer").to("user:alice")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(2);
@@ -442,11 +442,11 @@ class ActionPackageTest {
 
         @Test
         void batch_revoke_collection() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"})
-                    .to("alice", "bob");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"})
+                    .to("user:alice", "user:bob");
 
-            new BatchBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT)
-                    .revoke("editor").from(List.of("alice", "bob"))
+            new BatchBuilder(RES_TYPE, RES_ID, transport)
+                    .revoke("editor").from("user:alice", "user:bob")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(0);
@@ -454,8 +454,8 @@ class ActionPackageTest {
 
         @Test
         void batch_grant_collection() {
-            new BatchBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT)
-                    .grant("viewer").to(List.of("alice", "bob"))
+            new BatchBuilder(RES_TYPE, RES_ID, transport)
+                    .grant("viewer").to("user:alice", "user:bob")
                     .execute();
 
             assertThat(transport.size()).isEqualTo(2);
@@ -471,8 +471,8 @@ class ActionPackageTest {
 
         @BeforeEach
         void grantSome() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"}).to("alice");
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"}).to("bob", "carol");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"}).to("user:alice");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"}).to("user:bob", "user:carol");
         }
 
         @Test
@@ -601,8 +601,8 @@ class ActionPackageTest {
 
         @BeforeEach
         void grantSome() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"}).to("alice", "bob");
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"}).to("carol");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"}).to("user:alice", "user:bob");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"}).to("user:carol");
         }
 
         @Test
@@ -711,8 +711,8 @@ class ActionPackageTest {
 
         @BeforeEach
         void grantSome() {
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"editor"}).to("alice", "bob");
-            new GrantAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, new String[]{"viewer"}).to("carol");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"}).to("user:alice", "user:bob");
+            new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"}).to("user:carol");
         }
 
         @Test

@@ -14,26 +14,23 @@ public class BatchBuilder {
     private final String resourceType;
     private final String resourceId;
     private final SdkTransport transport;
-    private final String defaultSubjectType;
     private final List<RelationshipUpdate> updates = new ArrayList<>();
 
     /** Internal — use {@link com.authx.sdk.ResourceHandle} entry points. */
-    public BatchBuilder(String resourceType, String resourceId, SdkTransport transport,
-                        String defaultSubjectType) {
+    public BatchBuilder(String resourceType, String resourceId, SdkTransport transport) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
     }
 
     /** Add grant operations for the given relations to this batch. */
     public BatchGrantAction grant(String... relations) {
-        return new BatchGrantAction(this, resourceType, resourceId, defaultSubjectType, relations);
+        return new BatchGrantAction(this, resourceType, resourceId, relations);
     }
 
     /** Add revoke operations for the given relations to this batch. */
     public BatchRevokeAction revoke(String... relations) {
-        return new BatchRevokeAction(this, resourceType, resourceId, defaultSubjectType, relations);
+        return new BatchRevokeAction(this, resourceType, resourceId, relations);
     }
 
     void addUpdate(RelationshipUpdate update) {
