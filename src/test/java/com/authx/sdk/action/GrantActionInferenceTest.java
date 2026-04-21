@@ -167,4 +167,34 @@ class GrantActionInferenceTest {
         assertThatThrownBy(() -> a.to(folderType, "f-1"))
                 .isInstanceOf(com.authx.sdk.exception.InvalidRelationException.class);
     }
+
+    @Test
+    void typedOverloadWithSubRelationBuildsCanonicalRef() {
+        // Schema declares viewer accepts group#member — the 3-arg typed
+        // overload must pass the validator because it constructs
+        // "group:eng#member".
+        var cache = new SchemaCache();
+        cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
+                Set.of("viewer"), Set.of(),
+                Map.of("viewer", List.of(SubjectType.of("group", "member"))))));
+        var a = new GrantAction("document", "d-1", new InMemoryTransport(),
+                new String[]{"viewer"}, cache);
+        var groupType = ResourceType.of("group", R.class, P.class);
+        a.to(groupType, "eng", "member"); // no throw
+    }
+
+    @Test
+    void typedOverloadWithWrongSubRelationFailsValidation() {
+        // Schema only declares group#member. Passing group#owner through the
+        // 3-arg overload must fail-fast.
+        var cache = new SchemaCache();
+        cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
+                Set.of("viewer"), Set.of(),
+                Map.of("viewer", List.of(SubjectType.of("group", "member"))))));
+        var a = new GrantAction("document", "d-1", new InMemoryTransport(),
+                new String[]{"viewer"}, cache);
+        var groupType = ResourceType.of("group", R.class, P.class);
+        assertThatThrownBy(() -> a.to(groupType, "eng", "owner"))
+                .isInstanceOf(com.authx.sdk.exception.InvalidRelationException.class);
+    }
 }

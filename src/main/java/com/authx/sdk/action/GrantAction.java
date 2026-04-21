@@ -214,6 +214,21 @@ public class GrantAction {
     }
 
     /**
+     * Typed subject with a sub-relation (subject-set form):
+     * {@code grant(...).to(Group.TYPE, "eng", "member")} constructs
+     * {@code "group:eng#member"}.
+     *
+     * <p>Use this when a relation accepts a typed subject-set such as
+     * {@code group#member} — the {@code #relation} piece is the access
+     * rule from the subject's schema definition, not this resource's
+     * relation.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    GrantResult to(ResourceType<R, P> subjectType, String id, String subjectRelation) {
+        return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+    }
+
+    /**
      * Grant the relation(s) to the given canonical subject strings and
      * execute the write.
      *
