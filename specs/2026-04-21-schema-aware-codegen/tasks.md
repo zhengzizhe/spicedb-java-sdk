@@ -8,18 +8,18 @@ Traceability tags `[SR:req-N]` reference requirement IDs in `spec.md`. Tasks mar
 
 ## Phase 0: Setup
 
-- [ ] T001 Create `feature/pr-a-codegen-restore` from `main@4a27a84`; record baseline `./gradlew test -x :test-app:test -x :cluster-test:test` is green — git state only
+- [X] T001 Create `feature/pr-a-codegen-restore` from `main@4a27a84`; record baseline `./gradlew test -x :test-app:test -x :cluster-test:test` is green — git state only
 
 ---
 
 ## Phase 1: PR-A — Restore codegen + SDK schema read path
 
-- [ ] T002 [SR:req-4] `SubjectType` record (`type`, `relation`, `wildcard`) with `of()` / `wildcard()` / `parse()` / `toRef()` factories + unit test — `src/main/java/com/authx/sdk/model/SubjectType.java`, `src/test/java/com/authx/sdk/model/SubjectTypeTest.java`
-- [ ] T003 [P] [SR:req-4] Add `default List<SubjectType> subjectTypes()` to `Relation.Named` + interface-default test — `src/main/java/com/authx/sdk/model/Relation.java`, `src/test/java/com/authx/sdk/model/RelationSubjectTypesDefaultTest.java`
-- [ ] T004 [SR:req-2] `SchemaCache` metadata-only scaffolding — `DefinitionCache(relations, permissions, relationSubjectTypes)`, `CaveatDef(name, parameters, expression, comment)`, atomic-reference swap, refresh cooldown, read accessors — `src/main/java/com/authx/sdk/cache/SchemaCache.java`, `src/test/java/com/authx/sdk/cache/SchemaCacheTest.java`
-- [ ] T005 [SR:req-1] `SchemaLoader` — live `ExperimentalReflectSchema` gRPC call, maps proto `ExpRelationSubjectType` → `SubjectType`, writes both definition + caveat maps; non-fatal on `UNIMPLEMENTED`; tested via gRPC in-process channel — `src/main/java/com/authx/sdk/transport/SchemaLoader.java`, `src/test/java/com/authx/sdk/transport/SchemaLoaderTest.java`
-- [ ] T006 [P] [SR:req-3] `SchemaClient` public wrapper + `AuthxClient.schema()` accessor — `src/main/java/com/authx/sdk/SchemaClient.java`, `src/main/java/com/authx/sdk/AuthxClient.java`, `src/test/java/com/authx/sdk/SchemaClientTest.java`
-- [ ] T007 [SR:req-5] Builder wiring — `AuthxClientBuilder.loadSchemaOnStart(boolean)` + calls `SchemaLoader.load()` in `build()` then hands `SchemaCache` into `SchemaClient`; non-fatal on load failure — `src/main/java/com/authx/sdk/AuthxClientBuilder.java`, `src/test/java/com/authx/sdk/AuthxClientBuilderSchemaTest.java`
+- [X] T002 [SR:req-4] `SubjectType` record (`type`, `relation`, `wildcard`) with `of()` / `wildcard()` / `parse()` / `toRef()` factories + unit test — `src/main/java/com/authx/sdk/model/SubjectType.java`, `src/test/java/com/authx/sdk/model/SubjectTypeTest.java`
+- [X] T003 [P] [SR:req-4] Add `default List<SubjectType> subjectTypes()` to `Relation.Named` + interface-default test — `src/main/java/com/authx/sdk/model/Relation.java`, `src/test/java/com/authx/sdk/model/RelationSubjectTypesDefaultTest.java`
+- [X] T004 [SR:req-2] `SchemaCache` metadata-only scaffolding — `DefinitionCache(relations, permissions, relationSubjectTypes)`, `CaveatDef(name, parameters, expression, comment)`, atomic-reference swap, refresh cooldown, read accessors — `src/main/java/com/authx/sdk/cache/SchemaCache.java`, `src/test/java/com/authx/sdk/cache/SchemaCacheTest.java`
+- [X] T005 [SR:req-1] `SchemaLoader` — live `ExperimentalReflectSchema` gRPC call, maps proto `ExpRelationSubjectType` → `SubjectType`, writes both definition + caveat maps; non-fatal on `UNIMPLEMENTED`; tested via gRPC in-process channel — `src/main/java/com/authx/sdk/transport/SchemaLoader.java`, `src/test/java/com/authx/sdk/transport/SchemaLoaderTest.java`
+- [X] T006 [P] [SR:req-3] `SchemaClient` public wrapper + `AuthxClient.schema()` accessor — `src/main/java/com/authx/sdk/SchemaClient.java`, `src/main/java/com/authx/sdk/AuthxClient.java`, `src/test/java/com/authx/sdk/SchemaClientTest.java`
+- [X] T007 [SR:req-5] Builder wiring — `AuthxClientBuilder.loadSchemaOnStart(boolean)` + calls `SchemaLoader.load()` in `build()` then hands `SchemaCache` into `SchemaClient`; non-fatal on load failure — `src/main/java/com/authx/sdk/AuthxClientBuilder.java`, `src/test/java/com/authx/sdk/AuthxClientBuilderSchemaTest.java`
 - [ ] T008 [SR:req-6] `AuthxCodegen` — restore historical codegen + upgrade `emitTypeClass` to emit schema-aware `Rel` enum with `subjectTypes()` override; emits `XxxType.java`, `XxxCaveat.java`, `ResourceTypes.java`, `Caveats.java`; javadoc scrubbed of deleted `.toUser()` API references — `src/main/java/com/authx/sdk/AuthxCodegen.java`, `src/test/java/com/authx/sdk/AuthxCodegenTest.java`
 - [ ] T009 [SR:req-7] Regenerate `test-app/schema/*.java` via `RegenerateTestAppSchemaTool` (checked-in `@Disabled` JUnit tool) — produces new `Department.java`, `Document.java`, `Folder.java`, `Group.java`, `Organization.java`, `Space.java`, `User.java` (new), `ResourceTypes.java`; test-app compiles + tests unchanged — `test-app/src/main/java/com/authx/testapp/schema/*.java`, `src/test/java/com/authx/sdk/codegen/RegenerateTestAppSchemaTool.java`
 
