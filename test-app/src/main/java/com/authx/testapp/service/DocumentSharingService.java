@@ -2,8 +2,9 @@ package com.authx.testapp.service;
 
 import com.authx.sdk.AuthxClient;
 import com.authx.sdk.model.CheckMatrix;
-import com.authx.sdk.model.SubjectRef;
 import com.authx.testapp.schema.Document;
+import com.authx.testapp.schema.Group;
+import com.authx.testapp.schema.User;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -90,28 +91,28 @@ public class DocumentSharingService {
     //  分享 (grant)
     // ═══════════════════════════════════════════════════════════════
 
-    /** 单用户分享. */
+    /** 单用户分享 —— typed 重载消除 "user:" 字符串拼接. */
     public void shareWithUser(String docId, String targetUserId, ShareLevel level) {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(relFor(level))
-                .to("user:" + targetUserId);
+                .to(User.TYPE, targetUserId);
     }
 
-    /** 批量分享 —— 给 userIds 批量 grant. */
+    /** 批量分享 —— 单一 subject type 多 id 的 typed 批量重载. */
     public void shareWithUsers(String docId, List<String> userIds, ShareLevel level) {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(relFor(level))
-                .to(userIds.stream().map(u -> "user:" + u).toList());
+                .to(User.TYPE, userIds);
     }
 
-    /** 分享给一个组 (group#member subject). */
+    /** 分享给一个组 (group#member subject) —— typed sub-relation 重载. */
     public void shareWithGroup(String docId, String groupId, ShareLevel level) {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(relFor(level))
-                .to("group:" + groupId + "#member");
+                .to(Group.TYPE, groupId, "member");
     }
 
     /** 公开文档 —— 所有用户可见 (user:* 通配符). */
@@ -119,7 +120,7 @@ public class DocumentSharingService {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(Document.Rel.VIEWER)
-                .to("user:*");
+                .toWildcard(User.TYPE);
     }
 
     /** 限时分享 —— SpiceDB 关系过期字段, 到期自动失效. */
@@ -128,7 +129,7 @@ public class DocumentSharingService {
                 .select(docId)
                 .grant(relFor(level))
                 .expiringIn(ttl)
-                .to("user:" + targetUserId);
+                .to(User.TYPE, targetUserId);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -136,10 +137,9 @@ public class DocumentSharingService {
     // ═══════════════════════════════════════════════════════════════
 
     public void unshareWithUser(String docId, String targetUserId) {
-        String subj = "user:" + targetUserId;
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.VIEWER).from(subj);
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.COMMENTER).from(subj);
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.EDITOR).from(subj);
+        client.on(Document.TYPE).select(docId).revoke(Document.Rel.VIEWER).from(User.TYPE, targetUserId);
+        client.on(Document.TYPE).select(docId).revoke(Document.Rel.COMMENTER).from(User.TYPE, targetUserId);
+        client.on(Document.TYPE).select(docId).revoke(Document.Rel.EDITOR).from(User.TYPE, targetUserId);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -148,22 +148,22 @@ public class DocumentSharingService {
 
     /**
      * 把文档挂到文件夹下 —— 建立 document.folder 跨类型关系。
-     * subject 是 folder 不是 user，用 to(SubjectRef). 写错 subject 类型会由
-     * SpiceDB 服务端以 INVALID_ARGUMENT 拒绝并映射为
-     * AuthxInvalidArgumentException.
+     * {@code document.folder} 只声明 {@code folder} 一种 subject 类型，所以
+     * 单类型推断直接拿 bare id 就够了，SDK 自动拼 {@code "folder:" + id}。
      */
     public void moveIntoFolder(String docId, String folderId) {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(Document.Rel.FOLDER)
-                .to(SubjectRef.of("folder", folderId, null));
+                .to(folderId);
     }
 
+    /** 类似地，{@code document.space} 只接 space —— 单类型推断. */
     public void attachToSpace(String docId, String spaceId) {
         client.on(Document.TYPE)
                 .select(docId)
                 .grant(Document.Rel.SPACE)
-                .to(SubjectRef.of("space", spaceId, null));
+                .to(spaceId);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -190,14 +190,14 @@ public class DocumentSharingService {
     /** "用户能看的所有文档" —— 首页 feed / 搜索索引用. */
     public List<String> myReadableDocs(String userId, int max) {
         return client.on(Document.TYPE)
-                .findBy(SubjectRef.of("user", userId))
+                .findBy(User.TYPE, userId)
                 .limit(max)
                 .can(Document.Perm.VIEW);
     }
 
     public List<String> myEditableDocs(String userId, int max) {
         return client.on(Document.TYPE)
-                .findBy(SubjectRef.of("user", userId))
+                .findBy(User.TYPE, userId)
                 .limit(max)
                 .can(Document.Perm.EDIT);
     }
@@ -208,19 +208,18 @@ public class DocumentSharingService {
      */
     public Map<Document.Perm, List<String>> myDocsByPermissions(String userId, int max) {
         return client.on(Document.TYPE)
-                .findBy(SubjectRef.of("user", userId))
+                .findBy(User.TYPE, userId)
                 .limit(max)
                 .can(Document.Perm.VIEW, Document.Perm.EDIT, Document.Perm.COMMENT);
     }
 
     /**
-     * 多用户反查 —— N 个用户每人能看哪些 doc. 一次 findBy(Collection<SubjectRef>)
+     * 多用户反查 —— N 个用户每人能看哪些 doc. 一次 findBy(User.TYPE, ids)
      * 收集成 {@code Map<subjectRef, List<docId>>}.
      */
     public Map<String, List<String>> readableDocsForUsers(List<String> userIds, int max) {
-        var subjects = userIds.stream().map(u -> SubjectRef.of("user", u)).toList();
         return client.on(Document.TYPE)
-                .findBy(subjects)
+                .findBy(User.TYPE, userIds)
                 .limit(max)
                 .can(Document.Perm.VIEW);
     }
@@ -232,7 +231,7 @@ public class DocumentSharingService {
         client.on(Document.TYPE)
                 .select(docId)
                 .revoke(Document.Rel.VIEWER, Document.Rel.COMMENTER, Document.Rel.EDITOR)
-                .from(userIds.stream().map(u -> "user:" + u).toList());
+                .from(User.TYPE, userIds);
     }
 
     // ─── internal ────────────────────────────────────────────────
