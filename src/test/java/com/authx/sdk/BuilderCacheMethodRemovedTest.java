@@ -7,8 +7,15 @@ import java.util.Arrays;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Regression guard for the 2026-04-18 L1 cache removal: asserts that the
- * cache-related builder API surface has not crept back in.
+ * Regression guard for the 2026-04-18 L1 <b>decision</b> cache removal
+ * (ADR 2026-04-18): the cache-related builder / client API surface that
+ * carried per-request decisions and Watch subscriptions must not creep
+ * back in.
+ *
+ * <p>This guard intentionally does <i>not</i> ban {@code schema()} — that
+ * accessor was added in the 2026-04-21 schema-aware codegen work and
+ * exposes read-only schema metadata (relations / permissions / subject
+ * types), not cached decisions. See {@link SchemaClient}.
  */
 class BuilderCacheMethodRemovedTest {
 
@@ -50,15 +57,6 @@ class BuilderCacheMethodRemovedTest {
                         || m.getName().equals("offRelationshipChange"));
         assertThat(hasWatchSub)
                 .as("AuthxClient Watch subscription methods must not exist")
-                .isFalse();
-    }
-
-    @Test
-    void authxClientHasNoSchemaMethod() {
-        boolean hasSchema = Arrays.stream(AuthxClient.class.getDeclaredMethods())
-                .anyMatch(m -> m.getName().equals("schema"));
-        assertThat(hasSchema)
-                .as("AuthxClient.schema() must not exist — SchemaCache removed")
                 .isFalse();
     }
 }
