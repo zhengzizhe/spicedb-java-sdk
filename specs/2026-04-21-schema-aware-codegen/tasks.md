@@ -59,9 +59,9 @@ Traceability tags `[SR:req-N]` reference requirement IDs in `spec.md`. Tasks mar
 
 ## Phase 4: PR-D — Typed caveat
 
-- [ ] T026 [SR:req-15] Add `caveat ip_allowlist(cidrs list<string>, client_ip string) { ... }` block + one relation referencing it — `deploy/schema.zed`
-- [ ] T027 [SR:req-15] Regenerate test-app schema — new `IpAllowlist.java` (with `ref()` factory + `context(...)` builder) + `Caveats.java` constants — `test-app/src/main/java/com/authx/testapp/schema/IpAllowlist.java`, `test-app/src/main/java/com/authx/testapp/schema/Caveats.java`
-- [ ] T028 [SR:req-15] `ConditionalShareService` demo + test using `IpAllowlist.ref(...)` + `IpAllowlist.context(...)` — `test-app/src/main/java/com/authx/testapp/service/ConditionalShareService.java`, `test-app/src/test/java/com/authx/testapp/service/ConditionalShareServiceTest.java`
+- [X] T026 [SR:req-15] Add `caveat ip_allowlist(cidrs list<string>, client_ip string) { ... }` block + one relation referencing it — `deploy/schema.zed`
+- [X] T027 [SR:req-15] Regenerate test-app schema — new `IpAllowlist.java` (with `ref()` factory + `context(...)` builder) + `Caveats.java` constants — `test-app/src/main/java/com/authx/testapp/schema/IpAllowlist.java`, `test-app/src/main/java/com/authx/testapp/schema/Caveats.java`
+- [X] T028 [SR:req-15] `ConditionalShareService` demo + test using `IpAllowlist.ref(...)` + `IpAllowlist.context(...)` — `test-app/src/main/java/com/authx/testapp/service/ConditionalShareService.java`, `test-app/src/test/java/com/authx/testapp/service/ConditionalShareServiceTest.java`
 
 **Phase 4 gate:** `./gradlew test` green. PR-D opens against merged PR-C.
 
