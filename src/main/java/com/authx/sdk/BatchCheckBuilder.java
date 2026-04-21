@@ -23,9 +23,9 @@ import java.util.List;
  *
  * <pre>
  * CheckMatrix result = client.batchCheck()
- *         .add("document", "doc-1", Document.Perm.VIEW, SubjectRef.user("alice"))
- *         .add("task",     "t-5",   Task.Perm.COMPLETE, SubjectRef.user("alice"))
- *         .add("folder",   "f-9",   Folder.Perm.EDIT,   SubjectRef.user("alice"))
+ *         .add("document", "doc-1", Document.Perm.VIEW, SubjectRef.of("user", "alice"))
+ *         .add("task",     "t-5",   Task.Perm.COMPLETE, SubjectRef.of("user", "alice"))
+ *         .add("folder",   "f-9",   Folder.Perm.EDIT,   SubjectRef.of("user", "alice"))
  *         .fetch();
  *
  * result.allowed("document", "view", "alice");   // true/false
@@ -58,7 +58,7 @@ public final class BatchCheckBuilder {
     /** Convenience: default-user subject. */
     public BatchCheckBuilder add(String resourceType, String resourceId,
                                   Permission.Named permission, String userId) {
-        return add(resourceType, resourceId, permission, SubjectRef.user(userId));
+        return add(resourceType, resourceId, permission, SubjectRef.of("user", userId));
     }
 
     /** Typed overload — accepts a {@link ResourceType} descriptor in place of the raw string. */
@@ -70,7 +70,7 @@ public final class BatchCheckBuilder {
     /** Typed overload with default-user subject. */
     public BatchCheckBuilder add(ResourceType<?, ?> resourceType, String resourceId,
                                   Permission.Named permission, String userId) {
-        return add(resourceType.name(), resourceId, permission, SubjectRef.user(userId));
+        return add(resourceType.name(), resourceId, permission, SubjectRef.of("user", userId));
     }
 
     /**
@@ -83,7 +83,7 @@ public final class BatchCheckBuilder {
                                      Permission.Named permission,
                                      String userId) {
         for (String id : resourceIds) {
-            add(resourceType.name(), id, permission, SubjectRef.user(userId));
+            add(resourceType.name(), id, permission, SubjectRef.of("user", userId));
         }
         return this;
     }
@@ -94,7 +94,7 @@ public final class BatchCheckBuilder {
                                      Permission.Named permission,
                                      String userId) {
         for (String id : resourceIds) {
-            add(resourceType, id, permission, SubjectRef.user(userId));
+            add(resourceType, id, permission, SubjectRef.of("user", userId));
         }
         return this;
     }
@@ -119,7 +119,7 @@ public final class BatchCheckBuilder {
         }
         public static Cell of(ResourceType<?, ?> type, String id,
                               Permission.Named perm, String userId) {
-            return new Cell(type.name(), id, perm.permissionName(), SubjectRef.user(userId));
+            return new Cell(type.name(), id, perm.permissionName(), SubjectRef.of("user", userId));
         }
     }
 

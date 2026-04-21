@@ -409,14 +409,14 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            assertThat(action.by(SubjectRef.user("alice"))).isTrue();
+            assertThat(action.by(SubjectRef.of("user", "alice"))).isTrue();
         }
 
         @Test
         void by_subjectRef_multipleIds_throws() {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
 
-            assertThatThrownBy(() -> action.by(SubjectRef.user("alice")))
+            assertThatThrownBy(() -> action.by(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
         }
 
@@ -442,7 +442,7 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            CheckResult result = action.detailedBy(SubjectRef.user("alice"));
+            CheckResult result = action.detailedBy(SubjectRef.of("user", "alice"));
             assertThat(result.hasPermission()).isTrue();
         }
 
@@ -450,7 +450,7 @@ class TypedClassesTest {
         void detailedBy_subjectRef_multiplePerms_throws() {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view", "edit"});
 
-            assertThatThrownBy(() -> action.detailedBy(SubjectRef.user("alice")))
+            assertThatThrownBy(() -> action.detailedBy(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
         }
 
@@ -496,7 +496,7 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            CheckMatrix matrix = action.byAll(SubjectRef.user("alice"), SubjectRef.user("bob"));
+            CheckMatrix matrix = action.byAll(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
             assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
             assertThat(matrix.allowed("doc-1", "view", "bob")).isFalse();
         }
@@ -535,7 +535,7 @@ class TypedClassesTest {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             // Single id x single perm x single subject -> simple path
-            CheckMatrix matrix = action.byAll(SubjectRef.user("alice"));
+            CheckMatrix matrix = action.byAll(SubjectRef.of("user", "alice"));
             assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
             assertThat(matrix.size()).isEqualTo(1);
         }
@@ -565,7 +565,7 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
-            EnumMap<TestPerm, Boolean> result = action.by(SubjectRef.user("alice"));
+            EnumMap<TestPerm, Boolean> result = action.by(SubjectRef.of("user", "alice"));
             assertThat(result.get(TestPerm.VIEW)).isTrue();
         }
 
@@ -581,7 +581,7 @@ class TypedClassesTest {
         void by_subjectRef_multipleIds_throws() {
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
 
-            assertThatThrownBy(() -> action.by(SubjectRef.user("alice")))
+            assertThatThrownBy(() -> action.by(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
         }
 
@@ -602,7 +602,7 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
-            Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll(SubjectRef.user("alice"));
+            Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll(SubjectRef.of("user", "alice"));
             assertThat(result.get("doc-1").get(TestPerm.VIEW)).isTrue();
         }
 
@@ -699,7 +699,7 @@ class TypedClassesTest {
         @Test
         void to_subjectRef_collection() {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
-            action.to(List.of(SubjectRef.user("alice"), SubjectRef.user("bob")));
+            action.to(List.of(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob")));
 
             assertThat(transport.size()).isEqualTo(2);
         }
@@ -971,7 +971,7 @@ class TypedClassesTest {
 
         @Test
         void can_single() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.can(TestPerm.VIEW);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -979,7 +979,7 @@ class TypedClassesTest {
 
         @Test
         void can_withLimit() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             finder.limit(1);
             List<String> ids = finder.can(TestPerm.VIEW);
 
@@ -988,7 +988,7 @@ class TypedClassesTest {
 
         @Test
         void can_multiple() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(result.get(TestPerm.VIEW)).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -997,21 +997,21 @@ class TypedClassesTest {
 
         @Test
         void can_multiple_empty() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can();
             assertThat(result).isEmpty();
         }
 
         @Test
         void can_multiple_null() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can((TestPerm[]) null);
             assertThat(result).isEmpty();
         }
 
         @Test
         void can_collection() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(List.of(TestPerm.VIEW));
 
             assertThat(result.get(TestPerm.VIEW)).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -1019,14 +1019,14 @@ class TypedClassesTest {
 
         @Test
         void can_collection_empty() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(List.of());
             assertThat(result).isEmpty();
         }
 
         @Test
         void canAny() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAny(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2", "doc-3");
@@ -1034,7 +1034,7 @@ class TypedClassesTest {
 
         @Test
         void canAny_empty() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAny();
             assertThat(ids).isEmpty();
         }
@@ -1043,7 +1043,7 @@ class TypedClassesTest {
         void canAll() {
             // alice has view on doc-1 and doc-2, edit on doc-3
             // Only doc-1 and doc-2 have view; none have both view AND edit
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(ids).isEmpty(); // no doc has both view and edit
@@ -1051,7 +1051,7 @@ class TypedClassesTest {
 
         @Test
         void canAll_singlePerm() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll(TestPerm.VIEW);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -1059,7 +1059,7 @@ class TypedClassesTest {
 
         @Test
         void canAll_empty() {
-            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.user("alice"));
+            var finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll();
             assertThat(ids).isEmpty();
         }
@@ -1126,7 +1126,7 @@ class TypedClassesTest {
         @Test
         void findBy_subjectRef() {
             docFactory.grant("doc-1", "view", "alice");
-            TypedFinder<TestPerm> finder = entry.findBy(SubjectRef.user("alice"));
+            TypedFinder<TestPerm> finder = entry.findBy(SubjectRef.of("user", "alice"));
             List<String> ids = finder.can(TestPerm.VIEW);
 
             assertThat(ids).contains("doc-1");
@@ -1158,7 +1158,7 @@ class TypedClassesTest {
         void findBy_subjectRefs_varargs() {
             docFactory.grant("doc-1", "view", "alice");
 
-            var multi = entry.findBy(new SubjectRef[]{SubjectRef.user("alice"), SubjectRef.user("bob")});
+            var multi = entry.findBy(new SubjectRef[]{SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob")});
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("alice")).contains("doc-1");
@@ -1168,7 +1168,7 @@ class TypedClassesTest {
         void findBy_subjectRefs_collection() {
             docFactory.grant("doc-1", "view", "alice");
 
-            var multi = entry.findBy(List.of(SubjectRef.user("alice")));
+            var multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("alice")).contains("doc-1");
@@ -1204,7 +1204,7 @@ class TypedClassesTest {
         @Test
         void add_stringBased_and_fetch() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add("document", "doc-1", "view", SubjectRef.user("alice"));
+            builder.add("document", "doc-1", "view", SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
             assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
@@ -1213,7 +1213,7 @@ class TypedClassesTest {
         @Test
         void add_permissionNamed() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.user("alice"));
+            builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
             assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
@@ -1231,7 +1231,7 @@ class TypedClassesTest {
         @Test
         void add_resourceType_descriptor() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.user("alice"));
+            builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
             assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
@@ -1269,7 +1269,7 @@ class TypedClassesTest {
         void addAll_cells() {
             var builder = new BatchCheckBuilder(transport);
             builder.addAll(List.of(
-                    BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.user("alice")),
+                    BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice")),
                     BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, "bob")
             ));
 

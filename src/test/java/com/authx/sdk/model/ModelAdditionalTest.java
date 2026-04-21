@@ -46,23 +46,23 @@ class ModelAdditionalTest {
     // ---- CheckKey ----
     @Nested class CheckKeyTest {
         @Test void resourceIndexAutoComputed() {
-            var key = new CheckKey(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.user("alice"));
+            var key = new CheckKey(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.of("user", "alice"));
             assertThat(key.resourceIndex()).isEqualTo("doc:1");
         }
 
         @Test void factoryMethodOf() {
-            var key = CheckKey.of(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.user("alice"));
+            var key = CheckKey.of(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.of("user", "alice"));
             assertThat(key.resourceIndex()).isEqualTo("doc:1");
         }
 
         @Test void explicitResourceIndex() {
-            var key = new CheckKey(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.user("alice"), "custom:idx");
+            var key = new CheckKey(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.of("user", "alice"), "custom:idx");
             assertThat(key.resourceIndex()).isEqualTo("custom:idx");
         }
 
         @Test void equalityAndHashCode() {
-            var k1 = CheckKey.of(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.user("alice"));
-            var k2 = CheckKey.of(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.user("alice"));
+            var k1 = CheckKey.of(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.of("user", "alice"));
+            var k2 = CheckKey.of(ResourceRef.of("doc", "1"), Permission.of("view"), SubjectRef.of("user", "alice"));
             assertThat(k1).isEqualTo(k2);
             assertThat(k1.hashCode()).isEqualTo(k2.hashCode());
         }
