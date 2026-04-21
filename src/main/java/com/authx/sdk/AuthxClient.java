@@ -35,18 +35,36 @@ public class AuthxClient implements AutoCloseable {
     private final SdkObservability observability;
     private final SdkConfig config;
     private final HealthProbe healthProbe;
+    private final SchemaClient schemaClient;
     private final ConcurrentHashMap<String, ResourceFactory> factories = new ConcurrentHashMap<>();
 
+    /**
+     * Legacy constructor — delegates with a null-backed {@link SchemaClient}
+     * so existing callers (and the {@link #inMemory()} factory below) do not
+     * need to be updated atomically. The builder uses the 6-arg form to
+     * pass a populated {@code SchemaClient}.
+     */
     AuthxClient(SdkTransport transport,
                    SdkInfrastructure infra,
                    SdkObservability observability,
                    SdkConfig config,
                    HealthProbe healthProbe) {
+        this(transport, infra, observability, config, healthProbe, null);
+    }
+
+    AuthxClient(SdkTransport transport,
+                   SdkInfrastructure infra,
+                   SdkObservability observability,
+                   SdkConfig config,
+                   HealthProbe healthProbe,
+                   SchemaClient schemaClient) {
         this.transport = Objects.requireNonNull(transport);
         this.infra = Objects.requireNonNull(infra);
         this.observability = Objects.requireNonNull(observability);
         this.config = Objects.requireNonNull(config);
         this.healthProbe = Objects.requireNonNull(healthProbe, "healthProbe");
+        // Always non-null at the accessor — callers don't need a null check.
+        this.schemaClient = schemaClient != null ? schemaClient : new SchemaClient(null);
     }
 
     /** Create a new builder for configuring and constructing an {@link AuthxClient}. */
@@ -201,6 +219,16 @@ public class AuthxClient implements AutoCloseable {
     /** Expose the configured health probe (useful for actuator integration). */
     public HealthProbe healthProbe() {
         return healthProbe;
+    }
+
+    /**
+     * Read-only view of the loaded SpiceDB schema. Always non-null; callers
+     * should check {@link SchemaClient#isLoaded()} before relying on content
+     * (in-memory clients and clients that disabled schema loading both
+     * report {@code isLoaded() == false}).
+     */
+    public SchemaClient schema() {
+        return schemaClient;
     }
 
     // ---- Lifecycle ----
