@@ -61,7 +61,7 @@ public class AuthxClient implements AutoCloseable {
         lm.begin(); lm.complete();
         var infra = new SdkInfrastructure(null, null, Runnable::run, lm);
         var observability = new SdkObservability(new SdkMetrics(), bus, null);
-        var config = new SdkConfig("user", PolicyRegistry.withDefaults(), false, false);
+        var config = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
         return new AuthxClient(new InMemoryTransport(), infra, observability, config, HealthProbe.up());
     }
 
@@ -86,8 +86,7 @@ public class AuthxClient implements AutoCloseable {
      */
     public ResourceFactory on(String resourceType) {
         return factories.computeIfAbsent(resourceType, type ->
-                new ResourceFactory(type, transport, config.defaultSubjectType(),
-                        infra.asyncExecutor()));
+                new ResourceFactory(type, transport, infra.asyncExecutor()));
     }
 
     /**
@@ -136,8 +135,7 @@ public class AuthxClient implements AutoCloseable {
             var constructor = clazz.getDeclaredConstructor();
             constructor.setAccessible(true);
             T instance = constructor.newInstance();
-            instance.init(resourceType, transport, config.defaultSubjectType(),
-                    infra.asyncExecutor());
+            instance.init(resourceType, transport, infra.asyncExecutor());
             return instance;
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to create " + clazz.getSimpleName() + ": " + e.getMessage(), e);
@@ -146,12 +144,12 @@ public class AuthxClient implements AutoCloseable {
 
     /** Create a one-off resource handle for the given type and id. */
     public ResourceHandle resource(String type, String id) {
-        return new ResourceHandle(type, id, transport, config.defaultSubjectType(), infra.asyncExecutor());
+        return new ResourceHandle(type, id, transport, infra.asyncExecutor());
     }
 
     /** Start a cross-resource lookup query (find all resources a subject can access). */
     public LookupQuery lookup(String resourceType) {
-        return new LookupQuery(resourceType, transport, config.defaultSubjectType());
+        return new LookupQuery(resourceType, transport);
     }
 
     /** Start a cross-resource batch builder for atomic operations across multiple resources. */
@@ -178,7 +176,6 @@ public class AuthxClient implements AutoCloseable {
 
     /** Package-private: used by TypedResourceFactory to access the transport chain. */
     SdkTransport transport() { return transport; }
-    String defaultSubjectType() { return config.defaultSubjectType(); }
     java.util.concurrent.Executor asyncExecutor() { return infra.asyncExecutor(); }
 
     /** Return the SDK metrics collector. */

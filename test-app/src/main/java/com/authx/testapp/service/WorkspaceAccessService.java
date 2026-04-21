@@ -1,5 +1,7 @@
 package com.authx.testapp.service;
 
+import com.authx.sdk.model.SubjectRef;
+
 import com.authx.sdk.AuthxClient;
 import com.authx.sdk.model.CheckMatrix;
 import com.authx.testapp.schema.Document;
@@ -38,13 +40,13 @@ public class WorkspaceAccessService {
      */
     public WorkspaceView renderWorkspace(String userId, String spaceId, String folderId) {
         CheckMatrix m = client.batchCheck()
-                .add(Space.TYPE,  spaceId,  Space.Perm.VIEW,          userId)
-                .add(Space.TYPE,  spaceId,  Space.Perm.EDIT,          userId)
-                .add(Space.TYPE,  spaceId,  Space.Perm.MANAGE,        userId)
-                .add(Folder.TYPE, folderId, Folder.Perm.VIEW,         userId)
-                .add(Folder.TYPE, folderId, Folder.Perm.EDIT,         userId)
-                .add(Folder.TYPE, folderId, Folder.Perm.CREATE_CHILD, userId)
-                .add(Folder.TYPE, folderId, Folder.Perm.MANAGE,       userId)
+                .add(Space.TYPE,  spaceId,  Space.Perm.VIEW, SubjectRef.of("user", userId))
+                .add(Space.TYPE,  spaceId,  Space.Perm.EDIT, SubjectRef.of("user", userId))
+                .add(Space.TYPE,  spaceId,  Space.Perm.MANAGE, SubjectRef.of("user", userId))
+                .add(Folder.TYPE, folderId, Folder.Perm.VIEW, SubjectRef.of("user", userId))
+                .add(Folder.TYPE, folderId, Folder.Perm.EDIT, SubjectRef.of("user", userId))
+                .add(Folder.TYPE, folderId, Folder.Perm.CREATE_CHILD, SubjectRef.of("user", userId))
+                .add(Folder.TYPE, folderId, Folder.Perm.MANAGE, SubjectRef.of("user", userId))
                 .fetch();
 
         return new WorkspaceView(
@@ -66,9 +68,9 @@ public class WorkspaceAccessService {
         var builder = client.batchCheck();
         for (var item : items) {
             switch (item.type()) {
-                case "document" -> builder.add(Document.TYPE, item.id(), Document.Perm.VIEW, userId);
-                case "folder"   -> builder.add(Folder.TYPE,   item.id(), Folder.Perm.VIEW,   userId);
-                case "space"    -> builder.add(Space.TYPE,    item.id(), Space.Perm.VIEW,    userId);
+                case "document" -> builder.add(Document.TYPE, item.id(), Document.Perm.VIEW, SubjectRef.of("user", userId));
+                case "folder"   -> builder.add(Folder.TYPE,   item.id(), Folder.Perm.VIEW, SubjectRef.of("user", userId));
+                case "space"    -> builder.add(Space.TYPE,    item.id(), Space.Perm.VIEW, SubjectRef.of("user", userId));
                 default -> throw new IllegalArgumentException("Unknown resource type: " + item.type());
             }
         }

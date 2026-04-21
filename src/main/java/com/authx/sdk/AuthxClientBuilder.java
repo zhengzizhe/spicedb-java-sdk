@@ -74,7 +74,6 @@ public class AuthxClientBuilder {
     private boolean useVirtualThreads = false;
     private boolean registerShutdownHook = false;
     private boolean telemetryEnabled = false;
-    private String defaultSubjectType = "user";
 
     // Extensibility
     private PolicyRegistry policyRegistry;
@@ -157,7 +156,6 @@ public class AuthxClientBuilder {
         public FeatureConfig virtualThreads(boolean e) { AuthxClientBuilder.this.useVirtualThreads = e; return this; }
         public FeatureConfig shutdownHook(boolean e) { AuthxClientBuilder.this.registerShutdownHook = e; return this; }
         public FeatureConfig telemetry(boolean e) { AuthxClientBuilder.this.telemetryEnabled = e; return this; }
-        public FeatureConfig defaultSubjectType(String t) { AuthxClientBuilder.this.defaultSubjectType = t; return this; }
     }
 
     public class ExtendConfig {
@@ -285,7 +283,7 @@ public class AuthxClientBuilder {
             // Build aggregation objects
             var infraObj = new SdkInfrastructure(grpcChannel, ctx.scheduler, asyncExec, lm);
             var observabilityObj = new SdkObservability(sdkMetrics, bus, ctx.telemetryReporter);
-            var configObj = new SdkConfig(defaultSubjectType, policies, coalescingEnabled, useVirtualThreads);
+            var configObj = new SdkConfig(policies, coalescingEnabled, useVirtualThreads);
 
             // Resolve health probe: user-provided takes precedence, otherwise
             // default to a composite of channel-state + schema-read so diagnostics

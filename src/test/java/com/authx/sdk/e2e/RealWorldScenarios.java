@@ -64,18 +64,18 @@ public class RealWorldScenarios {
         System.out.println("  邀请李四、王五为编辑者，赵六为查看者");
 
         // 检查权限
-        boolean canEdit = doc.check("editor").by("li-si").hasPermission();
-        boolean canView = doc.check("viewer").by("zhao-liu").hasPermission();
-        boolean noAccess = doc.check("editor").by("stranger").hasPermission();
+        boolean canEdit = doc.check("editor").by("user:li-si").hasPermission();
+        boolean canView = doc.check("viewer").by("user:zhao-liu").hasPermission();
+        boolean noAccess = doc.check("editor").by("user:stranger").hasPermission();
         System.out.printf("  李四能编辑？%s  赵六能查看？%s  陌生人能编辑？%s%n", canEdit, canView, noAccess);
 
         // 查看谁是编辑者
-        Set<String> editors = doc.who().withRelation("editor").fetchSet();
+        Set<String> editors = doc.who("user").withRelation("editor").fetchSet();
         System.out.println("  编辑者列表：" + editors);
 
         // 移除王五的编辑权限
         doc.revoke("editor").from("wang-wu");
-        boolean wangwuStill = doc.check("editor").by("wang-wu").hasPermission();
+        boolean wangwuStill = doc.check("editor").by("user:wang-wu").hasPermission();
         System.out.println("  移除王五后，王五还能编辑？" + wangwuStill);
     }
 
@@ -101,7 +101,7 @@ public class RealWorldScenarios {
         System.out.println("  项目A owner: pm-carol");
 
         // 查看后端组有谁
-        System.out.println("  后端组编辑者: " + backendTeam.who().withRelation("editor").fetch());
+        System.out.println("  后端组编辑者: " + backendTeam.who("user").withRelation("editor").fetch());
     }
 
     /**
@@ -139,8 +139,8 @@ public class RealWorldScenarios {
         doc.grant("owner").to("pm");
 
         // 一次拿到所有权限
-        PermissionSet designerPerms = doc.checkAll("owner", "editor", "viewer").by("designer");
-        PermissionSet pmPerms = doc.checkAll("owner", "editor", "viewer").by("pm");
+        PermissionSet designerPerms = doc.checkAll("owner", "editor", "viewer").by("user:designer");
+        PermissionSet pmPerms = doc.checkAll("owner", "editor", "viewer").by("user:pm");
 
         System.out.println("  设计师权限: " + designerPerms.toMap());
         System.out.println("  PM 权限: " + pmPerms.toMap());
@@ -151,7 +151,7 @@ public class RealWorldScenarios {
         System.out.println("    [删除] " + (designerPerms.can("owner") ? "可点击" : "灰色"));
 
         // 权限矩阵：多人 × 多权限
-        PermissionMatrix matrix = doc.checkAll("owner", "editor", "viewer").byAll("designer", "pm", "intern");
+        PermissionMatrix matrix = doc.checkAll("owner", "editor", "viewer").byAll("user:designer", "user:pm", "user:intern");
         System.out.println("  谁能编辑: " + matrix.whoCanAny("editor"));
         System.out.println("  谁能删除: " + matrix.whoCanAny("owner"));
     }
@@ -165,7 +165,7 @@ public class RealWorldScenarios {
         doc.grant("owner").to("old-boss");
         doc.grant("editor").to("worker");
 
-        System.out.println("  转移前 owner: " + doc.who().withRelation("owner").fetch());
+        System.out.println("  转移前 owner: " + doc.who("user").withRelation("owner").fetch());
 
         // 原子操作：一个 gRPC 调用完成
         doc.batch()
@@ -174,8 +174,8 @@ public class RealWorldScenarios {
                 .grant("editor").to("old-boss")  // 降级为 editor
                 .execute();
 
-        System.out.println("  转移后 owner: " + doc.who().withRelation("owner").fetch());
-        System.out.println("  转移后 editor: " + doc.who().withRelation("editor").fetch());
+        System.out.println("  转移后 owner: " + doc.who("user").withRelation("owner").fetch());
+        System.out.println("  转移后 editor: " + doc.who("user").withRelation("editor").fetch());
     }
 
     /**
@@ -185,7 +185,7 @@ public class RealWorldScenarios {
     static void departmentAccess(AuthxClient client) {
         // 先把人加到部门
         client.resource("group", "engineering").grant("member").to("alice", "bob", "carol", "dave");
-        System.out.println("  工程部成员: " + client.resource("group", "engineering").who().withRelation("member").fetch());
+        System.out.println("  工程部成员: " + client.resource("group", "engineering").who("user").withRelation("member").fetch());
 
         // 给整个部门授权（通过 group#member 引用）
         client.resource("document", "arch-design")
@@ -229,15 +229,15 @@ public class RealWorldScenarios {
         client.resource("document", "doc-d").grant("owner").to("bob");
 
         // alice 能编辑哪些文档？（InMemory 按 relation 匹配）
-        List<String> aliceEditable = client.lookup("document").withPermission("editor").by("alice").fetch();
+        List<String> aliceEditable = client.lookup("document").withPermission("editor").by("user:alice").fetch();
         System.out.println("  alice 能编辑的文档: " + aliceEditable);
 
         // alice 有没有能编辑的文档？
-        boolean hasAny = client.lookup("document").withPermission("editor").by("alice").fetchExists();
+        boolean hasAny = client.lookup("document").withPermission("editor").by("user:alice").fetchExists();
         System.out.println("  alice 有可编辑文档？" + hasAny);
 
         // bob 能编辑的？
-        List<String> bobEditable = client.lookup("document").withPermission("editor").by("bob").fetch();
+        List<String> bobEditable = client.lookup("document").withPermission("editor").by("user:bob").fetch();
         System.out.println("  bob 能编辑的文档: " + bobEditable);
     }
 
@@ -250,7 +250,7 @@ public class RealWorldScenarios {
         var projectNew = client.resource("folder", "project-new");
 
         projectOld.grant("editor").to("migrating-user");
-        System.out.println("  转移前 project-old editor: " + projectOld.who().withRelation("editor").fetch());
+        System.out.println("  转移前 project-old editor: " + projectOld.who("user").withRelation("editor").fetch());
 
         // 原子操作：从旧项目移除 + 加到新项目
         client.batch()
@@ -258,8 +258,8 @@ public class RealWorldScenarios {
                 .on(projectNew).grant("editor").to("migrating-user")
                 .execute();
 
-        System.out.println("  转移后 project-old editor: " + projectOld.who().withRelation("editor").fetch());
-        System.out.println("  转移后 project-new editor: " + projectNew.who().withRelation("editor").fetch());
+        System.out.println("  转移后 project-old editor: " + projectOld.who("user").withRelation("editor").fetch());
+        System.out.println("  转移后 project-new editor: " + projectNew.who("user").withRelation("editor").fetch());
     }
 
     /**

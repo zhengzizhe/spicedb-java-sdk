@@ -22,15 +22,17 @@ import java.util.List;
  * folder-9?" is one round trip instead of three.
  *
  * <pre>
+ * SubjectRef alice = SubjectRef.of("user", "alice");
  * CheckMatrix result = client.batchCheck()
- *         .add("document", "doc-1", Document.Perm.VIEW, SubjectRef.of("user", "alice"))
- *         .add("task",     "t-5",   Task.Perm.COMPLETE, SubjectRef.of("user", "alice"))
- *         .add("folder",   "f-9",   Folder.Perm.EDIT,   SubjectRef.of("user", "alice"))
+ *         .add("document", "doc-1", Document.Perm.VIEW,     alice)
+ *         .add("task",     "t-5",   Task.Perm.COMPLETE,     alice)
+ *         .add("folder",   "f-9",   Folder.Perm.EDIT,       alice)
  *         .fetch();
- *
- * result.allowed("document", "view", "alice");   // true/false
- * result.allAllowed();                           // true iff all three pass
  * </pre>
+ *
+ * <p>Subjects are always {@link SubjectRef}s — the SDK does not assume
+ * a default subject type. Use {@link SubjectRef#parse(String)} to go
+ * from a canonical string.
  */
 public final class BatchCheckBuilder {
 
@@ -55,22 +57,10 @@ public final class BatchCheckBuilder {
         return this;
     }
 
-    /** Convenience: default-user subject. */
-    public BatchCheckBuilder add(String resourceType, String resourceId,
-                                  Permission.Named permission, String userId) {
-        return add(resourceType, resourceId, permission, SubjectRef.of("user", userId));
-    }
-
     /** Typed overload — accepts a {@link ResourceType} descriptor in place of the raw string. */
     public BatchCheckBuilder add(ResourceType<?, ?> resourceType, String resourceId,
                                   Permission.Named permission, SubjectRef subject) {
         return add(resourceType.name(), resourceId, permission, subject);
-    }
-
-    /** Typed overload with default-user subject. */
-    public BatchCheckBuilder add(ResourceType<?, ?> resourceType, String resourceId,
-                                  Permission.Named permission, String userId) {
-        return add(resourceType.name(), resourceId, permission, SubjectRef.of("user", userId));
     }
 
     /**
@@ -81,9 +71,9 @@ public final class BatchCheckBuilder {
     public BatchCheckBuilder addAll(ResourceType<?, ?> resourceType,
                                      Collection<String> resourceIds,
                                      Permission.Named permission,
-                                     String userId) {
+                                     SubjectRef subject) {
         for (String id : resourceIds) {
-            add(resourceType.name(), id, permission, SubjectRef.of("user", userId));
+            add(resourceType.name(), id, permission, subject);
         }
         return this;
     }
@@ -92,9 +82,9 @@ public final class BatchCheckBuilder {
     public BatchCheckBuilder addAll(String resourceType,
                                      Collection<String> resourceIds,
                                      Permission.Named permission,
-                                     String userId) {
+                                     SubjectRef subject) {
         for (String id : resourceIds) {
-            add(resourceType, id, permission, SubjectRef.of("user", userId));
+            add(resourceType, id, permission, subject);
         }
         return this;
     }
@@ -117,10 +107,6 @@ public final class BatchCheckBuilder {
                               Permission.Named perm, SubjectRef subject) {
             return new Cell(type.name(), id, perm.permissionName(), subject);
         }
-        public static Cell of(ResourceType<?, ?> type, String id,
-                              Permission.Named perm, String userId) {
-            return new Cell(type.name(), id, perm.permissionName(), SubjectRef.of("user", userId));
-        }
     }
 
     /** String-based overload for dynamic-permission cases. */
@@ -134,9 +120,7 @@ public final class BatchCheckBuilder {
      * Execute the batch. The entire set is sent in a single
      * {@code CheckBulkPermissions} RPC (auto-batched above the transport's
      * MAX_BATCH_SIZE threshold). Returns a {@link CheckMatrix} keyed on
-     * {@code (resourceType:resourceId, permission, subject.id)} — note
-     * the {@code resourceId} dimension in the matrix is a composite
-     * {@code "type:id"} so cross-type batches don't collide on bare ids.
+     * {@code (resourceType:resourceId, permission, subject.toRefString())}.
      */
     public CheckMatrix fetch() {
         if (entries.isEmpty()) return CheckMatrix.builder().build();
@@ -152,7 +136,7 @@ public final class BatchCheckBuilder {
         for (int i = 0; i < results.size(); i++) {
             Entry e = entries.get(i);
             String compositeId = e.resourceType + ":" + e.resourceId;
-            b.add(compositeId, e.permission, e.subject.id(), results.get(i).hasPermission());
+            b.add(compositeId, e.permission, e.subject.toRefString(), results.get(i).hasPermission());
         }
         return b.build();
     }

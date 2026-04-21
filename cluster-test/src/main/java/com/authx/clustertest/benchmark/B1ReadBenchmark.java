@@ -31,7 +31,7 @@ public class B1ReadBenchmark {
                         .withConsistency(Consistency.minimizeLatency())
                         .by(userId);
             } else if (kind < 90) {
-                client.on("document").resource(docId).who()
+                client.on("document").resource(docId).who("user")
                         .withPermission("view")
                         .withConsistency(Consistency.minimizeLatency())
                         .limit(50)

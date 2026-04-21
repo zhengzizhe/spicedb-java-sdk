@@ -7,24 +7,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Typed lookupSubjects query — "who has this permission on this resource?".
- * Construct via {@link TypedHandle#who(com.authx.sdk.model.Permission.Named)}.
+ * Typed lookupSubjects query — "who (of the given subject type) has this
+ * permission on this resource?".
+ *
+ * <p>Construct via {@link TypedHandle#who(String, com.authx.sdk.model.Permission.Named)}.
  *
  * <pre>
  * List&lt;String&gt; editors = Document.select(client, "doc-1")
- *     .who(Document.Perm.EDIT).limit(50).asUserIds();
+ *     .who("user", Document.Perm.EDIT)
+ *     .limit(50)
+ *     .fetchIds();
  * </pre>
  */
 public class TypedWhoQuery {
 
     private final ResourceFactory factory;
     private final String resourceId;
+    private final String subjectType;
     private final String permission;
     private int limit = 0;
 
-    public TypedWhoQuery(ResourceFactory factory, String resourceId, String permission) {
+    public TypedWhoQuery(ResourceFactory factory, String resourceId,
+                          String subjectType, String permission) {
         this.factory = factory;
         this.resourceId = resourceId;
+        this.subjectType = subjectType;
         this.permission = permission;
     }
 
@@ -34,60 +41,51 @@ public class TypedWhoQuery {
         return this;
     }
 
-    /**
-     * Fetch the subject ids that have the permission, using the client's
-     * default subject type (usually {@code "user"}). For non-user subject
-     * types, drop to the raw API via
-     * {@code factory.resource(id).who().withPermission(perm).fetch()}.
-     */
-    public List<String> asUserIds() {
+    /** Fetch the subject ids (of the bound subject type) that have the permission. */
+    public List<String> fetchIds() {
         return new WhoBuilder(factory.resourceType(), resourceId, factory.transport(),
-                factory.defaultSubjectType(), factory.asyncExecutor())
+                subjectType, factory.asyncExecutor())
                 .withPermission(permission)
                 .limit(limit)
                 .fetch();
     }
 
     /**
-     * Same lookup, but wrap each returned id in a {@link SubjectRef} bound
-     * to the factory's default subject type. Useful when feeding the result
-     * directly back into a grant/revoke chain, e.g.:
+     * Same lookup, but wrap each returned id in a {@link SubjectRef} bound to
+     * the configured subject type. Useful when feeding the result directly
+     * back into a grant/revoke chain:
      *
      * <pre>
      * var oldEditors = client.on(Document.TYPE).select(docId)
-     *         .who(Document.Perm.EDIT).asSubjectRefs();
+     *         .who("user", Document.Perm.EDIT).asSubjectRefs();
      * client.on(Document.TYPE).select(newDocId)
      *         .grant(Document.Rel.EDITOR).to(oldEditors);
      * </pre>
      */
     public List<SubjectRef> asSubjectRefs() {
-        List<String> ids = asUserIds();
+        List<String> ids = fetchIds();
         var out = new ArrayList<SubjectRef>(ids.size());
-        String subjectType = factory.defaultSubjectType();
         for (String id : ids) {
-            out.add(SubjectRef.of(subjectType, id, null));
+            out.add(SubjectRef.of(subjectType, id));
         }
         return out;
     }
 
-    /**
-     * Return just a count without materializing the id list — useful for
-     * pagination UIs that only need the badge number.
-     */
+    /** Return just a count without materializing the id list. */
     public int count() {
-        return asUserIds().size();
+        return fetchIds().size();
     }
 
     /**
      * {@code true} iff at least one subject has the permission — short-circuit
-     * version of {@code !asUserIds().isEmpty()}. Sends a LookupSubjects RPC
+     * version of {@code !fetchIds().isEmpty()}. Sends a LookupSubjects RPC
      * with limit=1 for efficiency.
      */
     public boolean exists() {
         int saved = this.limit;
         try {
             this.limit = 1;
-            return !asUserIds().isEmpty();
+            return !fetchIds().isEmpty();
         } finally {
             this.limit = saved;
         }
