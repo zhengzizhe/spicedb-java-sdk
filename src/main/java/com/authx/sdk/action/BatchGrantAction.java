@@ -53,4 +53,16 @@ public class BatchGrantAction {
         }
         return batch;
     }
+
+    /** {@link Iterable} overload of {@link #to(String...)}. */
+    public BatchBuilder to(Iterable<String> subjectRefs) {
+        ResourceRef resource = ResourceRef.of(resourceType, resourceId);
+        for (String rel : relations) {
+            for (String ref : subjectRefs) {
+                batch.addUpdate(new RelationshipUpdate(
+                        Operation.TOUCH, resource, Relation.of(rel), SubjectRef.parse(ref)));
+            }
+        }
+        return batch;
+    }
 }

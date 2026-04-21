@@ -71,6 +71,14 @@ public class TypedRevokeAction<R extends Relation.Named> {
         return write(subjectRefs);
     }
 
+    /** {@link Iterable} overload of {@link #from(String...)}. */
+    public RevokeCompletion from(Iterable<String> subjectRefs) {
+        java.util.List<String> list = new java.util.ArrayList<>();
+        for (String ref : subjectRefs) list.add(ref);
+        if (list.isEmpty()) return RevokeCompletion.of(new RevokeResult(null, 0));
+        return write(list.toArray(String[]::new));
+    }
+
     // ════════════════════════════════════════════════════════════════
     //  Internals
     // ════════════════════════════════════════════════════════════════

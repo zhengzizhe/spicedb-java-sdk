@@ -208,6 +208,13 @@ public class CrossResourceBatchBuilder {
             for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
             return to(subjects);
         }
+
+        /** {@link Iterable} overload of {@link #to(String...)}. */
+        public ResourceScope to(Iterable<String> subjectRefs) {
+            java.util.List<SubjectRef> subjects = new java.util.ArrayList<>();
+            for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
+            return to(subjects.toArray(SubjectRef[]::new));
+        }
     }
 
     /**
@@ -292,6 +299,13 @@ public class CrossResourceBatchBuilder {
             for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
             return to(subjects);
         }
+
+        /** {@link Iterable} overload of {@link #to(String...)}. */
+        public MultiResourceScope to(Iterable<String> subjectRefs) {
+            java.util.List<SubjectRef> subjects = new java.util.ArrayList<>();
+            for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
+            return to(subjects.toArray(SubjectRef[]::new));
+        }
     }
 
     public static class MultiRevokeScope {
@@ -323,6 +337,13 @@ public class CrossResourceBatchBuilder {
             for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
             return from(subjects);
         }
+
+        /** {@link Iterable} overload of {@link #from(String...)}. */
+        public MultiResourceScope from(Iterable<String> subjectRefs) {
+            java.util.List<SubjectRef> subjects = new java.util.ArrayList<>();
+            for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
+            return from(subjects.toArray(SubjectRef[]::new));
+        }
     }
 
     /** Revoke scope within a cross-resource batch, targeting specific relations. */
@@ -352,6 +373,13 @@ public class CrossResourceBatchBuilder {
             SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
             for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
             return from(subjects);
+        }
+
+        /** {@link Iterable} overload of {@link #from(String...)}. */
+        public ResourceScope from(Iterable<String> subjectRefs) {
+            java.util.List<SubjectRef> subjects = new java.util.ArrayList<>();
+            for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
+            return from(subjects.toArray(SubjectRef[]::new));
         }
     }
 }

@@ -68,4 +68,15 @@ public class RevokeAllAction {
     public RevokeResult from(String... subjectRefs) {
         return from(Arrays.stream(subjectRefs).map(SubjectRef::parse).toArray(SubjectRef[]::new));
     }
+
+    /**
+     * {@link Iterable} overload of {@link #from(String...)}. Accepts any
+     * {@code List<String>} / {@code Set<String>} without array conversion
+     * at the call site.
+     */
+    public RevokeResult from(Iterable<String> subjectRefs) {
+        java.util.List<SubjectRef> subjects = new java.util.ArrayList<>();
+        for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
+        return from(subjects);
+    }
 }

@@ -111,6 +111,13 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
         return new MultiFinder<>(factory, refs);
     }
 
+    /** {@link Iterable} overload of {@link #findBy(String...)}. */
+    public MultiFinder<R, P> findBy(Iterable<String> subjectRefs) {
+        var refs = new java.util.ArrayList<SubjectRef>();
+        for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
+        return new MultiFinder<>(factory, refs);
+    }
+
     /**
      * Intermediate for multi-subject reverse lookup. Holds a subject list
      * and an optional {@code limit}; the terminal is {@code can(P)}.

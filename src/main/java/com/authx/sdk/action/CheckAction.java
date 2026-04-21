@@ -128,4 +128,11 @@ public class CheckAction {
         for (int i = 0; i < subjectRefs.length; i++) parsed[i] = SubjectRef.parse(subjectRefs[i]);
         return byAll(parsed);
     }
+
+    /** {@link Iterable} overload of {@link #byAll(String...)}. */
+    public BulkCheckResult byAll(Iterable<String> subjectRefs) {
+        List<SubjectRef> parsed = new java.util.ArrayList<>();
+        for (String ref : subjectRefs) parsed.add(SubjectRef.parse(ref));
+        return byAll(parsed);
+    }
 }

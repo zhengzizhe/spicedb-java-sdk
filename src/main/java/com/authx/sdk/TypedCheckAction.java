@@ -170,6 +170,13 @@ public class TypedCheckAction {
         return byAll(subjectRefs.toArray(String[]::new));
     }
 
+    /** {@link Iterable} overload of {@link #byAll(String...)}. */
+    public CheckMatrix byAll(Iterable<String> subjectRefs) {
+        java.util.List<String> list = new java.util.ArrayList<>();
+        for (String ref : subjectRefs) list.add(ref);
+        return byAll(list.toArray(String[]::new));
+    }
+
     /** Matrix check against explicit {@link SubjectRef}s. */
     public CheckMatrix byAll(SubjectRef... subjects) {
         if (subjects == null || subjects.length == 0) {
