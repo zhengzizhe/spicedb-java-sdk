@@ -1,5 +1,6 @@
 package com.authx.sdk.model;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -30,6 +31,23 @@ public record Relation(String name) {
          * @return a new {@code Relation} wrapping this constant's name
          */
         default Relation toRelation() { return Relation.of(relationName()); }
+
+        /**
+         * Allowed subject shapes on this relation, as declared in the SpiceDB
+         * schema. Codegen enums override this to return the metadata emitted
+         * from {@link SubjectType#parse(String)}; hand-written enums without
+         * codegen metadata get the empty default.
+         *
+         * <p>Used by the SDK for:
+         * <ul>
+         *   <li>runtime subject validation ({@code SchemaCache.validateSubject})</li>
+         *   <li>single-type subject inference ({@code .to(id)})</li>
+         *   <li>business-code introspection ({@code Document.Rel.VIEWER.subjectTypes()})</li>
+         * </ul>
+         *
+         * @return declared subject shapes; empty when no schema metadata is attached.
+         */
+        default List<SubjectType> subjectTypes() { return List.of(); }
     }
 
     public Relation { Objects.requireNonNull(name, "name"); }
