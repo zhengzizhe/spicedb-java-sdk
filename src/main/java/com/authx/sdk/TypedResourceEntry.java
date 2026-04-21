@@ -76,9 +76,9 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
         return new TypedFinder<>(factory, subject);
     }
 
-    /** Convenience overload for the default user subject type. */
-    public TypedFinder<P> findByUser(String userId) {
-        return new TypedFinder<>(factory, SubjectRef.of("user", userId));
+    /** Canonical-string form of {@link #findBy(SubjectRef)} — {@code "user:alice"} etc. */
+    public TypedFinder<P> findBy(String subjectRef) {
+        return new TypedFinder<>(factory, SubjectRef.parse(subjectRef));
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -88,11 +88,11 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
     /**
      * Multi-subject reverse lookup. Returns an intermediate that, when
      * terminated with {@code .can(Perm)}, runs one {@code LookupResources}
-     * RPC per subject and returns a {@code Map<subjectId, List<resourceId>>}.
+     * RPC per subject and returns a {@code Map<subjectRef, List<resourceId>>}.
      *
      * <pre>
      * Map&lt;String, List&lt;String&gt;&gt; perUser = client.on(Document.TYPE)
-     *     .findByUsers(List.of("alice", "bob", "carol"))
+     *     .findBy(SubjectRef.of("user","alice"), SubjectRef.of("user","bob"))
      *     .can(Document.Perm.EDIT);
      * </pre>
      */
@@ -104,15 +104,10 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
         return new MultiFinder<>(factory, List.copyOf(subjects));
     }
 
-    public MultiFinder<R, P> findByUsers(String... userIds) {
-        var refs = new java.util.ArrayList<SubjectRef>(userIds.length);
-        for (String id : userIds) refs.add(SubjectRef.of("user", id));
-        return new MultiFinder<>(factory, refs);
-    }
-
-    public MultiFinder<R, P> findByUsers(Collection<String> userIds) {
-        var refs = new java.util.ArrayList<SubjectRef>(userIds.size());
-        for (String id : userIds) refs.add(SubjectRef.of("user", id));
+    /** Canonical-string varargs form of {@link #findBy(SubjectRef...)}. */
+    public MultiFinder<R, P> findBy(String... subjectRefs) {
+        var refs = new java.util.ArrayList<SubjectRef>(subjectRefs.length);
+        for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
         return new MultiFinder<>(factory, refs);
     }
 
@@ -133,11 +128,11 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
 
         public MultiFinder<R, P> limit(int n) { this.limit = n; return this; }
 
-        /** Run one {@code LookupResources} per subject and collect results. */
+        /** Run one {@code LookupResources} per subject and collect results keyed by the subject's canonical ref string. */
         public Map<String, List<String>> can(P permission) {
             var out = new LinkedHashMap<String, List<String>>(subjects.size());
             for (SubjectRef subject : subjects) {
-                out.put(subject.id(), new TypedFinder<P>(factory, subject).limit(limit).can(permission));
+                out.put(subject.toRefString(), new TypedFinder<P>(factory, subject).limit(limit).can(permission));
             }
             return out;
         }

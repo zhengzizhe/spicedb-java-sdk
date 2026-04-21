@@ -39,44 +39,34 @@ public class ResourceFactory {
 
     private volatile String resourceType;
     private volatile SdkTransport transport;
-    private volatile String defaultSubjectType;
     private volatile Executor asyncExecutor = Runnable::run;
 
     protected ResourceFactory() {}
 
-    ResourceFactory(String resourceType, SdkTransport transport, String defaultSubjectType) {
+    ResourceFactory(String resourceType, SdkTransport transport) {
         this.resourceType = resourceType;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
     }
 
-    ResourceFactory(String resourceType, SdkTransport transport, String defaultSubjectType,
-                    Executor asyncExecutor) {
+    ResourceFactory(String resourceType, SdkTransport transport, Executor asyncExecutor) {
         this.resourceType = resourceType;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
         this.asyncExecutor = asyncExecutor;
     }
 
-    void init(String resourceType, SdkTransport transport, String defaultSubjectType) {
+    void init(String resourceType, SdkTransport transport) {
         this.resourceType = resourceType;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
     }
 
-    void init(String resourceType, SdkTransport transport, String defaultSubjectType,
-              Executor asyncExecutor) {
+    void init(String resourceType, SdkTransport transport, Executor asyncExecutor) {
         this.resourceType = resourceType;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
         this.asyncExecutor = asyncExecutor;
     }
 
     /** Package-private accessor for the transport chain, used by typed action classes. */
     SdkTransport transport() { return transport; }
-
-    /** Package-private accessor for the default subject type (usually "user"). */
-    String defaultSubjectType() { return defaultSubjectType; }
 
     /** Package-private accessor for the async executor used by typed action classes. */
     Executor asyncExecutor() { return asyncExecutor; }
@@ -85,24 +75,27 @@ public class ResourceFactory {
 
     /** Get a handle for advanced operations: batch, expand, who, relations. */
     public ResourceHandle resource(String id) {
-        return new ResourceHandle(resourceType, id, transport, defaultSubjectType, asyncExecutor);
+        return new ResourceHandle(resourceType, id, transport, asyncExecutor);
     }
 
-    /** Reverse lookup: find all resources of this type a user can access. */
+    /** Reverse lookup: find all resources of this type a subject can access. */
     public LookupQuery lookup() {
-        return new LookupQuery(resourceType, transport, defaultSubjectType);
+        return new LookupQuery(resourceType, transport);
     }
 
     // ---- String-based operations (escape hatch for dynamic cases) ----
 
-    /** Check permission. */
-    public boolean check(String id, String permission, String userId) {
-        return resource(id).check(permission).by(userId).hasPermission();
+    /**
+     * Check permission for a canonical subject string ({@code "user:alice"},
+     * {@code "group:eng#member"}).
+     */
+    public boolean check(String id, String permission, String subjectRef) {
+        return resource(id).check(permission).by(subjectRef).hasPermission();
     }
 
     /** Check with explicit consistency. */
-    public boolean check(String id, String permission, String userId, Consistency consistency) {
-        return resource(id).check(permission).withConsistency(consistency).by(userId).hasPermission();
+    public boolean check(String id, String permission, String subjectRef, Consistency consistency) {
+        return resource(id).check(permission).withConsistency(consistency).by(subjectRef).hasPermission();
     }
 
     /**

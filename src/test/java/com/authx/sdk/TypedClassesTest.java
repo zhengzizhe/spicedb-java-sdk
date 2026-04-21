@@ -69,7 +69,7 @@ class TypedClassesTest {
     @BeforeEach
     void setUp() {
         transport = new InMemoryTransport();
-        docFactory = new ResourceFactory("document", transport, DEFAULT_SUBJECT, SYNC_EXEC);
+        docFactory = new ResourceFactory("document", transport, SYNC_EXEC);
     }
 
     // ================================================================
@@ -87,14 +87,14 @@ class TypedClassesTest {
         @Test
         void check_stringBased() {
             docFactory.grant("doc-1", "view", "user:alice");
-            assertThat(docFactory.check("doc-1", "view", "alice")).isTrue();
-            assertThat(docFactory.check("doc-1", "view", "bob")).isFalse();
+            assertThat(docFactory.check("doc-1", "view", "user:alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "view", "user:bob")).isFalse();
         }
 
         @Test
         void check_withConsistency() {
             docFactory.grant("doc-1", "view", "user:alice");
-            assertThat(docFactory.check("doc-1", "view", "alice", Consistency.full())).isTrue();
+            assertThat(docFactory.check("doc-1", "view", "user:alice", Consistency.full())).isTrue();
         }
 
         @Test
@@ -142,7 +142,7 @@ class TypedClassesTest {
         @Test
         void lookup_returnsQuery() {
             docFactory.grant("doc-1", "viewer", "user:alice");
-            List<String> ids = docFactory.lookup().withPermission("viewer").by("alice").fetch();
+            List<String> ids = docFactory.lookup().withPermission("viewer").by("user:alice").fetch();
             assertThat(ids).contains("doc-1");
         }
     }
@@ -158,7 +158,7 @@ class TypedClassesTest {
         void grant_and_check() {
             ResourceHandle handle = docFactory.resource("doc-1");
             handle.grant("editor").to("user:alice");
-            assertThat(handle.check("editor").by("alice").hasPermission()).isTrue();
+            assertThat(handle.check("editor").by("user:alice").hasPermission()).isTrue();
         }
 
         @Test
@@ -166,7 +166,7 @@ class TypedClassesTest {
             ResourceHandle handle = docFactory.resource("doc-1");
             handle.grant("editor").to("user:alice");
             handle.revoke("editor").from("user:alice");
-            assertThat(handle.check("editor").by("alice").hasPermission()).isFalse();
+            assertThat(handle.check("editor").by("user:alice").hasPermission()).isFalse();
         }
 
         @Test
@@ -176,8 +176,8 @@ class TypedClassesTest {
             handle.grant("viewer").to("user:alice");
             handle.revokeAll().from("user:alice");
 
-            assertThat(handle.check("editor").by("alice").hasPermission()).isFalse();
-            assertThat(handle.check("viewer").by("alice").hasPermission()).isFalse();
+            assertThat(handle.check("editor").by("user:alice").hasPermission()).isFalse();
+            assertThat(handle.check("viewer").by("user:alice").hasPermission()).isFalse();
         }
 
         @Test
@@ -187,15 +187,15 @@ class TypedClassesTest {
             handle.grant("viewer").to("user:alice");
             handle.revokeAll("editor").from("user:alice");
 
-            assertThat(handle.check("editor").by("alice").hasPermission()).isFalse();
-            assertThat(handle.check("viewer").by("alice").hasPermission()).isTrue();
+            assertThat(handle.check("editor").by("user:alice").hasPermission()).isFalse();
+            assertThat(handle.check("viewer").by("user:alice").hasPermission()).isTrue();
         }
 
         @Test
         void checkAll() {
             ResourceHandle handle = docFactory.resource("doc-1");
             handle.grant("editor").to("user:alice");
-            PermissionSet set = handle.checkAll("editor", "viewer").by("alice");
+            PermissionSet set = handle.checkAll("editor", "viewer").by("user:alice");
 
             assertThat(set.can("editor")).isTrue();
             assertThat(set.can("viewer")).isFalse();
@@ -205,7 +205,7 @@ class TypedClassesTest {
         void who() {
             ResourceHandle handle = docFactory.resource("doc-1");
             handle.grant("editor").to("user:alice", "user:bob");
-            List<String> editors = handle.who().withPermission("editor").fetch();
+            List<String> editors = handle.who("user").withPermission("editor").fetch();
 
             assertThat(editors).containsExactlyInAnyOrder("alice", "bob");
         }
@@ -228,8 +228,8 @@ class TypedClassesTest {
                     .execute();
 
             assertThat(result.zedToken()).isNotNull();
-            assertThat(handle.check("editor").by("alice").hasPermission()).isTrue();
-            assertThat(handle.check("viewer").by("bob").hasPermission()).isTrue();
+            assertThat(handle.check("editor").by("user:alice").hasPermission()).isTrue();
+            assertThat(handle.check("viewer").by("user:bob").hasPermission()).isTrue();
         }
 
         @Test
@@ -255,8 +255,8 @@ class TypedClassesTest {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAction action = handle.check(TestPerm.VIEW);
-            assertThat(action.by("alice")).isTrue();
-            assertThat(action.by("bob")).isFalse();
+            assertThat(action.by("user:alice")).isTrue();
+            assertThat(action.by("user:bob")).isFalse();
         }
 
         @Test
@@ -265,9 +265,9 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "edit", "user:alice");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
-            CheckMatrix matrix = handle.check(TestPerm.VIEW, TestPerm.EDIT).byAll("alice");
-            assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
-            assertThat(matrix.allowed("doc-1", "edit", "alice")).isTrue();
+            CheckMatrix matrix = handle.check(TestPerm.VIEW, TestPerm.EDIT).byAll("user:alice");
+            assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
+            assertThat(matrix.allowed("doc-1", "edit", "user:alice")).isTrue();
         }
 
         @Test
@@ -276,8 +276,8 @@ class TypedClassesTest {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAction action = handle.check(List.of(TestPerm.VIEW));
-            CheckMatrix matrix = action.byAll("alice");
-            assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
+            CheckMatrix matrix = action.byAll("user:alice");
+            assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
@@ -286,7 +286,7 @@ class TypedClassesTest {
             // No schema cache => validation is skipped
             handle.grant(TestRel.EDITOR).to("user:alice");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
         }
 
         @Test
@@ -294,7 +294,7 @@ class TypedClassesTest {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
             handle.grant(List.of(TestRel.EDITOR)).to("user:alice");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
         }
 
         @Test
@@ -303,7 +303,7 @@ class TypedClassesTest {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
             handle.revoke(TestRel.EDITOR).from("user:alice");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isFalse();
         }
 
         @Test
@@ -312,7 +312,7 @@ class TypedClassesTest {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
             handle.revoke(List.of(TestRel.EDITOR)).from("user:alice");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isFalse();
         }
 
         @Test
@@ -322,7 +322,7 @@ class TypedClassesTest {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAllAction<TestPerm> action = handle.checkAll(TestPerm.class);
-            EnumMap<TestPerm, Boolean> result = action.by("alice");
+            EnumMap<TestPerm, Boolean> result = action.by("user:alice");
 
             assertThat(result.get(TestPerm.VIEW)).isTrue();
             assertThat(result.get(TestPerm.EDIT)).isTrue();
@@ -352,8 +352,8 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "user:alice", "user:bob");
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
-            TypedWhoQuery query = handle.who(TestPerm.VIEW);
-            List<String> ids = query.asUserIds();
+            TypedWhoQuery query = handle.who("user", TestPerm.VIEW);
+            List<String> ids = query.fetchIds();
             assertThat(ids).containsExactlyInAnyOrder("alice", "bob");
         }
 
@@ -361,7 +361,7 @@ class TypedClassesTest {
         void who_multipleIds_throws() {
             var handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1", "doc-2"});
 
-            assertThatThrownBy(() -> handle.who(TestPerm.VIEW))
+            assertThatThrownBy(() -> handle.who("user", TestPerm.VIEW))
                     .isInstanceOf(IllegalStateException.class);
         }
     }
@@ -378,21 +378,21 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            assertThat(action.by("alice")).isTrue();
+            assertThat(action.by("user:alice")).isTrue();
         }
 
         @Test
         void by_singleId_singlePerm_denied() {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            assertThat(action.by("alice")).isFalse();
+            assertThat(action.by("user:alice")).isFalse();
         }
 
         @Test
         void by_multipleIds_throws() {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
 
-            assertThatThrownBy(() -> action.by("alice"))
+            assertThatThrownBy(() -> action.by("user:alice"))
                     .isInstanceOf(IllegalStateException.class);
         }
 
@@ -400,7 +400,7 @@ class TypedClassesTest {
         void by_multiplePerms_throws() {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view", "edit"});
 
-            assertThatThrownBy(() -> action.by("alice"))
+            assertThatThrownBy(() -> action.by("user:alice"))
                     .isInstanceOf(IllegalStateException.class);
         }
 
@@ -425,7 +425,7 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            CheckResult result = action.detailedBy("alice");
+            CheckResult result = action.detailedBy("user:alice");
             assertThat(result.hasPermission()).isTrue();
         }
 
@@ -433,7 +433,7 @@ class TypedClassesTest {
         void detailedBy_multipleIds_throws() {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
 
-            assertThatThrownBy(() -> action.detailedBy("alice"))
+            assertThatThrownBy(() -> action.detailedBy("user:alice"))
                     .isInstanceOf(IllegalStateException.class);
         }
 
@@ -460,7 +460,7 @@ class TypedClassesTest {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
             action.withConsistency(Consistency.full());
 
-            assertThat(action.by("alice")).isTrue();
+            assertThat(action.by("user:alice")).isTrue();
         }
 
         @Test
@@ -469,7 +469,7 @@ class TypedClassesTest {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
             action.withContext(Map.of("ip", "10.0.0.1"));
 
-            assertThat(action.by("alice")).isTrue();
+            assertThat(action.by("user:alice")).isTrue();
         }
 
         @Test
@@ -477,9 +477,9 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            CheckMatrix matrix = action.byAll("alice", "bob");
-            assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
-            assertThat(matrix.allowed("doc-1", "view", "bob")).isFalse();
+            CheckMatrix matrix = action.byAll("user:alice", "user:bob");
+            assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
+            assertThat(matrix.allowed("doc-1", "view", "user:bob")).isFalse();
         }
 
         @Test
@@ -487,8 +487,8 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "user:alice");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
-            CheckMatrix matrix = action.byAll(List.of("alice"));
-            assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
+            CheckMatrix matrix = action.byAll("user:alice");
+            assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
@@ -497,8 +497,8 @@ class TypedClassesTest {
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckMatrix matrix = action.byAll(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
-            assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
-            assertThat(matrix.allowed("doc-1", "view", "bob")).isFalse();
+            assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
+            assertThat(matrix.allowed("doc-1", "view", "user:bob")).isFalse();
         }
 
         @Test
@@ -523,10 +523,10 @@ class TypedClassesTest {
             docFactory.grant("doc-2", "edit", "user:bob");
             var action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view", "edit"});
 
-            CheckMatrix matrix = action.byAll("alice", "bob");
-            assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
-            assertThat(matrix.allowed("doc-2", "edit", "bob")).isTrue();
-            assertThat(matrix.allowed("doc-1", "edit", "alice")).isFalse();
+            CheckMatrix matrix = action.byAll("user:alice", "user:bob");
+            assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
+            assertThat(matrix.allowed("doc-2", "edit", "user:bob")).isTrue();
+            assertThat(matrix.allowed("doc-1", "edit", "user:alice")).isFalse();
         }
 
         @Test
@@ -536,7 +536,7 @@ class TypedClassesTest {
 
             // Single id x single perm x single subject -> simple path
             CheckMatrix matrix = action.byAll(SubjectRef.of("user", "alice"));
-            assertThat(matrix.allowed("doc-1", "view", "alice")).isTrue();
+            assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
             assertThat(matrix.size()).isEqualTo(1);
         }
     }
@@ -554,7 +554,7 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "edit", "user:alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
-            EnumMap<TestPerm, Boolean> result = action.by("alice");
+            EnumMap<TestPerm, Boolean> result = action.by("user:alice");
             assertThat(result.get(TestPerm.VIEW)).isTrue();
             assertThat(result.get(TestPerm.EDIT)).isTrue();
             assertThat(result.get(TestPerm.DELETE)).isFalse();
@@ -573,7 +573,7 @@ class TypedClassesTest {
         void by_multipleIds_throws() {
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
 
-            assertThatThrownBy(() -> action.by("alice"))
+            assertThatThrownBy(() -> action.by("user:alice"))
                     .isInstanceOf(IllegalStateException.class);
         }
 
@@ -591,7 +591,7 @@ class TypedClassesTest {
             docFactory.grant("doc-2", "edit", "user:alice");
             var action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
 
-            Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll("alice");
+            Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll("user:alice");
             assertThat(result).containsKeys("doc-1", "doc-2");
             assertThat(result.get("doc-1").get(TestPerm.VIEW)).isTrue();
             assertThat(result.get("doc-2").get(TestPerm.EDIT)).isTrue();
@@ -613,7 +613,7 @@ class TypedClassesTest {
             action.withConsistency(Consistency.full());
             action.withContext(Map.of("ip", "10.0.0.1"));
 
-            EnumMap<TestPerm, Boolean> result = action.by("alice");
+            EnumMap<TestPerm, Boolean> result = action.by("user:alice");
             assertThat(result.get(TestPerm.VIEW)).isTrue();
         }
     }
@@ -630,7 +630,7 @@ class TypedClassesTest {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
             action.to("user:alice");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
         }
 
         @Test
@@ -638,8 +638,8 @@ class TypedClassesTest {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
             action.to("user:alice", "user:bob");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
-            assertThat(docFactory.check("doc-1", "editor", "bob")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:bob")).isTrue();
         }
 
         @Test
@@ -647,7 +647,7 @@ class TypedClassesTest {
             var action = new TypedGrantAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
             action.to("user:alice", "user:bob");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
         }
 
         @Test
@@ -792,8 +792,8 @@ class TypedClassesTest {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
             action.from("user:alice");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
-            assertThat(docFactory.check("doc-1", "editor", "bob")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:bob")).isTrue();
         }
 
         @Test
@@ -801,8 +801,8 @@ class TypedClassesTest {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
             action.from("user:alice", "user:bob");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
-            assertThat(docFactory.check("doc-1", "editor", "bob")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:bob")).isFalse();
         }
 
         @Test
@@ -859,7 +859,7 @@ class TypedClassesTest {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
             action.from("user:alice");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isFalse();
         }
 
         @Test
@@ -867,7 +867,7 @@ class TypedClassesTest {
             var action = new TypedRevokeAction<>(docFactory, new String[]{"doc-1"}, TestRel.EDITOR);
             action.from("user:alice");
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isFalse();
         }
 
         @Test
@@ -901,15 +901,15 @@ class TypedClassesTest {
 
         @Test
         void asUserIds() {
-            var query = new TypedWhoQuery(docFactory, "doc-1", "view");
-            List<String> ids = query.asUserIds();
+            var query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
+            List<String> ids = query.fetchIds();
 
             assertThat(ids).containsExactlyInAnyOrder("alice", "bob", "carol");
         }
 
         @Test
         void asSubjectRefs() {
-            var query = new TypedWhoQuery(docFactory, "doc-1", "view");
+            var query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             List<SubjectRef> refs = query.asSubjectRefs();
 
             assertThat(refs).hasSize(3);
@@ -918,37 +918,37 @@ class TypedClassesTest {
 
         @Test
         void count() {
-            var query = new TypedWhoQuery(docFactory, "doc-1", "view");
+            var query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             assertThat(query.count()).isEqualTo(3);
         }
 
         @Test
         void exists_true() {
-            var query = new TypedWhoQuery(docFactory, "doc-1", "view");
+            var query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             assertThat(query.exists()).isTrue();
         }
 
         @Test
         void exists_false() {
-            var query = new TypedWhoQuery(docFactory, "doc-1", "edit");
+            var query = new TypedWhoQuery(docFactory, "doc-1", "user", "edit");
             assertThat(query.exists()).isFalse();
         }
 
         @Test
         void limit() {
-            var query = new TypedWhoQuery(docFactory, "doc-1", "view");
+            var query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             query.limit(2);
-            List<String> ids = query.asUserIds();
+            List<String> ids = query.fetchIds();
 
             assertThat(ids).hasSize(2);
         }
 
         @Test
         void exists_restoresLimit() {
-            var query = new TypedWhoQuery(docFactory, "doc-1", "view");
+            var query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             query.limit(0);
             query.exists(); // temporarily sets limit=1, then restores
-            List<String> ids = query.asUserIds();
+            List<String> ids = query.fetchIds();
 
             assertThat(ids).hasSize(3); // limit was restored to 0
         }
@@ -1117,7 +1117,7 @@ class TypedClassesTest {
         @Test
         void findByUser() {
             docFactory.grant("doc-1", "view", "user:alice");
-            TypedFinder<TestPerm> finder = entry.findByUser("alice");
+            TypedFinder<TestPerm> finder = entry.findBy("user:alice");
             List<String> ids = finder.can(TestPerm.VIEW);
 
             assertThat(ids).contains("doc-1");
@@ -1137,31 +1137,21 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "user:alice");
             docFactory.grant("doc-2", "view", "user:bob");
 
-            var multi = entry.findByUsers("alice", "bob");
+            var multi = entry.findBy("user:alice", "user:bob");
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
-            assertThat(result.get("alice")).contains("doc-1");
-            assertThat(result.get("bob")).contains("doc-2");
-        }
-
-        @Test
-        void findByUsers_collection() {
-            docFactory.grant("doc-1", "view", "user:alice");
-
-            var multi = entry.findByUsers(List.of("alice"));
-            Map<String, List<String>> result = multi.can(TestPerm.VIEW);
-
-            assertThat(result.get("alice")).contains("doc-1");
+            assertThat(result.get("user:alice")).contains("doc-1");
+            assertThat(result.get("user:bob")).contains("doc-2");
         }
 
         @Test
         void findBy_subjectRefs_varargs() {
             docFactory.grant("doc-1", "view", "user:alice");
 
-            var multi = entry.findBy(new SubjectRef[]{SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob")});
+            var multi = entry.findBy(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
-            assertThat(result.get("alice")).contains("doc-1");
+            assertThat(result.get("user:alice")).contains("doc-1");
         }
 
         @Test
@@ -1171,7 +1161,7 @@ class TypedClassesTest {
             var multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
-            assertThat(result.get("alice")).contains("doc-1");
+            assertThat(result.get("user:alice")).contains("doc-1");
         }
 
         @Test
@@ -1179,11 +1169,11 @@ class TypedClassesTest {
             docFactory.grant("doc-1", "view", "user:alice");
             docFactory.grant("doc-2", "view", "user:alice");
 
-            var multi = entry.findByUsers("alice");
+            var multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
             multi.limit(1);
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
-            assertThat(result.get("alice")).hasSize(1);
+            assertThat(result.get("user:alice")).hasSize(1);
         }
     }
 
@@ -1197,7 +1187,7 @@ class TypedClassesTest {
         @BeforeEach
         void grantSome() {
             docFactory.grant("doc-1", "view", "user:alice");
-            var taskFactory = new ResourceFactory("task", transport, DEFAULT_SUBJECT, SYNC_EXEC);
+            var taskFactory = new ResourceFactory("task", transport, SYNC_EXEC);
             taskFactory.grant("t-1", "complete", "user:alice");
         }
 
@@ -1207,7 +1197,7 @@ class TypedClassesTest {
             builder.add("document", "doc-1", "view", SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
@@ -1216,16 +1206,16 @@ class TypedClassesTest {
             builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
         void add_permissionNamed_userId() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add("document", "doc-1", TestPerm.VIEW, "alice");
+            builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
@@ -1234,35 +1224,35 @@ class TypedClassesTest {
             builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
         void add_resourceType_userId() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, "alice");
+            builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
         void addAll_resourceType() {
             var builder = new BatchCheckBuilder(transport);
-            builder.addAll(DOC_TYPE, List.of("doc-1", "doc-2"), TestPerm.VIEW, "alice");
+            builder.addAll(DOC_TYPE, List.of("doc-1", "doc-2"), TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
-            assertThat(matrix.allowed("document:doc-2", "view", "alice")).isFalse();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-2", "view", "user:alice")).isFalse();
         }
 
         @Test
         void addAll_string() {
             var builder = new BatchCheckBuilder(transport);
-            builder.addAll("document", List.of("doc-1"), TestPerm.VIEW, "alice");
+            builder.addAll("document", List.of("doc-1"), TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
@@ -1270,12 +1260,12 @@ class TypedClassesTest {
             var builder = new BatchCheckBuilder(transport);
             builder.addAll(List.of(
                     BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice")),
-                    BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, "bob")
+                    BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "bob"))
             ));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
-            assertThat(matrix.allowed("document:doc-1", "view", "bob")).isFalse();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:bob")).isFalse();
         }
 
         @Test
@@ -1290,21 +1280,21 @@ class TypedClassesTest {
         void withConsistency() {
             var builder = new BatchCheckBuilder(transport);
             builder.withConsistency(Consistency.full());
-            builder.add("document", "doc-1", TestPerm.VIEW, "alice");
+            builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
         }
 
         @Test
         void crossResource_batch() {
             var builder = new BatchCheckBuilder(transport);
-            builder.add("document", "doc-1", TestPerm.VIEW, "alice");
-            builder.add("task", "t-1", TaskPerm.COMPLETE, "alice");
+            builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
+            builder.add("task", "t-1", TaskPerm.COMPLETE, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
-            assertThat(matrix.allowed("document:doc-1", "view", "alice")).isTrue();
-            assertThat(matrix.allowed("task:t-1", "complete", "alice")).isTrue();
+            assertThat(matrix.allowed("document:doc-1", "view", "user:alice")).isTrue();
+            assertThat(matrix.allowed("task:t-1", "complete", "user:alice")).isTrue();
         }
     }
 
@@ -1327,8 +1317,8 @@ class TypedClassesTest {
                     .execute();
 
             assertThat(result.zedToken()).isNotNull();
-            assertThat(docFactory.check("doc-1", "editor", "bob")).isTrue();
-            assertThat(docFactory.check("doc-1", "owner", "alice")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:bob")).isTrue();
+            assertThat(docFactory.check("doc-1", "owner", "user:alice")).isFalse();
         }
 
         @Test
@@ -1337,7 +1327,7 @@ class TypedClassesTest {
             var builder = new CrossResourceBatchBuilder(transport);
             builder.on(handle).grant("editor").to("user:alice").execute();
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
         }
 
         @Test
@@ -1345,7 +1335,7 @@ class TypedClassesTest {
             var builder = new CrossResourceBatchBuilder(transport);
             builder.on(DOC_TYPE, "doc-1").grant("editor").to("user:alice").execute();
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
         }
 
         @Test
@@ -1356,8 +1346,8 @@ class TypedClassesTest {
                     .on("document", "doc-2").grant("viewer").to("user:bob")
                     .execute();
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
-            assertThat(docFactory.check("doc-2", "viewer", "bob")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
+            assertThat(docFactory.check("doc-2", "viewer", "user:bob")).isTrue();
         }
 
         @Test
@@ -1373,7 +1363,7 @@ class TypedClassesTest {
             var builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").grant(TestRel.EDITOR).to("user:alice").execute();
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isTrue();
         }
 
         @Test
@@ -1382,7 +1372,7 @@ class TypedClassesTest {
             var builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").revoke(TestRel.EDITOR).from("user:alice").execute();
 
-            assertThat(docFactory.check("doc-1", "editor", "alice")).isFalse();
+            assertThat(docFactory.check("doc-1", "editor", "user:alice")).isFalse();
         }
 
         @Test
@@ -1458,9 +1448,9 @@ class TypedClassesTest {
                     .execute();
 
             assertThat(transport.size()).isEqualTo(3);
-            assertThat(docFactory.check("doc-1", "viewer", "alice")).isTrue();
-            assertThat(docFactory.check("doc-2", "viewer", "alice")).isTrue();
-            assertThat(docFactory.check("doc-3", "viewer", "alice")).isTrue();
+            assertThat(docFactory.check("doc-1", "viewer", "user:alice")).isTrue();
+            assertThat(docFactory.check("doc-2", "viewer", "user:alice")).isTrue();
+            assertThat(docFactory.check("doc-3", "viewer", "user:alice")).isTrue();
         }
 
         @Test

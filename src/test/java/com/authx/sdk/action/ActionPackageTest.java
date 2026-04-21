@@ -130,41 +130,41 @@ class ActionPackageTest {
 
         @Test
         void check_by_allowed() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"editor"});
-            CheckResult result = check.by("alice");
+            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            CheckResult result = check.by("user:alice");
 
             assertThat(result.hasPermission()).isTrue();
         }
 
         @Test
         void check_by_denied() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"editor"});
-            CheckResult result = check.by("bob");
+            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            CheckResult result = check.by("user:bob");
 
             assertThat(result.hasPermission()).isFalse();
         }
 
         @Test
         void check_withConsistency() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"editor"});
+            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
             check.withConsistency(Consistency.full());
-            CheckResult result = check.by("alice");
+            CheckResult result = check.by("user:alice");
 
             assertThat(result.hasPermission()).isTrue();
         }
 
         @Test
         void check_byAsync_returns_future() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"editor"});
-            CompletableFuture<CheckResult> future = check.byAsync("alice");
+            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            CompletableFuture<CheckResult> future = check.byAsync("user:alice");
 
             assertThat(future.join().hasPermission()).isTrue();
         }
 
         @Test
         void check_byAll_varargs() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"viewer"});
-            BulkCheckResult result = check.byAll("alice", "bob", "carol");
+            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"viewer"});
+            BulkCheckResult result = check.byAll("user:alice", "user:bob", "user:carol");
 
             assertThat(result.get("alice").hasPermission()).isTrue();
             assertThat(result.get("bob").hasPermission()).isTrue();
@@ -174,8 +174,8 @@ class ActionPackageTest {
 
         @Test
         void check_byAll_collection() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"editor"});
-            BulkCheckResult result = check.byAll(List.of("alice", "bob"));
+            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            BulkCheckResult result = check.byAll("user:alice", "user:bob");
 
             assertThat(result.get("alice").hasPermission()).isTrue();
             assertThat(result.get("bob").hasPermission()).isFalse();
@@ -199,9 +199,8 @@ class ActionPackageTest {
 
         @Test
         void checkAll_by_singleUser() {
-            var action = new CheckAllAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT,
-                    new String[]{"editor", "viewer", "owner"});
-            PermissionSet perms = action.by("alice");
+            var action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer", "owner"});
+            PermissionSet perms = action.by("user:alice");
 
             assertThat(perms.can("editor")).isTrue();
             assertThat(perms.can("viewer")).isTrue();
@@ -211,32 +210,29 @@ class ActionPackageTest {
 
         @Test
         void checkAll_byAll_matrix() {
-            var action = new CheckAllAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT,
-                    new String[]{"editor", "viewer"});
-            PermissionMatrix matrix = action.byAll("alice", "bob");
+            var action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer"});
+            PermissionMatrix matrix = action.byAll("user:alice", "user:bob");
 
-            assertThat(matrix.get("alice").can("editor")).isTrue();
-            assertThat(matrix.get("alice").can("viewer")).isTrue();
-            assertThat(matrix.get("bob").can("editor")).isFalse();
-            assertThat(matrix.get("bob").can("viewer")).isTrue();
+            assertThat(matrix.get("user:alice").can("editor")).isTrue();
+            assertThat(matrix.get("user:alice").can("viewer")).isTrue();
+            assertThat(matrix.get("user:bob").can("editor")).isFalse();
+            assertThat(matrix.get("user:bob").can("viewer")).isTrue();
         }
 
         @Test
         void checkAll_byAll_collection() {
-            var action = new CheckAllAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT,
-                    new String[]{"editor", "viewer"});
-            PermissionMatrix matrix = action.byAll(List.of("alice", "bob"));
+            var action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer"});
+            PermissionMatrix matrix = action.byAll("user:alice", "user:bob");
 
-            assertThat(matrix.get("alice")).isNotNull();
-            assertThat(matrix.get("bob")).isNotNull();
+            assertThat(matrix.get("user:alice")).isNotNull();
+            assertThat(matrix.get("user:bob")).isNotNull();
         }
 
         @Test
         void checkAll_withConsistency() {
-            var action = new CheckAllAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT,
-                    new String[]{"editor"});
+            var action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor"});
             action.withConsistency(Consistency.full());
-            PermissionSet perms = action.by("alice");
+            PermissionSet perms = action.by("user:alice");
 
             assertThat(perms.can("editor")).isTrue();
         }
@@ -391,15 +387,15 @@ class ActionPackageTest {
 
             assertThat(result.zedToken()).isNotNull();
             // Verify: alice lost owner, bob has editor, carol+dave have viewer
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"owner"});
-            assertThat(check.by("alice").hasPermission()).isFalse();
+            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"owner"});
+            assertThat(check.by("user:alice").hasPermission()).isFalse();
 
-            check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"editor"});
-            assertThat(check.by("bob").hasPermission()).isTrue();
+            check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            assertThat(check.by("user:bob").hasPermission()).isTrue();
 
-            check = new CheckAction(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, new String[]{"viewer"});
-            assertThat(check.by("carol").hasPermission()).isTrue();
-            assertThat(check.by("dave").hasPermission()).isTrue();
+            check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"viewer"});
+            assertThat(check.by("user:carol").hasPermission()).isTrue();
+            assertThat(check.by("user:dave").hasPermission()).isTrue();
         }
 
         @Test

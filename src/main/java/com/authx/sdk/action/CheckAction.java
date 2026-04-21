@@ -18,12 +18,15 @@ import java.util.concurrent.Executor;
 
 /**
  * Fluent action for checking a single permission against one or more subjects.
+ *
+ * <p>Subjects come in as {@link SubjectRef} values or canonical strings
+ * ({@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}).
+ * The SDK does not assume a default subject type.
  */
 public class CheckAction {
     private final String resourceType;
     private final String resourceId;
     private final SdkTransport transport;
-    private final String defaultSubjectType;
     private final Executor asyncExecutor;
     private final String[] permissions;
     private Consistency consistency = Consistency.minimizeLatency();
@@ -31,11 +34,10 @@ public class CheckAction {
 
     /** Internal — use {@link com.authx.sdk.ResourceHandle} entry points. */
     public CheckAction(String resourceType, String resourceId, SdkTransport transport,
-                       String defaultSubjectType, Executor asyncExecutor, String[] permissions) {
+                       Executor asyncExecutor, String[] permissions) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
         this.asyncExecutor = asyncExecutor;
         this.permissions = permissions;
     }
@@ -78,37 +80,52 @@ public class CheckAction {
         return map;
     }
 
-    /** Execute the permission check against a single user id. */
-    public CheckResult by(String userId) {
+    /** Execute the permission check against a single {@link SubjectRef subject}. */
+    public CheckResult by(SubjectRef subject) {
         var request = new CheckRequest(
                 ResourceRef.of(resourceType, resourceId),
                 Permission.of(permissions[0]),
-                SubjectRef.of(defaultSubjectType, userId, null),
+                subject,
                 consistency,
                 context);
         return transport.check(request);
     }
 
+    /** Execute the permission check against a canonical subject string ({@code "user:alice"}, ...). */
+    public CheckResult by(String subjectRef) {
+        return by(SubjectRef.parse(subjectRef));
+    }
+
     /** Async version. Uses the SDK's configured executor instead of ForkJoinPool.commonPool. */
-    public CompletableFuture<CheckResult> byAsync(String userId) {
-        return CompletableFuture.supplyAsync(() -> by(userId), asyncExecutor);
+    public CompletableFuture<CheckResult> byAsync(SubjectRef subject) {
+        return CompletableFuture.supplyAsync(() -> by(subject), asyncExecutor);
     }
 
-    /** Check the permission against multiple user ids in a single bulk RPC. */
-    public BulkCheckResult byAll(String... userIds) {
-        return byAll(Arrays.asList(userIds));
+    /** Async version — canonical subject string form. */
+    public CompletableFuture<CheckResult> byAsync(String subjectRef) {
+        return byAsync(SubjectRef.parse(subjectRef));
     }
 
-    /** Check the permission against multiple user ids in a single bulk RPC. */
-    public BulkCheckResult byAll(Collection<String> userIds) {
+    /** Check the permission against multiple {@link SubjectRef subjects} in a single bulk RPC. */
+    public BulkCheckResult byAll(SubjectRef... subjects) {
+        return byAll(Arrays.asList(subjects));
+    }
+
+    /** Collection overload of {@link #byAll(SubjectRef...)}. */
+    public BulkCheckResult byAll(Collection<SubjectRef> subjects) {
+        SubjectRef head = subjects.iterator().next();
         var request = CheckRequest.of(
                 ResourceRef.of(resourceType, resourceId),
                 Permission.of(permissions[0]),
-                SubjectRef.of(defaultSubjectType, "", null),
+                head,
                 consistency);
-        List<SubjectRef> subjects = userIds.stream()
-                .map(uid -> SubjectRef.of(defaultSubjectType, uid, null))
-                .toList();
-        return transport.checkBulk(request, subjects);
+        return transport.checkBulk(request, List.copyOf(subjects));
+    }
+
+    /** Check the permission against multiple canonical subject strings in a single bulk RPC. */
+    public BulkCheckResult byAll(String... subjectRefs) {
+        SubjectRef[] parsed = new SubjectRef[subjectRefs.length];
+        for (int i = 0; i < subjectRefs.length; i++) parsed[i] = SubjectRef.parse(subjectRefs[i]);
+        return byAll(parsed);
     }
 }

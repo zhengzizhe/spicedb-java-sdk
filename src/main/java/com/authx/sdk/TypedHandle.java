@@ -149,15 +149,20 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
     // ────────────────────────────────────────────────────────────────
 
     /**
-     * Typed lookupSubjects — "who has this permission on the selected
-     * resource?". Requires exactly one selected resource id (SpiceDB's
-     * LookupSubjects is a per-resource RPC).
+     * Typed lookupSubjects — "who (of the given subject type) has this
+     * permission on the selected resource?". Requires exactly one selected
+     * resource id (SpiceDB's LookupSubjects is a per-resource RPC).
+     *
+     * @param subjectType the subject object type to look up, e.g.
+     *                    {@code "user"} or {@code "service"} — SpiceDB's
+     *                    LookupSubjects always filters by object type, so
+     *                    the caller must specify it.
      */
-    public TypedWhoQuery who(P permission) {
+    public TypedWhoQuery who(String subjectType, P permission) {
         if (ids.length != 1) {
             throw new IllegalStateException(
-                    "who(Perm) requires exactly one selected resource id; got " + ids.length);
+                    "who(...) requires exactly one selected resource id; got " + ids.length);
         }
-        return new TypedWhoQuery(factory, ids[0], permission.permissionName());
+        return new TypedWhoQuery(factory, ids[0], subjectType, permission.permissionName());
     }
 }

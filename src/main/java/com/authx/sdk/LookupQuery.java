@@ -13,30 +13,36 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Cross-resource lookup query: find all resources of a type that a subject has a permission on.
+ * Cross-resource lookup query: find all resources of a type that a subject has
+ * a permission on.
  *
  * <pre>
  * List&lt;String&gt; docs = client.lookup("document")
  *     .withPermission("view")
- *     .by("alice")
+ *     .by("user:alice")                  // canonical string
+ *     .fetch();
+ *
+ * List&lt;String&gt; docs = client.lookup("document")
+ *     .withPermission("view")
+ *     .by(SubjectRef.of("user", "alice")) // strongly typed
  *     .fetch();
  * </pre>
+ *
+ * <p>The SDK does not assume a default subject type — the subject reference
+ * must always carry a type.
  */
 public class LookupQuery {
 
     private final String resourceType;
     private final SdkTransport transport;
-    private final String defaultSubjectType;
     private String permission;
-    private String subjectId;
-    private String subjectType;
+    private SubjectRef subject;
     private Consistency consistency = Consistency.minimizeLatency();
     private int limit = 0;
 
-    LookupQuery(String resourceType, SdkTransport transport, String defaultSubjectType) {
+    LookupQuery(String resourceType, SdkTransport transport) {
         this.resourceType = resourceType;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
     }
 
     /** Set the permission to look up (required). */
@@ -45,18 +51,15 @@ public class LookupQuery {
         return this;
     }
 
-    /** Set the subject (user) to look up resources for, using the default subject type. */
-    public LookupQuery by(String subjectId) {
-        this.subjectId = subjectId;
-        this.subjectType = defaultSubjectType;
+    /** Set the subject to look up resources for. */
+    public LookupQuery by(SubjectRef subject) {
+        this.subject = subject;
         return this;
     }
 
-    /** Set the subject to look up resources for, using an explicit subject reference. */
-    public LookupQuery by(SubjectRef subject) {
-        this.subjectId = subject.id();
-        this.subjectType = subject.type();
-        return this;
+    /** Canonical-string form of {@link #by(SubjectRef)} — {@code "user:alice"} etc. */
+    public LookupQuery by(String subjectRef) {
+        return by(SubjectRef.parse(subjectRef));
     }
 
     /** Override the consistency level for this lookup. */
@@ -74,9 +77,9 @@ public class LookupQuery {
     /** Execute the lookup and return matching resource ids as a list. */
     public List<String> fetch() {
         if (permission == null) throw new IllegalStateException("withPermission() must be called before fetch()");
-        if (subjectId == null) throw new IllegalStateException("by() must be called before fetch()");
+        if (subject == null) throw new IllegalStateException("by() must be called before fetch()");
         var request = new LookupResourcesRequest(resourceType, Permission.of(permission),
-                SubjectRef.of(subjectType, subjectId, null), limit, consistency);
+                subject, limit, consistency);
         return transport.lookupResources(request).stream()
                 .map(ResourceRef::id).toList();
     }

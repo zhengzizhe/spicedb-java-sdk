@@ -37,19 +37,17 @@ public class ResourceHandle {
     private final String resourceType;
     private final String resourceId;
     private final SdkTransport transport;
-    private final String defaultSubjectType;
     private final Executor asyncExecutor;
 
-    ResourceHandle(String resourceType, String resourceId, SdkTransport transport, String defaultSubjectType) {
-        this(resourceType, resourceId, transport, defaultSubjectType, Runnable::run);
+    ResourceHandle(String resourceType, String resourceId, SdkTransport transport) {
+        this(resourceType, resourceId, transport, Runnable::run);
     }
 
     ResourceHandle(String resourceType, String resourceId, SdkTransport transport,
-                   String defaultSubjectType, Executor asyncExecutor) {
+                   Executor asyncExecutor) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
         this.asyncExecutor = asyncExecutor;
     }
 
@@ -87,13 +85,13 @@ public class ResourceHandle {
 
     /** Start a permission check for a single permission on this resource. */
     public CheckAction check(String permission) {
-        return new CheckAction(resourceType, resourceId, transport, defaultSubjectType,
+        return new CheckAction(resourceType, resourceId, transport,
                 asyncExecutor, new String[]{permission});
     }
 
     /** Check multiple permissions in a single bulk RPC. */
     public CheckAllAction checkAll(String... permissions) {
-        return new CheckAllAction(resourceType, resourceId, transport, defaultSubjectType, permissions);
+        return new CheckAllAction(resourceType, resourceId, transport, permissions);
     }
 
     // ---- Expand ----
@@ -111,9 +109,14 @@ public class ResourceHandle {
 
     // ---- Who ----
 
-    /** Start a subject lookup query ("who has X on this resource?"). */
-    public WhoBuilder who() {
-        return new WhoBuilder(resourceType, resourceId, transport, defaultSubjectType, asyncExecutor);
+    /**
+     * Start a subject lookup query ("who of this type has X on this resource?").
+     *
+     * @param subjectType the subject object type to look up (required by
+     *                    SpiceDB's LookupSubjects RPC).
+     */
+    public WhoBuilder who(String subjectType) {
+        return new WhoBuilder(resourceType, resourceId, transport, subjectType, asyncExecutor);
     }
 
     // ---- Relations ----

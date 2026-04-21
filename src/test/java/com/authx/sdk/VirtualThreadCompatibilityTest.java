@@ -71,7 +71,7 @@ class VirtualThreadCompatibilityTest {
 
         var infra = new SdkInfrastructure(null, null, vtExecutor, lm);
         var observability = new SdkObservability(new SdkMetrics(), bus, null);
-        var config = new SdkConfig("user", PolicyRegistry.withDefaults(), false, true);
+        var config = new SdkConfig(PolicyRegistry.withDefaults(), false, true);
         client = new AuthxClient(new InMemoryTransport(), infra, observability, config, HealthProbe.up());
     }
 
@@ -88,8 +88,8 @@ class VirtualThreadCompatibilityTest {
     void clientWithVirtualThreads_basicOperationsWork() {
         var doc = client.on("document");
         doc.grant("doc-1", "editor", "user:alice");
-        assertThat(doc.check("doc-1", "editor", "alice")).isTrue();
-        assertThat(doc.check("doc-1", "editor", "bob")).isFalse();
+        assertThat(doc.check("doc-1", "editor", "user:alice")).isTrue();
+        assertThat(doc.check("doc-1", "editor", "user:bob")).isFalse();
     }
 
     // ================================================================
@@ -118,11 +118,11 @@ class VirtualThreadCompatibilityTest {
                         int userIdx = docIdx % 10;
 
                         // This user SHOULD have permission
-                        boolean allowed = doc.check("doc-" + docIdx, "viewer", "user-" + userIdx);
+                        boolean allowed = doc.check("doc-" + docIdx, "viewer", "user:user-" + userIdx);
                         if (!allowed) wrongResults.incrementAndGet();
 
                         // This user should NOT have permission (off by one)
-                        boolean denied = doc.check("doc-" + docIdx, "viewer", "user-" + ((userIdx + 5) % 10));
+                        boolean denied = doc.check("doc-" + docIdx, "viewer", "user:user-" + ((userIdx + 5) % 10));
                         if (denied) wrongResults.incrementAndGet();
                     } catch (Exception e) {
                         errors.incrementAndGet();
@@ -164,7 +164,7 @@ class VirtualThreadCompatibilityTest {
                             doc.grant("mixed-doc-" + (idx % 20), "editor", "user:mixed-user-" + idx);
                         } else {
                             // Read
-                            doc.check("mixed-doc-" + (idx % 20), "viewer", "mixed-user-" + (idx % 10));
+                            doc.check("mixed-doc-" + (idx % 20), "viewer", "user:mixed-user-" + (idx % 10));
                         }
                     } catch (Exception e) {
                         errors.incrementAndGet();
@@ -343,7 +343,7 @@ class VirtualThreadCompatibilityTest {
                         if (idx % 10 == 0) {
                             doc.grant("burst-doc-" + (idx % 50), "commenter", "user:burst-vt-" + idx);
                         } else {
-                            doc.check("burst-doc-" + (idx % 50), "viewer", "burst-user-" + (idx % 5));
+                            doc.check("burst-doc-" + (idx % 50), "viewer", "user:burst-user-" + (idx % 5));
                         }
                         completed.incrementAndGet();
                     } catch (Exception e) {

@@ -23,7 +23,7 @@ public class SubjectQuery {
     private final String resourceType;
     private final String resourceId;
     private final SdkTransport transport;
-    private final String defaultSubjectType;
+    private final String subjectType;
     private final Executor asyncExecutor;
     private final String permissionOrRelation;
     private final boolean isPermission;
@@ -32,12 +32,12 @@ public class SubjectQuery {
 
     /** Internal — use {@link com.authx.sdk.ResourceHandle} entry points. */
     public SubjectQuery(String resourceType, String resourceId, SdkTransport transport,
-                        String defaultSubjectType, Executor asyncExecutor,
+                        String subjectType, Executor asyncExecutor,
                         String permissionOrRelation, boolean isPermission) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
+        this.subjectType = subjectType;
         this.asyncExecutor = asyncExecutor;
         this.permissionOrRelation = permissionOrRelation;
         this.isPermission = isPermission;
@@ -60,7 +60,7 @@ public class SubjectQuery {
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         if (isPermission) {
             var request = new LookupSubjectsRequest(resource,
-                    Permission.of(permissionOrRelation), defaultSubjectType, limit, consistency);
+                    Permission.of(permissionOrRelation), subjectType, limit, consistency);
             return transport.lookupSubjects(request).stream()
                     .map(SubjectRef::id).toList();
         } else {
@@ -94,7 +94,7 @@ public class SubjectQuery {
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         if (isPermission) {
             var request = new LookupSubjectsRequest(resource,
-                    Permission.of(permissionOrRelation), defaultSubjectType, 1, consistency);
+                    Permission.of(permissionOrRelation), subjectType, 1, consistency);
             return !transport.lookupSubjects(request).isEmpty();
         } else {
             var results = transport.readRelationships(

@@ -170,34 +170,34 @@ public class DocumentSharingService {
     //  反查 / 正查
     // ═══════════════════════════════════════════════════════════════
 
-    /** "谁能编辑这个文档?" */
+    /** "谁能编辑这个文档?" (只查 user 主体) */
     public List<String> listEditors(String docId, int max) {
         return client.on(Document.TYPE)
                 .select(docId)
-                .who(Document.Perm.EDIT)
+                .who("user", Document.Perm.EDIT)
                 .limit(max)
-                .asUserIds();
+                .fetchIds();
     }
 
     public List<String> listViewers(String docId, int max) {
         return client.on(Document.TYPE)
                 .select(docId)
-                .who(Document.Perm.VIEW)
+                .who("user", Document.Perm.VIEW)
                 .limit(max)
-                .asUserIds();
+                .fetchIds();
     }
 
     /** "用户能看的所有文档" —— 首页 feed / 搜索索引用. */
     public List<String> myReadableDocs(String userId, int max) {
         return client.on(Document.TYPE)
-                .findByUser(userId)
+                .findBy(SubjectRef.of("user", userId))
                 .limit(max)
                 .can(Document.Perm.VIEW);
     }
 
     public List<String> myEditableDocs(String userId, int max) {
         return client.on(Document.TYPE)
-                .findByUser(userId)
+                .findBy(SubjectRef.of("user", userId))
                 .limit(max)
                 .can(Document.Perm.EDIT);
     }
@@ -208,18 +208,19 @@ public class DocumentSharingService {
      */
     public Map<Document.Perm, List<String>> myDocsByPermissions(String userId, int max) {
         return client.on(Document.TYPE)
-                .findByUser(userId)
+                .findBy(SubjectRef.of("user", userId))
                 .limit(max)
                 .can(Document.Perm.VIEW, Document.Perm.EDIT, Document.Perm.COMMENT);
     }
 
     /**
-     * 多用户反查 —— N 个用户每人能看哪些 doc. 一次 findByUsers(Collection)
-     * 收集成 {@code Map<userId, List<docId>>}.
+     * 多用户反查 —— N 个用户每人能看哪些 doc. 一次 findBy(Collection<SubjectRef>)
+     * 收集成 {@code Map<subjectRef, List<docId>>}.
      */
     public Map<String, List<String>> readableDocsForUsers(List<String> userIds, int max) {
+        var subjects = userIds.stream().map(u -> SubjectRef.of("user", u)).toList();
         return client.on(Document.TYPE)
-                .findByUsers(userIds)
+                .findBy(subjects)
                 .limit(max)
                 .can(Document.Perm.VIEW);
     }

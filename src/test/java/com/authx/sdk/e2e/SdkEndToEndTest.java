@@ -87,7 +87,7 @@ class SdkEndToEndTest {
     void who_withRelation() {
         var doc = client.resource("document", "e2e-doc-1");
 
-        Set<String> editors = doc.who().withRelation("editor")
+        Set<String> editors = doc.who("user").withRelation("editor")
                 .withConsistency(com.authx.sdk.model.Consistency.full())
                 .fetchSet();
         assertTrue(editors.contains("alice"), "alice should be in editors list");

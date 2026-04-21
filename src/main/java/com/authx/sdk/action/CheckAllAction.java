@@ -18,22 +18,23 @@ import java.util.Map;
 
 /**
  * Fluent action for checking multiple permissions in a single bulk RPC.
+ *
+ * <p>Subjects come in as {@link SubjectRef} values or canonical strings.
+ * The SDK does not assume a default subject type.
  */
 public class CheckAllAction {
     private final String resourceType;
     private final String resourceId;
     private final SdkTransport transport;
-    private final String defaultSubjectType;
     private final String[] permissions;
     private Consistency consistency = Consistency.minimizeLatency();
 
     /** Internal — use {@link com.authx.sdk.ResourceHandle} entry points. */
     public CheckAllAction(String resourceType, String resourceId, SdkTransport transport,
-                          String defaultSubjectType, String[] permissions) {
+                          String[] permissions) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
-        this.defaultSubjectType = defaultSubjectType;
         this.permissions = permissions;
     }
 
@@ -44,15 +45,15 @@ public class CheckAllAction {
     }
 
     /**
-     * Check all permissions for one user in a single bulk RPC.
+     * Check all permissions for one {@link SubjectRef subject} in a single bulk RPC.
      * N permissions -> 1 gRPC call (not N sequential calls).
      */
-    public PermissionSet by(String userId) {
+    public PermissionSet by(SubjectRef subject) {
         var items = Arrays.stream(permissions)
                 .map(perm -> new SdkTransport.BulkCheckItem(
                         ResourceRef.of(resourceType, resourceId),
                         Permission.of(perm),
-                        SubjectRef.of(defaultSubjectType, userId, null)))
+                        subject))
                 .toList();
         List<CheckResult> results = transport.checkBulkMulti(items, consistency);
         Map<String, CheckResult> map = new LinkedHashMap<>();
@@ -62,37 +63,51 @@ public class CheckAllAction {
         return new PermissionSet(map);
     }
 
-    /** Check all permissions against multiple user ids, returning a user-to-permissions matrix. */
-    public PermissionMatrix byAll(String... userIds) {
-        return byAll(Arrays.asList(userIds));
+    /** Canonical-string form of {@link #by(SubjectRef)}. */
+    public PermissionSet by(String subjectRef) {
+        return by(SubjectRef.parse(subjectRef));
     }
 
-    /** Check all permissions against multiple user ids, returning a user-to-permissions matrix. */
-    public PermissionMatrix byAll(Collection<String> userIds) {
-        List<String> uidList = userIds instanceof List ? (List<String>) userIds : new ArrayList<>(userIds);
-        // Build all (user x permission) items in one flat list
-        List<SdkTransport.BulkCheckItem> items = new ArrayList<>(uidList.size() * permissions.length);
-        for (String uid : uidList) {
+    /**
+     * Check all permissions against multiple {@link SubjectRef subjects},
+     * returning a matrix keyed by the subject's canonical ref string.
+     */
+    public PermissionMatrix byAll(SubjectRef... subjects) {
+        return byAll(Arrays.asList(subjects));
+    }
+
+    /** Collection overload of {@link #byAll(SubjectRef...)}. */
+    public PermissionMatrix byAll(Collection<SubjectRef> subjects) {
+        List<SubjectRef> list = subjects instanceof List
+                ? (List<SubjectRef>) subjects
+                : new ArrayList<>(subjects);
+        List<SdkTransport.BulkCheckItem> items = new ArrayList<>(list.size() * permissions.length);
+        for (SubjectRef sub : list) {
             for (String perm : permissions) {
                 items.add(new SdkTransport.BulkCheckItem(
                         ResourceRef.of(resourceType, resourceId),
                         Permission.of(perm),
-                        SubjectRef.of(defaultSubjectType, uid, null)));
+                        sub));
             }
         }
-
         List<CheckResult> results = transport.checkBulkMulti(items, consistency);
 
-        // Unpack flat results back into matrix[user][permission]
         Map<String, PermissionSet> matrix = new LinkedHashMap<>();
         int idx = 0;
-        for (String uid : uidList) {
+        for (SubjectRef sub : list) {
             Map<String, CheckResult> permMap = new LinkedHashMap<>();
             for (String perm : permissions) {
                 permMap.put(perm, results.get(idx++));
             }
-            matrix.put(uid, new PermissionSet(permMap));
+            matrix.put(sub.toRefString(), new PermissionSet(permMap));
         }
         return new PermissionMatrix(matrix);
+    }
+
+    /** Canonical-string form of {@link #byAll(SubjectRef...)}. */
+    public PermissionMatrix byAll(String... subjectRefs) {
+        SubjectRef[] parsed = new SubjectRef[subjectRefs.length];
+        for (int i = 0; i < subjectRefs.length; i++) parsed[i] = SubjectRef.parse(subjectRefs[i]);
+        return byAll(parsed);
     }
 }

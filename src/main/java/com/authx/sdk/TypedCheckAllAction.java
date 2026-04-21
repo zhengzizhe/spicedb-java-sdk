@@ -74,19 +74,10 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     // ────────────────────────────────────────────────────────────────
 
     /**
-     * Resolve every permission against a single user id and return a typed
-     * {@link EnumMap}. Requires exactly one selected resource id — for the
-     * multi-resource case use {@link #byAll(String)}.
+     * Resolve every permission against a single {@link SubjectRef subject} and
+     * return a typed {@link EnumMap}. Requires exactly one selected resource
+     * id — for the multi-resource case use {@link #byAll(SubjectRef)}.
      */
-    public EnumMap<E, Boolean> by(String userId) {
-        if (ids.length != 1) {
-            throw new IllegalStateException(
-                    "checkAll(...).by(String) requires exactly one resource id; "
-                            + "use byAll(userId) or loop for multi-resource");
-        }
-        return by(SubjectRef.of(factory.defaultSubjectType(), userId, null));
-    }
-
     public EnumMap<E, Boolean> by(SubjectRef subject) {
         if (ids.length != 1) {
             throw new IllegalStateException(
@@ -109,6 +100,11 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
         return result;
     }
 
+    /** Canonical-string form of {@link #by(SubjectRef)} — {@code "user:alice"} etc. */
+    public EnumMap<E, Boolean> by(String subjectRef) {
+        return by(SubjectRef.parse(subjectRef));
+    }
+
     // ────────────────────────────────────────────────────────────────
     //  Multi-resource terminators
     // ────────────────────────────────────────────────────────────────
@@ -120,13 +116,9 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
      * <pre>
      * Map&lt;String, EnumMap&lt;Document.Perm, Boolean&gt;&gt; perRow =
      *     Document.select(client, pageIds)
-     *         .checkAll(Document.Perm.class).byAll(userId);
+     *         .checkAll(Document.Perm.class).byAll(SubjectRef.of("user", userId));
      * </pre>
      */
-    public Map<String, EnumMap<E, Boolean>> byAll(String userId) {
-        return byAll(SubjectRef.of(factory.defaultSubjectType(), userId, null));
-    }
-
     public Map<String, EnumMap<E, Boolean>> byAll(SubjectRef subject) {
         E[] values = permClass.getEnumConstants();
         String resourceType = factory.resourceType();
@@ -151,5 +143,10 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
             out.put(id, permMap);
         }
         return out;
+    }
+
+    /** Canonical-string form of {@link #byAll(SubjectRef)}. */
+    public Map<String, EnumMap<E, Boolean>> byAll(String subjectRef) {
+        return byAll(SubjectRef.parse(subjectRef));
     }
 }
