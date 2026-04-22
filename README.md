@@ -19,6 +19,20 @@
 - **请求合并（Coalescing）**：并发相同请求自动合并，减少 SpiceDB 负载
 - **优雅降级**：Caffeine 缺失时自动 fallback 到 noop 缓存，永远不会因为缺依赖导致崩溃
 
+### 2026-04 新特性 — 扁平描述符（Schema flat descriptors）
+
+业务代码只需加一行 `import static`，就能从链式调用里去掉所有 `.TYPE` / `.class`：
+
+```java
+import static com.your.app.schema.Schema.*;
+
+client.on(Document).select(docId)
+      .check(Document.Perm.VIEW)
+      .by(User, userId);
+```
+
+详见 [`docs/migration-schema-flat-descriptors.md`](docs/migration-schema-flat-descriptors.md)。
+
 ## 快速开始
 
 ### 添加依赖
@@ -96,26 +110,26 @@ client.revokeAll("document", "doc-1", "bob");
 
 ```java
 // 同步监听器 —— 回调在当前线程运行，本调用等它返回后才继续
-client.on(Document.TYPE).select("doc-1")
+client.on(Document).select("doc-1")
     .grant(Document.Rel.EDITOR)
     .toUser("bob")
     .listener(r -> log.info("granted, zedToken={}", r.zedToken()));
 
 // 异步监听器 —— 投递到你提供的 executor，立即返回
-client.on(Document.TYPE).select("doc-1")
+client.on(Document).select("doc-1")
     .grant(Document.Rel.EDITOR)
     .toUser("bob")
     .listenerAsync(r -> audit.write(r), auditExecutor);
 
 // 多个监听器可链式挂载
-client.on(Document.TYPE).select("doc-1")
+client.on(Document).select("doc-1")
     .grant(Document.Rel.EDITOR)
     .toUser("bob")
     .listener(r -> localLog(r))
     .listenerAsync(r -> remoteAudit(r), auditExecutor);
 
 // 忽略返回值（语句形式）仍然可用 —— 老代码 0 改动
-client.on(Document.TYPE).select("doc-1")
+client.on(Document).select("doc-1")
     .grant(Document.Rel.EDITOR)
     .toUser("bob");
 ```
