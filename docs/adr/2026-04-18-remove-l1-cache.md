@@ -222,7 +222,7 @@ AuthxClient.builder()
 **背景**：本 ADR 一次性删除了 `com.authx.sdk.cache.SchemaCache` + `transport.SchemaLoader` + `SchemaClient`。但 schema 元信息（resource types / relations / permissions / 每个 relation 允许的 subject types / caveat 定义）在后续工作中又有两条真实需求：
 
 1. **运行时 subject 校验**（fail-fast）——`grant.to("folder:xxx")` 写错 subject 类型应该在 SDK 侧立即报错，不是走到 SpiceDB 再 `INVALID_ARGUMENT` 回来。
-2. **Typed codegen**——`AuthxCodegen` 要根据 schema 生成 `Document.Rel.VIEWER.subjectTypes()` 元数据，业务代码才能写 `.to(User.TYPE, userId)` 这种 typed overload 而不必手写 `"user:"` 前缀。
+2. **Typed codegen**——`AuthxCodegen` 要根据 schema 生成 `Document.Rel.VIEWER.subjectTypes()` 元数据，业务代码才能写 `.to(User, userId)` 这种 typed overload 而不必手写 `"user:"` 前缀。（2026-04-22 之前形态为 `.to(User.TYPE, userId)`；参见 `docs/migration-schema-flat-descriptors.md`。）
 
 两者都只需要 **metadata**，不需要 decision 缓存。
 

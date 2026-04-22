@@ -106,7 +106,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     }
 
     /**
-     * Typed subject form: {@code checkAll().by(User.TYPE, "alice")} —
+     * Typed subject form: {@code checkAll().by(User, "alice")} —
      * mirrors {@link TypedCheckAction#by(com.authx.sdk.ResourceType, String)}
      * so business code doesn't need to hand-compose {@code "user:alice"}.
      */
@@ -162,7 +162,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     }
 
     /**
-     * Typed subject form: {@code checkAll().byAll(User.TYPE, "alice")} —
+     * Typed subject form: {@code checkAll().byAll(User, "alice")} —
      * single subject, many resource ids × all permissions in one RPC.
      */
     public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,

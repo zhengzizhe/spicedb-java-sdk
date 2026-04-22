@@ -115,7 +115,7 @@ public class TypedCheckAction {
     }
 
     /**
-     * Typed subject form: {@code check(Perm.VIEW).by(User.TYPE, "alice")}.
+     * Typed subject form: {@code check(Perm.VIEW).by(User, "alice")}.
      * Constructs the canonical {@code "user:alice"} and routes through
      * {@link #by(String)} for the single-cell check.
      */
@@ -149,7 +149,7 @@ public class TypedCheckAction {
     }
 
     /**
-     * Typed subject form: {@code check(Perm.EDIT).detailedBy(User.TYPE, "alice")}.
+     * Typed subject form: {@code check(Perm.EDIT).detailedBy(User, "alice")}.
      * Constructs the canonical subject ref and routes through
      * {@link #detailedBy(String)} to return the full {@link CheckResult}.
      */

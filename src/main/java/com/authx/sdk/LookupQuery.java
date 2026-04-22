@@ -63,7 +63,7 @@ public class LookupQuery {
     }
 
     /**
-     * Typed subject form: {@code lookup("document").withPermission("view").by(User.TYPE, "alice")}.
+     * Typed subject form: {@code lookup("document").withPermission("view").by(User, "alice")}.
      * Constructs the canonical subject ref and routes through {@link #by(String)}.
      */
     public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,

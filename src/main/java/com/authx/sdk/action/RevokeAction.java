@@ -128,7 +128,7 @@ public class RevokeAction {
                 .collect(Collectors.joining(", ", "[", "]"));
     }
 
-    /** Typed subject form: {@code revoke(...).from(User.TYPE, "alice")}. */
+    /** Typed subject form: {@code revoke(...).from(User, "alice")}. */
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     RevokeResult from(ResourceType<R, P> subjectType, String id) {
         return from(new String[]{subjectType.name() + ":" + id});
@@ -136,14 +136,14 @@ public class RevokeAction {
 
     /**
      * Typed subject with sub-relation:
-     * {@code revoke(...).from(Group.TYPE, "eng", "member")}.
+     * {@code revoke(...).from(Group, "eng", "member")}.
      */
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     RevokeResult from(ResourceType<R, P> subjectType, String id, String subjectRelation) {
         return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
     }
 
-    /** Wildcard typed form: {@code revoke(...).fromWildcard(User.TYPE)}. */
+    /** Wildcard typed form: {@code revoke(...).fromWildcard(User)}. */
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     RevokeResult fromWildcard(ResourceType<R, P> subjectType) {
         return from(new String[]{subjectType.name() + ":*"});

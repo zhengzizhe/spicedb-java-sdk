@@ -59,7 +59,7 @@ public class CrossResourceBatchBuilder {
     /**
      * Typed overload — accepts a {@link ResourceType} descriptor in place
      * of the raw string, so business code can keep the same typed tokens
-     * it uses in {@code client.on(Xxx.TYPE)} chains.
+     * it uses in {@code client.on(Xxx)} chains.
      */
     public ResourceScope on(ResourceType<?, ?> resourceType, String resourceId) {
         return new ResourceScope(this, resourceType.name(), resourceId);
@@ -73,7 +73,7 @@ public class CrossResourceBatchBuilder {
      *
      * <pre>
      * client.batch()
-     *     .onAll(Document.TYPE, List.of("d-1", "d-2", "d-3"))
+     *     .onAll(Document, List.of("d-1", "d-2", "d-3"))
      *         .grant(Document.Rel.VIEWER).to("alice")
      *     .commit();
      * </pre>
@@ -218,12 +218,12 @@ public class CrossResourceBatchBuilder {
 
         // ────── Typed subject overloads (mirror TypedGrantAction) ─────
 
-        /** Typed single subject: {@code .grant(...).to(User.TYPE, "alice")}. */
+        /** Typed single subject: {@code .grant(...).to(User, "alice")}. */
         public ResourceScope to(ResourceType<?, ?> subjectType, String id) {
             return to(new String[]{subjectType.name() + ":" + id});
         }
 
-        /** Typed sub-relation: {@code .grant(...).to(Group.TYPE, "eng", "member")}. */
+        /** Typed sub-relation: {@code .grant(...).to(Group, "eng", "member")}. */
         public ResourceScope to(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
             return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
         }
@@ -241,7 +241,7 @@ public class CrossResourceBatchBuilder {
             return to(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
         }
 
-        /** Typed wildcard: {@code .grant(...).toWildcard(User.TYPE)}. */
+        /** Typed wildcard: {@code .grant(...).toWildcard(User)}. */
         public ResourceScope toWildcard(ResourceType<?, ?> subjectType) {
             return to(new String[]{subjectType.name() + ":*"});
         }
@@ -495,12 +495,12 @@ public class CrossResourceBatchBuilder {
 
         // ────── Typed subject overloads (mirror TypedRevokeAction) ─────
 
-        /** Typed single subject: {@code .revoke(...).from(User.TYPE, "alice")}. */
+        /** Typed single subject: {@code .revoke(...).from(User, "alice")}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, String id) {
             return from(new String[]{subjectType.name() + ":" + id});
         }
 
-        /** Typed sub-relation: {@code .revoke(...).from(Group.TYPE, "eng", "member")}. */
+        /** Typed sub-relation: {@code .revoke(...).from(Group, "eng", "member")}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
             return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
         }
@@ -518,7 +518,7 @@ public class CrossResourceBatchBuilder {
             return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
         }
 
-        /** Typed wildcard: {@code .revoke(...).fromWildcard(User.TYPE)}. */
+        /** Typed wildcard: {@code .revoke(...).fromWildcard(User)}. */
         public ResourceScope fromWildcard(ResourceType<?, ?> subjectType) {
             return from(new String[]{subjectType.name() + ":*"});
         }

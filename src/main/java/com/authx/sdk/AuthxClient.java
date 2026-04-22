@@ -140,13 +140,14 @@ public class AuthxClient implements AutoCloseable {
 
     /**
      * Typed entry point — the preferred surface for business code. Hand
-     * in the generated {@code Xxx.TYPE} descriptor and chain downward:
+     * in the generated descriptor and chain downward (examples assume
+     * {@code import static Schema.*}):
      *
      * <pre>
-     * client.on(Document.TYPE).select(docId).check(Document.Perm.VIEW).by(userId);
-     * client.on(Document.TYPE).select(docId).grant(Document.Rel.EDITOR).to(userId);
-     * client.on(Document.TYPE).select(docId).checkAll().by(userId);
-     * client.on(Document.TYPE).findByUser(userId).limit(100).can(Document.Perm.VIEW);
+     * client.on(Document).select(docId).check(Document.Perm.VIEW).by(userId);
+     * client.on(Document).select(docId).grant(Document.Rel.EDITOR).to(userId);
+     * client.on(Document).select(docId).checkAll().by(userId);
+     * client.on(Document).findByUser(userId).limit(100).can(Document.Perm.VIEW);
      * </pre>
      *
      * <p>Every operation that used to be spelled as a client-taking

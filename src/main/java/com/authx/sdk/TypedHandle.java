@@ -8,12 +8,12 @@ import java.util.Collection;
 /**
  * A typed handle scoped to one or more resource ids of a specific type.
  * Construct directly from a {@link ResourceFactory} (usually via
- * {@code client.on(TYPE)}) — no base class required, no wrapper object
+ * {@code client.on(Document)}) — no base class required, no wrapper object
  * to hold as a field:
  *
  * <pre>
  * var handle = new TypedHandle&lt;Document.Rel, Document.Perm&gt;(
- *         client.on(Document.TYPE), new String[]{"doc-1"});
+ *         client.on(Document), new String[]{"doc-1"});
  * boolean ok = handle.check(Document.Perm.VIEW).by("alice");
  * </pre>
  *

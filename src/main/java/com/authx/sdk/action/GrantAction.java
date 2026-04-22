@@ -199,7 +199,7 @@ public class GrantAction {
     }
 
     /**
-     * Typed subject form: {@code grant(...).to(User.TYPE, "alice")} —
+     * Typed subject form: {@code grant(...).to(User, "alice")} —
      * constructs the canonical {@code "user:alice"} ref and routes through
      * {@link #to(String...)} so the schema validation runs as normal.
      *
@@ -215,7 +215,7 @@ public class GrantAction {
 
     /**
      * Typed subject with a sub-relation (subject-set form):
-     * {@code grant(...).to(Group.TYPE, "eng", "member")} constructs
+     * {@code grant(...).to(Group, "eng", "member")} constructs
      * {@code "group:eng#member"}.
      *
      * <p>Use this when a relation accepts a typed subject-set such as
@@ -230,7 +230,7 @@ public class GrantAction {
 
     /**
      * Wildcard form for relations that accept {@code type:*}:
-     * {@code grant(...).toWildcard(User.TYPE)} constructs {@code "user:*"}.
+     * {@code grant(...).toWildcard(User)} constructs {@code "user:*"}.
      *
      * <p>Still routes through {@link #to(String...)} so schema validation
      * fires — if the relation does not declare a matching {@code user:*}

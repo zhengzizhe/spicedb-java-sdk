@@ -61,7 +61,7 @@ public class TypedFinder<P extends Permission.Named> {
      *
      * <pre>
      * Map&lt;Document.Perm, List&lt;String&gt;&gt; byPerm =
-     *     client.on(Document.TYPE).findByUser(userId).limit(200)
+     *     client.on(Document).findByUser(userId).limit(200)
      *           .can(Document.Perm.VIEW, Document.Perm.EDIT);
      *
      * List&lt;String&gt; viewable = byPerm.get(Document.Perm.VIEW);

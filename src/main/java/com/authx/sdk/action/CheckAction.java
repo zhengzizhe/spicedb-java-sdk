@@ -100,7 +100,7 @@ public class CheckAction {
     }
 
     /**
-     * Typed subject form: {@code check(...).by(User.TYPE, "alice")} —
+     * Typed subject form: {@code check(...).by(User, "alice")} —
      * constructs the canonical {@code "user:alice"} and delegates to
      * {@link #by(String)}.
      */

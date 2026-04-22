@@ -122,13 +122,13 @@ public class TypedRevokeAction<R extends Relation.Named> {
                 .collect(Collectors.joining(", ", "[", "]"));
     }
 
-    /** Typed subject form: {@code revoke(...).from(User.TYPE, "alice")}. */
+    /** Typed subject form: {@code revoke(...).from(User, "alice")}. */
     public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
     RevokeCompletion from(ResourceType<R2, P2> subjectType, String id) {
         return from(new String[]{subjectType.name() + ":" + id});
     }
 
-    /** Typed subject with sub-relation: {@code revoke(...).from(Group.TYPE, "eng", "member")}. */
+    /** Typed subject with sub-relation: {@code revoke(...).from(Group, "eng", "member")}. */
     public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
     RevokeCompletion from(ResourceType<R2, P2> subjectType, String id, String subjectRelation) {
         return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
@@ -156,7 +156,7 @@ public class TypedRevokeAction<R extends Relation.Named> {
         return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
     }
 
-    /** Wildcard typed form: {@code revoke(...).fromWildcard(User.TYPE)}. */
+    /** Wildcard typed form: {@code revoke(...).fromWildcard(User)}. */
     public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
     RevokeCompletion fromWildcard(ResourceType<R2, P2> subjectType) {
         return from(new String[]{subjectType.name() + ":*"});

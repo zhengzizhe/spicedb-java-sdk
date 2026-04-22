@@ -19,9 +19,9 @@ import java.util.Objects;
  * the simplest path:
  *
  * <pre>
- * client.on(Document.TYPE).select("d-1").grant(Rel.EDITOR).to("user:alice");
- * client.on(Document.TYPE).select("d-1").grant(Rel.VIEWER).to("user:*");
- * client.on(Document.TYPE).select("d-1").grant(Rel.VIEWER).to("group:eng#member");
+ * client.on(Document).select("d-1").grant(Rel.EDITOR).to("user:alice");
+ * client.on(Document).select("d-1").grant(Rel.VIEWER).to("user:*");
+ * client.on(Document).select("d-1").grant(Rel.VIEWER).to("group:eng#member");
  * </pre>
  *
  * <h2>When to use {@code SubjectRef}</h2>

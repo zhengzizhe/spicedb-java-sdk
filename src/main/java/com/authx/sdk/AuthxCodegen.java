@@ -76,7 +76,7 @@ public final class AuthxCodegen {
             // Emit a class for every declared type, even subject-only ones
             // such as {@code user} (no relations / no permissions). These
             // still need a {@code TYPE} descriptor so business code can
-            // pass {@code User.TYPE} to the typed subject overloads on
+            // pass {@code User} to the typed subject overloads on
             // Grant/Revoke/Check/Lookup.
 
             var relSTs = schema.allSubjectTypes(type);

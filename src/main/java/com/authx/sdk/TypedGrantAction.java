@@ -209,7 +209,7 @@ public class TypedGrantAction<R extends Relation.Named> {
     }
 
     /**
-     * Typed subject form: {@code grant(...).to(User.TYPE, "alice")} —
+     * Typed subject form: {@code grant(...).to(User, "alice")} —
      * constructs the canonical {@code "user:alice"} ref and routes through
      * {@link #to(String...)} so the per-relation validation on the
      * underlying {@link com.authx.sdk.action.GrantAction} still runs.
@@ -221,7 +221,7 @@ public class TypedGrantAction<R extends Relation.Named> {
 
     /**
      * Typed subject with a sub-relation:
-     * {@code grant(...).to(Group.TYPE, "eng", "member")} constructs
+     * {@code grant(...).to(Group, "eng", "member")} constructs
      * {@code "group:eng#member"}.
      */
     public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
@@ -261,7 +261,7 @@ public class TypedGrantAction<R extends Relation.Named> {
     }
 
     /**
-     * Wildcard form: {@code grant(...).toWildcard(User.TYPE)} constructs
+     * Wildcard form: {@code grant(...).toWildcard(User)} constructs
      * {@code "user:*"}. Still routes through {@link #to(String...)} so
      * schema validation fires — if the relation does not declare a
      * matching {@code user:*} allowance, the call throws.

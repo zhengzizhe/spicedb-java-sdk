@@ -131,7 +131,7 @@ public class ResourceHandle {
 
     /**
      * Typed version of {@link #who(String)} — takes a {@link ResourceType}
-     * descriptor (e.g. {@code User.TYPE}) so business code can avoid
+     * descriptor (e.g. {@code User}) so business code can avoid
      * hand-writing the type name string.
      */
     public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,
