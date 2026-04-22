@@ -228,6 +228,19 @@ public class CrossResourceBatchBuilder {
             return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
         }
 
+        /** Enum-typed sub-relation: {@code .grant(...).to(Group, "eng", Group.Rel.MEMBER)}. */
+        public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+                P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+        ResourceScope to(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+            return to(subjectType, id, subjectRelation.relationName());
+        }
+
+        /** Enum-typed sub-permission: {@code .grant(...).to(Department, "hq", Department.Perm.ALL_MEMBERS)}. */
+        public ResourceScope to(ResourceType<?, ?> subjectType, String id,
+                                 com.authx.sdk.model.Permission.Named subjectPermission) {
+            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+        }
+
         /** Typed wildcard: {@code .grant(...).toWildcard(User.TYPE)}. */
         public ResourceScope toWildcard(ResourceType<?, ?> subjectType) {
             return to(new String[]{subjectType.name() + ":*"});
@@ -343,6 +356,19 @@ public class CrossResourceBatchBuilder {
             return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
         }
 
+        /** Enum-typed sub-relation across every resource id in the fan. */
+        public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+                P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+        MultiResourceScope to(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+            return to(subjectType, id, subjectRelation.relationName());
+        }
+
+        /** Enum-typed sub-permission across every resource id in the fan. */
+        public MultiResourceScope to(ResourceType<?, ?> subjectType, String id,
+                                       com.authx.sdk.model.Permission.Named subjectPermission) {
+            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+        }
+
         /** Typed wildcard across every resource id in the fan. */
         public MultiResourceScope toWildcard(ResourceType<?, ?> subjectType) {
             return to(new String[]{subjectType.name() + ":*"});
@@ -405,6 +431,19 @@ public class CrossResourceBatchBuilder {
             return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
         }
 
+        /** Enum-typed sub-relation across every resource id in the fan. */
+        public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+                P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+        MultiResourceScope from(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+            return from(subjectType, id, subjectRelation.relationName());
+        }
+
+        /** Enum-typed sub-permission across every resource id in the fan. */
+        public MultiResourceScope from(ResourceType<?, ?> subjectType, String id,
+                                         com.authx.sdk.model.Permission.Named subjectPermission) {
+            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+        }
+
         /** Typed wildcard across every resource id in the fan. */
         public MultiResourceScope fromWildcard(ResourceType<?, ?> subjectType) {
             return from(new String[]{subjectType.name() + ":*"});
@@ -464,6 +503,19 @@ public class CrossResourceBatchBuilder {
         /** Typed sub-relation: {@code .revoke(...).from(Group.TYPE, "eng", "member")}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
             return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Enum-typed sub-relation: {@code .revoke(...).from(Group, "eng", Group.Rel.MEMBER)}. */
+        public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+                P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+        ResourceScope from(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+            return from(subjectType, id, subjectRelation.relationName());
+        }
+
+        /** Enum-typed sub-permission: {@code .revoke(...).from(Department, "hq", Department.Perm.ALL_MEMBERS)}. */
+        public ResourceScope from(ResourceType<?, ?> subjectType, String id,
+                                   com.authx.sdk.model.Permission.Named subjectPermission) {
+            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
         }
 
         /** Typed wildcard: {@code .revoke(...).fromWildcard(User.TYPE)}. */
