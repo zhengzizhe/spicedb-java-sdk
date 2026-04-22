@@ -22,8 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.function.Consumer;
 
 /**
  * Fluent flow for granting relationships. Accumulates (relation, subject)
@@ -68,6 +66,17 @@ import java.util.function.Consumer;
  * .to(User, "dave")                          // clean again, no caveat/expiry
  * </pre>
  *
+ * <h2>Listener hooks</h2>
+ *
+ * <p>{@link #commit()} returns a {@link GrantCompletion} that supports
+ * chaining synchronous and asynchronous callbacks:
+ *
+ * <pre>
+ * flow.commit()
+ *     .listener(r -> auditLog.write(r))
+ *     .listenerAsync(r -> eventBus.emit(r), executor);
+ * </pre>
+ *
  * <h2>Lifecycle</h2>
  *
  * <ul>
@@ -103,15 +112,7 @@ public final class GrantFlow {
 
     private final List<RelationshipUpdate> pending = new ArrayList<>();
 
-    /** Sync listeners — fire on the calling thread before {@link #commit()} returns. */
-    private List<Consumer<GrantResult>> syncListeners;
-
-    /** Async listeners — dispatched to their paired executor after the write returns. */
-    private List<AsyncListener<GrantResult>> asyncListeners;
-
     private boolean committed = false;
-
-    private record AsyncListener<T>(Consumer<T> callback, Executor executor) {}
 
     GrantFlow(String resourceType,
               String resourceId,
@@ -293,59 +294,31 @@ public final class GrantFlow {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  Listeners (fire after commit succeeds)
-    // ──────────────────────────────────────────────────────────────────
-
-    /**
-     * Register a synchronous callback that runs on the calling thread
-     * <b>after</b> the write completes and <b>before</b> {@link #commit()}
-     * returns. Multiple listeners fire in registration order. If a
-     * listener throws, remaining sync listeners do not fire and the
-     * exception propagates to the caller.
-     *
-     * <p>Listeners do not fire if the write itself fails — callers see
-     * the transport exception instead.
-     */
-    public GrantFlow listener(Consumer<GrantResult> callback) {
-        checkOpen();
-        Objects.requireNonNull(callback, "callback");
-        if (syncListeners == null) syncListeners = new ArrayList<>(2);
-        syncListeners.add(callback);
-        return this;
-    }
-
-    /**
-     * Register an asynchronous callback dispatched to {@code executor}
-     * after the write completes. {@link #commit()} returns without
-     * waiting. Callback exceptions are caught, logged at WARNING under
-     * logger {@code com.authx.sdk.GrantFlow}, and swallowed — they do
-     * not affect the write outcome or other listeners.
-     */
-    public GrantFlow listenerAsync(Consumer<GrantResult> callback, Executor executor) {
-        checkOpen();
-        Objects.requireNonNull(callback, "callback");
-        Objects.requireNonNull(executor, "executor");
-        if (asyncListeners == null) asyncListeners = new ArrayList<>(2);
-        asyncListeners.add(new AsyncListener<>(callback, executor));
-        return this;
-    }
-
-    // ──────────────────────────────────────────────────────────────────
     //  Termination
     // ──────────────────────────────────────────────────────────────────
 
     /**
-     * Flush all accumulated updates in one {@code WriteRelationships} RPC.
-     * After this call the flow is sealed and any further method call throws.
+     * Flush all accumulated updates in one {@code WriteRelationships} RPC
+     * and return a {@link GrantCompletion} that callers can chain with
+     * {@link GrantCompletion#listener} / {@link GrantCompletion#listenerAsync}.
+     * After this call the flow is sealed.
      *
-     * <p>Listeners registered via {@link #listener} / {@link #listenerAsync}
-     * fire after the write returns successfully (sync listeners first, on
-     * the calling thread; async ones are dispatched to their executors).
+     * <p>Most callers just read the delegated fields:
+     * <pre>
+     * int n = flow.commit().count();
+     * </pre>
+     *
+     * <p>Callers who want side-effect hooks chain listeners:
+     * <pre>
+     * flow.commit()
+     *     .listener(r -> auditLog.write(r))
+     *     .listenerAsync(r -> eventBus.emit(r), executor);
+     * </pre>
      *
      * @throws IllegalStateException if the flow is already committed or
      *         has no pending updates
      */
-    public GrantResult commit() {
+    public GrantCompletion commit() {
         checkOpen();
         if (pending.isEmpty()) {
             throw new IllegalStateException(
@@ -355,12 +328,18 @@ public final class GrantFlow {
         committed = true;
         validateSchemaFailFast();
         GrantResult result = transport.writeRelationships(List.copyOf(pending));
-        fireListeners(result);
-        return result;
+        return new GrantCompletion(result);
     }
 
-    /** Async variant of {@link #commit()}. */
-    public CompletableFuture<GrantResult> commitAsync() {
+    /**
+     * Async variant of {@link #commit()}. Resolves to a
+     * {@link GrantCompletion} so the same listener chaining works:
+     *
+     * <pre>
+     * flow.commitAsync().thenAccept(c -> c.listener(r -> audit(r)));
+     * </pre>
+     */
+    public CompletableFuture<GrantCompletion> commitAsync() {
         checkOpen();
         if (pending.isEmpty()) {
             return CompletableFuture.failedFuture(new IllegalStateException(
@@ -373,11 +352,8 @@ public final class GrantFlow {
             return CompletableFuture.failedFuture(e);
         }
         List<RelationshipUpdate> snapshot = List.copyOf(pending);
-        return CompletableFuture.supplyAsync(() -> {
-            GrantResult result = transport.writeRelationships(snapshot);
-            fireListeners(result);
-            return result;
-        });
+        return CompletableFuture.supplyAsync(() ->
+                new GrantCompletion(transport.writeRelationships(snapshot)));
     }
 
     /**
@@ -451,29 +427,6 @@ public final class GrantFlow {
                     u.resource().type(),
                     u.relation().name(),
                     u.subject().toRefString());
-        }
-    }
-
-    private void fireListeners(GrantResult result) {
-        if (syncListeners != null) {
-            // First throw propagates; remaining sync listeners do not fire.
-            // Matches GrantCompletion semantics.
-            for (Consumer<GrantResult> l : syncListeners) {
-                l.accept(result);
-            }
-        }
-        if (asyncListeners != null) {
-            for (AsyncListener<GrantResult> al : asyncListeners) {
-                al.executor().execute(() -> {
-                    try {
-                        al.callback().accept(result);
-                    } catch (Throwable t) {
-                        System.getLogger(GrantFlow.class.getName()).log(
-                                System.Logger.Level.WARNING,
-                                "GrantFlow async listener threw — swallowed", t);
-                    }
-                });
-            }
         }
     }
 }

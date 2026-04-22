@@ -386,21 +386,30 @@ class GrantFlowTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  Listeners
+    //  GrantCompletion listeners — hang off commit()
     // ──────────────────────────────────────────────────────────────────
 
     @Test
-    void listener_firesAfterCommitOnCallingThread() {
+    void commit_returnsCompletionWithDelegatedAccessors() {
+        GrantCompletion c = newFlow()
+                .grant(DocRel.VIEWER)
+                .to(User, "alice")
+                .commit();
+        assertThat(c.result()).isNotNull();
+        assertThat(c.count()).isEqualTo(c.result().count());
+    }
+
+    @Test
+    void listener_firesImmediatelyOnCallingThread() {
         var fired = new java.util.concurrent.atomic.AtomicInteger(0);
         var threadName = new java.util.concurrent.atomic.AtomicReference<String>();
         newFlow()
-                .grant(DocRel.VIEWER)
-                .to(User, "alice")
+                .grant(DocRel.VIEWER).to(User, "alice")
+                .commit()
                 .listener(r -> {
                     fired.incrementAndGet();
                     threadName.set(Thread.currentThread().getName());
-                })
-                .commit();
+                });
 
         assertThat(fired.get()).isEqualTo(1);
         assertThat(threadName.get()).isEqualTo(Thread.currentThread().getName());
@@ -410,12 +419,11 @@ class GrantFlowTest {
     void listener_multipleFireInOrder() {
         var order = new java.util.ArrayList<Integer>();
         newFlow()
-                .grant(DocRel.VIEWER)
-                .to(User, "alice")
+                .grant(DocRel.VIEWER).to(User, "alice")
+                .commit()
                 .listener(r -> order.add(1))
                 .listener(r -> order.add(2))
-                .listener(r -> order.add(3))
-                .commit();
+                .listener(r -> order.add(3));
 
         assertThat(order).containsExactly(1, 2, 3);
     }
@@ -424,12 +432,11 @@ class GrantFlowTest {
     void listener_syncThrowStopsSubsequentSyncListeners() {
         var fired = new java.util.ArrayList<Integer>();
         assertThatThrownBy(() -> newFlow()
-                .grant(DocRel.VIEWER)
-                .to(User, "alice")
+                .grant(DocRel.VIEWER).to(User, "alice")
+                .commit()
                 .listener(r -> fired.add(1))
                 .listener(r -> { throw new RuntimeException("boom"); })
-                .listener(r -> fired.add(3))      // must not fire
-                .commit())
+                .listener(r -> fired.add(3)))      // must not fire
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("boom");
 
@@ -448,13 +455,12 @@ class GrantFlowTest {
             var threadName = new java.util.concurrent.atomic.AtomicReference<String>();
 
             newFlow()
-                    .grant(DocRel.VIEWER)
-                    .to(User, "alice")
+                    .grant(DocRel.VIEWER).to(User, "alice")
+                    .commit()
                     .listenerAsync(r -> {
                         threadName.set(Thread.currentThread().getName());
                         done.countDown();
-                    }, exec)
-                    .commit();
+                    }, exec);
 
             assertThat(done.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
             assertThat(threadName.get()).isEqualTo("listener-async-pool");
@@ -467,34 +473,22 @@ class GrantFlowTest {
     void listenerAsync_exceptionSwallowed() {
         var exec = java.util.concurrent.Executors.newSingleThreadExecutor();
         try {
-            // commit must not throw; the async listener's exception is logged and swallowed.
-            var result = newFlow()
-                    .grant(DocRel.VIEWER)
-                    .to(User, "alice")
-                    .listenerAsync(r -> { throw new RuntimeException("async-boom"); }, exec)
-                    .commit();
-            assertThat(result).isNotNull();
+            // completion chain must not throw; async listener's exception is logged and swallowed.
+            var c = newFlow()
+                    .grant(DocRel.VIEWER).to(User, "alice")
+                    .commit()
+                    .listenerAsync(r -> { throw new RuntimeException("async-boom"); }, exec);
+            assertThat(c).isNotNull();
         } finally {
             exec.shutdown();
         }
     }
 
     @Test
-    void listener_doesNotFireWhenNoCommit() {
-        var fired = new java.util.concurrent.atomic.AtomicBoolean(false);
-        var flow = newFlow()
-                .grant(DocRel.VIEWER)
-                .to(User, "alice")
-                .listener(r -> fired.set(true));
-        // no commit — flow is discarded
-        assertThat(fired.get()).isFalse();
-        assertThat(flow.pendingCount()).isEqualTo(1);
-    }
-
-    @Test
     void listener_null_throws() {
         assertThatThrownBy(() -> newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
+                .commit()
                 .listener(null))
                 .isInstanceOf(NullPointerException.class);
     }
@@ -505,6 +499,7 @@ class GrantFlowTest {
         try {
             assertThatThrownBy(() -> newFlow()
                     .grant(DocRel.VIEWER).to(User, "alice")
+                    .commit()
                     .listenerAsync(null, exec))
                     .isInstanceOf(NullPointerException.class);
         } finally { exec.shutdown(); }
@@ -514,6 +509,7 @@ class GrantFlowTest {
     void listenerAsync_nullExecutor_throws() {
         assertThatThrownBy(() -> newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
+                .commit()
                 .listenerAsync(r -> {}, null))
                 .isInstanceOf(NullPointerException.class);
     }
