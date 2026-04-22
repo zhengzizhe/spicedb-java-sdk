@@ -6,6 +6,8 @@ import com.authx.testapp.schema.IpAllowlist;
 import com.authx.testapp.schema.User;
 import org.springframework.stereotype.Service;
 
+import static com.authx.testapp.schema.Schema.*;
+
 import java.util.List;
 
 /**
@@ -44,11 +46,11 @@ public class ConditionalShareService {
      * 把它塞进 {@code RelationshipUpdate.caveat} 字段。
      */
     public void shareOnCorpNetwork(String docId, List<String> allowedCidrs) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(Document.Rel.LINK_VIEWER)
                 .onlyIf(IpAllowlist.ref(IpAllowlist.CIDRS, allowedCidrs))
-                .toWildcard(User.TYPE);
+                .toWildcard(User);
     }
 
     /**
@@ -57,26 +59,26 @@ public class ConditionalShareService {
      * 不需要手写 {@code "user:*"}。
      */
     public void stopSharing(String docId) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .revoke(Document.Rel.LINK_VIEWER)
-                .fromWildcard(User.TYPE);
+                .fromWildcard(User);
     }
 
     /**
      * 用户在观察到的 client IP 前提下能否看这个文档。
      *
      * <p>{@code given(IpAllowlist.CLIENT_IP, clientIp)} 构造 check 时的
-     * caveat context；{@code by(User.TYPE, userId)} 构造 subject。SpiceDB
+     * caveat context；{@code by(User, userId)} 构造 subject。SpiceDB
      * 对 link_viewer 关系带的 {@code ip_allowlist} caveat 执行 CEL，
      * 返回最终的 true / false。如果文档没有走 link_viewer 路径（例如
      * 直接被 editor 分享），caveat 不参与判定，context 被忽略。
      */
     public boolean canOpenFrom(String docId, String userId, String clientIp) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
                 .check(Document.Perm.VIEW)
                 .given(IpAllowlist.CLIENT_IP, clientIp)
-                .by(User.TYPE, userId);
+                .by(User, userId);
     }
 }
