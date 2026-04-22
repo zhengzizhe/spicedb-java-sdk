@@ -55,11 +55,11 @@ Schema regeneration (T021) and service migrations (T023–T028) must land in the
 
 ## Phase 3 — Segment 3: docs (req-10)
 
-- [ ] T031 [SR:req-10] Update `README.md` API example block to new flat-descriptor form — `README.md`
-- [ ] T032 [SR:req-10] Create migration guide with before/after table for external users — `docs/migration-schema-flat-descriptors.md`
-- [ ] T033 [P] [SR:req-10] Grep docs for lingering `Xxx.TYPE` / `.on("<type>")` examples and update; grep skills in `.claude/skills/` too — `docs/**/*.md`, `README.md`, `.claude/**/*.md`
-- [ ] T034 [SR:req-10] Phase-3 gate + segment-3 commit — `./gradlew test` final green run, commit with message "docs: migration guide + README examples for flat descriptors"
-- [ ] T035 Final verification — run success-criteria checklist from spec §Success Criteria:
+- [X] T031 [SR:req-10] Update `README.md` API example block to new flat-descriptor form — `README.md`
+- [X] T032 [SR:req-10] Create migration guide with before/after table for external users — `docs/migration-schema-flat-descriptors.md`
+- [X] T033 [P] [SR:req-10] Grep docs for lingering `Xxx.TYPE` / `.on("<type>")` examples and update; grep skills in `.claude/skills/` too — `docs/**/*.md`, `README.md`, `.claude/**/*.md`
+- [X] T034 [SR:req-10] Phase-3 gate + segment-3 commit — `./gradlew test` final green run, commit with message "docs: migration guide + README examples for flat descriptors"
+- [X] T035 Final verification — run success-criteria checklist from spec §Success Criteria:
   1. `./gradlew test` green
   2. `CompanyWorkspaceService.java` char-count ≥ 25% smaller than pre-migration
   3. `grep -r "\.TYPE" test-app/src/main/java/com/authx/testapp/service/` returns 0
