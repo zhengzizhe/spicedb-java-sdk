@@ -74,6 +74,7 @@ public class AuthxClientBuilder {
     private boolean useVirtualThreads = false;
     private boolean registerShutdownHook = false;
     private boolean telemetryEnabled = false;
+    private boolean loadSchemaOnStart = true;
 
     // Extensibility
     private PolicyRegistry policyRegistry;
@@ -138,6 +139,28 @@ public class AuthxClientBuilder {
      */
     public AuthxClientBuilder customize(com.authx.sdk.spi.AuthxClientCustomizer customizer) {
         clientCustomizers.add(Objects.requireNonNull(customizer, "customizer"));
+        return this;
+    }
+
+    /**
+     * Controls whether the SDK eagerly reads the SpiceDB schema via
+     * {@code ExperimentalService.ReflectSchema} at {@link #build()} time
+     * to populate the {@link com.authx.sdk.cache.SchemaCache} that backs
+     * {@link AuthxClient#schema()} and runtime subject-type validation.
+     *
+     * <p>Defaults to {@code true}. Disabling this skips the reflect call
+     * entirely — useful in unit tests / offline environments, or when the
+     * SpiceDB deployment has reflection disabled. The {@link SchemaClient}
+     * accessor still returns a non-null instance, but
+     * {@link SchemaClient#isLoaded()} is {@code false} and all getters
+     * return empty collections.
+     *
+     * <p>A failed reflect call (e.g. {@code UNIMPLEMENTED}) is always
+     * non-fatal — the client still builds; only the cache stays empty.
+     * See {@link com.authx.sdk.transport.SchemaLoader}.
+     */
+    public AuthxClientBuilder loadSchemaOnStart(boolean enabled) {
+        this.loadSchemaOnStart = enabled;
         return this;
     }
 
@@ -295,7 +318,25 @@ public class AuthxClientBuilder {
                         new SchemaReadHealthProbe(grpcChannel, presharedKey));
             }
 
-            var client = new AuthxClient(transport, infraObj, observabilityObj, configObj, probe);
+            // Schema: populate SchemaCache from SpiceDB via ReflectSchema, unless
+            // disabled. Failures are non-fatal — the loader logs and the cache
+            // stays empty. The SchemaClient exposed via AuthxClient#schema() is
+            // always non-null so callers don't need a null check.
+            var schemaCache = new com.authx.sdk.cache.SchemaCache();
+            if (loadSchemaOnStart) {
+                var authMetadata = new io.grpc.Metadata();
+                authMetadata.put(
+                        io.grpc.Metadata.Key.of("authorization", io.grpc.Metadata.ASCII_STRING_MARSHALLER),
+                        "Bearer " + presharedKey);
+                new com.authx.sdk.transport.SchemaLoader().load(grpcChannel, authMetadata, schemaCache);
+            }
+            var schemaClient = new SchemaClient(schemaCache);
+
+            // Hand the cache to AuthxClient so ResourceFactory/Handle/GrantAction
+            // can consume it for runtime subject-type validation. The
+            // SchemaClient public accessor wraps the same instance.
+            var client = new AuthxClient(transport, infraObj, observabilityObj, configObj, probe,
+                    schemaClient, schemaCache);
 
             if (registerShutdownHook) {
                 var hook = new Thread(client::close, "authx-sdk-shutdown");

@@ -56,9 +56,9 @@ public class TypedWhoQuery {
      * back into a grant/revoke chain:
      *
      * <pre>
-     * var oldEditors = client.on(Document.TYPE).select(docId)
+     * var oldEditors = client.on(Document).select(docId)
      *         .who("user", Document.Perm.EDIT).asSubjectRefs();
-     * client.on(Document.TYPE).select(newDocId)
+     * client.on(Document).select(newDocId)
      *         .grant(Document.Rel.EDITOR).to(oldEditors);
      * </pre>
      */

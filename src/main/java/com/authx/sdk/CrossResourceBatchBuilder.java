@@ -59,7 +59,7 @@ public class CrossResourceBatchBuilder {
     /**
      * Typed overload — accepts a {@link ResourceType} descriptor in place
      * of the raw string, so business code can keep the same typed tokens
-     * it uses in {@code client.on(Xxx.TYPE)} chains.
+     * it uses in {@code client.on(Xxx)} chains.
      */
     public ResourceScope on(ResourceType<?, ?> resourceType, String resourceId) {
         return new ResourceScope(this, resourceType.name(), resourceId);
@@ -73,7 +73,7 @@ public class CrossResourceBatchBuilder {
      *
      * <pre>
      * client.batch()
-     *     .onAll(Document.TYPE, List.of("d-1", "d-2", "d-3"))
+     *     .onAll(Document, List.of("d-1", "d-2", "d-3"))
      *         .grant(Document.Rel.VIEWER).to("alice")
      *     .commit();
      * </pre>
@@ -215,6 +215,43 @@ public class CrossResourceBatchBuilder {
             for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
             return to(subjects.toArray(SubjectRef[]::new));
         }
+
+        // ────── Typed subject overloads (mirror TypedGrantAction) ─────
+
+        /** Typed single subject: {@code .grant(...).to(User, "alice")}. */
+        public ResourceScope to(ResourceType<?, ?> subjectType, String id) {
+            return to(new String[]{subjectType.name() + ":" + id});
+        }
+
+        /** Typed sub-relation: {@code .grant(...).to(Group, "eng", "member")}. */
+        public ResourceScope to(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
+            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Enum-typed sub-relation: {@code .grant(...).to(Group, "eng", Group.Rel.MEMBER)}. */
+        public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+                P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+        ResourceScope to(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+            return to(subjectType, id, subjectRelation.relationName());
+        }
+
+        /** Enum-typed sub-permission: {@code .grant(...).to(Department, "hq", Department.Perm.ALL_MEMBERS)}. */
+        public ResourceScope to(ResourceType<?, ?> subjectType, String id,
+                                 com.authx.sdk.model.Permission.Named subjectPermission) {
+            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+        }
+
+        /** Typed wildcard: {@code .grant(...).toWildcard(User)}. */
+        public ResourceScope toWildcard(ResourceType<?, ?> subjectType) {
+            return to(new String[]{subjectType.name() + ":*"});
+        }
+
+        /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
+        public ResourceScope to(ResourceType<?, ?> subjectType, Iterable<String> ids) {
+            java.util.List<String> refs = new java.util.ArrayList<>();
+            for (String id : ids) refs.add(subjectType.name() + ":" + id);
+            return to(refs.toArray(String[]::new));
+        }
     }
 
     /**
@@ -306,6 +343,43 @@ public class CrossResourceBatchBuilder {
             for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
             return to(subjects.toArray(SubjectRef[]::new));
         }
+
+        // ────── Typed subject overloads (mirror TypedGrantAction) ─────
+
+        /** Typed single subject across every resource id in the fan. */
+        public MultiResourceScope to(ResourceType<?, ?> subjectType, String id) {
+            return to(new String[]{subjectType.name() + ":" + id});
+        }
+
+        /** Typed sub-relation across every resource id in the fan. */
+        public MultiResourceScope to(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
+            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Enum-typed sub-relation across every resource id in the fan. */
+        public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+                P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+        MultiResourceScope to(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+            return to(subjectType, id, subjectRelation.relationName());
+        }
+
+        /** Enum-typed sub-permission across every resource id in the fan. */
+        public MultiResourceScope to(ResourceType<?, ?> subjectType, String id,
+                                       com.authx.sdk.model.Permission.Named subjectPermission) {
+            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+        }
+
+        /** Typed wildcard across every resource id in the fan. */
+        public MultiResourceScope toWildcard(ResourceType<?, ?> subjectType) {
+            return to(new String[]{subjectType.name() + ":*"});
+        }
+
+        /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
+        public MultiResourceScope to(ResourceType<?, ?> subjectType, Iterable<String> ids) {
+            java.util.List<String> refs = new java.util.ArrayList<>();
+            for (String id : ids) refs.add(subjectType.name() + ":" + id);
+            return to(refs.toArray(String[]::new));
+        }
     }
 
     public static class MultiRevokeScope {
@@ -344,6 +418,43 @@ public class CrossResourceBatchBuilder {
             for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
             return from(subjects.toArray(SubjectRef[]::new));
         }
+
+        // ────── Typed subject overloads (mirror TypedRevokeAction) ─────
+
+        /** Typed single subject across every resource id in the fan. */
+        public MultiResourceScope from(ResourceType<?, ?> subjectType, String id) {
+            return from(new String[]{subjectType.name() + ":" + id});
+        }
+
+        /** Typed sub-relation across every resource id in the fan. */
+        public MultiResourceScope from(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
+            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Enum-typed sub-relation across every resource id in the fan. */
+        public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+                P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+        MultiResourceScope from(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+            return from(subjectType, id, subjectRelation.relationName());
+        }
+
+        /** Enum-typed sub-permission across every resource id in the fan. */
+        public MultiResourceScope from(ResourceType<?, ?> subjectType, String id,
+                                         com.authx.sdk.model.Permission.Named subjectPermission) {
+            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+        }
+
+        /** Typed wildcard across every resource id in the fan. */
+        public MultiResourceScope fromWildcard(ResourceType<?, ?> subjectType) {
+            return from(new String[]{subjectType.name() + ":*"});
+        }
+
+        /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
+        public MultiResourceScope from(ResourceType<?, ?> subjectType, Iterable<String> ids) {
+            java.util.List<String> refs = new java.util.ArrayList<>();
+            for (String id : ids) refs.add(subjectType.name() + ":" + id);
+            return from(refs.toArray(String[]::new));
+        }
     }
 
     /** Revoke scope within a cross-resource batch, targeting specific relations. */
@@ -380,6 +491,43 @@ public class CrossResourceBatchBuilder {
             java.util.List<SubjectRef> subjects = new java.util.ArrayList<>();
             for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
             return from(subjects.toArray(SubjectRef[]::new));
+        }
+
+        // ────── Typed subject overloads (mirror TypedRevokeAction) ─────
+
+        /** Typed single subject: {@code .revoke(...).from(User, "alice")}. */
+        public ResourceScope from(ResourceType<?, ?> subjectType, String id) {
+            return from(new String[]{subjectType.name() + ":" + id});
+        }
+
+        /** Typed sub-relation: {@code .revoke(...).from(Group, "eng", "member")}. */
+        public ResourceScope from(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
+            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Enum-typed sub-relation: {@code .revoke(...).from(Group, "eng", Group.Rel.MEMBER)}. */
+        public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+                P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+        ResourceScope from(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+            return from(subjectType, id, subjectRelation.relationName());
+        }
+
+        /** Enum-typed sub-permission: {@code .revoke(...).from(Department, "hq", Department.Perm.ALL_MEMBERS)}. */
+        public ResourceScope from(ResourceType<?, ?> subjectType, String id,
+                                   com.authx.sdk.model.Permission.Named subjectPermission) {
+            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+        }
+
+        /** Typed wildcard: {@code .revoke(...).fromWildcard(User)}. */
+        public ResourceScope fromWildcard(ResourceType<?, ?> subjectType) {
+            return from(new String[]{subjectType.name() + ":*"});
+        }
+
+        /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
+        public ResourceScope from(ResourceType<?, ?> subjectType, Iterable<String> ids) {
+            java.util.List<String> refs = new java.util.ArrayList<>();
+            for (String id : ids) refs.add(subjectType.name() + ":" + id);
+            return from(refs.toArray(String[]::new));
         }
     }
 }

@@ -62,6 +62,16 @@ public class LookupQuery {
         return by(SubjectRef.parse(subjectRef));
     }
 
+    /**
+     * Typed subject form: {@code lookup("document").withPermission("view").by(User, "alice")}.
+     * Constructs the canonical subject ref and routes through {@link #by(String)}.
+     */
+    public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,
+            P extends Enum<P> & Permission.Named>
+    LookupQuery by(ResourceType<R, P> subjectType, String id) {
+        return by(subjectType.name() + ":" + id);
+    }
+
     /** Override the consistency level for this lookup. */
     public LookupQuery withConsistency(Consistency consistency) {
         this.consistency = consistency;

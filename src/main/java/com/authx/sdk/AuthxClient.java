@@ -1,5 +1,6 @@
 package com.authx.sdk;
 
+import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.event.DefaultTypedEventBus;
 import com.authx.sdk.event.SdkTypedEvent;
 import com.authx.sdk.event.TypedEventBus;
@@ -12,6 +13,8 @@ import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.spi.HealthProbe;
 import com.authx.sdk.transport.InMemoryTransport;
 import com.authx.sdk.transport.SdkTransport;
+
+import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -35,18 +38,51 @@ public class AuthxClient implements AutoCloseable {
     private final SdkObservability observability;
     private final SdkConfig config;
     private final HealthProbe healthProbe;
+    private final SchemaClient schemaClient;
+    private final @Nullable SchemaCache schemaCache;
     private final ConcurrentHashMap<String, ResourceFactory> factories = new ConcurrentHashMap<>();
 
+    /**
+     * Legacy constructor — delegates with a null-backed {@link SchemaClient}
+     * so existing callers (and the {@link #inMemory()} factory below) do not
+     * need to be updated atomically. The builder uses the 7-arg form to
+     * pass a populated {@code SchemaClient} and the cache it wraps.
+     */
     AuthxClient(SdkTransport transport,
                    SdkInfrastructure infra,
                    SdkObservability observability,
                    SdkConfig config,
                    HealthProbe healthProbe) {
+        this(transport, infra, observability, config, healthProbe, null, null);
+    }
+
+    AuthxClient(SdkTransport transport,
+                   SdkInfrastructure infra,
+                   SdkObservability observability,
+                   SdkConfig config,
+                   HealthProbe healthProbe,
+                   SchemaClient schemaClient) {
+        this(transport, infra, observability, config, healthProbe, schemaClient, null);
+    }
+
+    AuthxClient(SdkTransport transport,
+                   SdkInfrastructure infra,
+                   SdkObservability observability,
+                   SdkConfig config,
+                   HealthProbe healthProbe,
+                   @Nullable SchemaClient schemaClient,
+                   @Nullable SchemaCache schemaCache) {
         this.transport = Objects.requireNonNull(transport);
         this.infra = Objects.requireNonNull(infra);
         this.observability = Objects.requireNonNull(observability);
         this.config = Objects.requireNonNull(config);
         this.healthProbe = Objects.requireNonNull(healthProbe, "healthProbe");
+        // Always non-null at the accessor — callers don't need a null check.
+        this.schemaClient = schemaClient != null ? schemaClient : new SchemaClient(null);
+        // Nullable — only wired when the builder populated it via ReflectSchema.
+        // Factories pass this to ResourceHandle → GrantAction for runtime
+        // subject-type validation. When null, validation is a no-op (fail-open).
+        this.schemaCache = schemaCache;
     }
 
     /** Create a new builder for configuring and constructing an {@link AuthxClient}. */
@@ -56,13 +92,26 @@ public class AuthxClient implements AutoCloseable {
 
     /** Create an in-memory client for testing (no SpiceDB connection required). */
     public static AuthxClient inMemory() {
+        return inMemory(null);
+    }
+
+    /**
+     * Create an in-memory client with an attached {@link SchemaCache}. Use
+     * this when tests / demos need single-type {@code .to(id)} inference,
+     * which depends on per-relation subject-type metadata carried by the
+     * cache. Pass {@code null} (or call {@link #inMemory()}) for the plain
+     * no-schema setup; in that mode a bare-id {@code .to(id)} falls through
+     * to {@code SubjectRef.parse} and throws if the id has no {@code ':'}.
+     */
+    public static AuthxClient inMemory(@Nullable SchemaCache schemaCache) {
         var bus = new DefaultTypedEventBus();
         var lm = new LifecycleManager(bus);
         lm.begin(); lm.complete();
         var infra = new SdkInfrastructure(null, null, Runnable::run, lm);
         var observability = new SdkObservability(new SdkMetrics(), bus, null);
         var config = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
-        return new AuthxClient(new InMemoryTransport(), infra, observability, config, HealthProbe.up());
+        return new AuthxClient(new InMemoryTransport(), infra, observability, config,
+                HealthProbe.up(), new SchemaClient(schemaCache), schemaCache);
     }
 
     // ---- Business API ----
@@ -86,18 +135,19 @@ public class AuthxClient implements AutoCloseable {
      */
     public ResourceFactory on(String resourceType) {
         return factories.computeIfAbsent(resourceType, type ->
-                new ResourceFactory(type, transport, infra.asyncExecutor()));
+                new ResourceFactory(type, transport, infra.asyncExecutor(), schemaCache));
     }
 
     /**
      * Typed entry point — the preferred surface for business code. Hand
-     * in the generated {@code Xxx.TYPE} descriptor and chain downward:
+     * in the generated descriptor and chain downward (examples assume
+     * {@code import static Schema.*}):
      *
      * <pre>
-     * client.on(Document.TYPE).select(docId).check(Document.Perm.VIEW).by(userId);
-     * client.on(Document.TYPE).select(docId).grant(Document.Rel.EDITOR).to(userId);
-     * client.on(Document.TYPE).select(docId).checkAll().by(userId);
-     * client.on(Document.TYPE).findByUser(userId).limit(100).can(Document.Perm.VIEW);
+     * client.on(Document).select(docId).check(Document.Perm.VIEW).by(userId);
+     * client.on(Document).select(docId).grant(Document.Rel.EDITOR).to(userId);
+     * client.on(Document).select(docId).checkAll().by(userId);
+     * client.on(Document).findByUser(userId).limit(100).can(Document.Perm.VIEW);
      * </pre>
      *
      * <p>Every operation that used to be spelled as a client-taking
@@ -144,7 +194,7 @@ public class AuthxClient implements AutoCloseable {
 
     /** Create a one-off resource handle for the given type and id. */
     public ResourceHandle resource(String type, String id) {
-        return new ResourceHandle(type, id, transport, infra.asyncExecutor());
+        return new ResourceHandle(type, id, transport, infra.asyncExecutor(), schemaCache);
     }
 
     /** Start a cross-resource lookup query (find all resources a subject can access). */
@@ -201,6 +251,16 @@ public class AuthxClient implements AutoCloseable {
     /** Expose the configured health probe (useful for actuator integration). */
     public HealthProbe healthProbe() {
         return healthProbe;
+    }
+
+    /**
+     * Read-only view of the loaded SpiceDB schema. Always non-null; callers
+     * should check {@link SchemaClient#isLoaded()} before relying on content
+     * (in-memory clients and clients that disabled schema loading both
+     * report {@code isLoaded() == false}).
+     */
+    public SchemaClient schema() {
+        return schemaClient;
     }
 
     // ---- Lifecycle ----

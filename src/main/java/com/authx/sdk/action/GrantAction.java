@@ -1,13 +1,19 @@
 package com.authx.sdk.action;
 
+import com.authx.sdk.ResourceType;
+import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.CaveatRef;
 import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
+import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
+
+import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -16,6 +22,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Fluent action for granting one or more relations on a resource to subjects.
@@ -37,16 +44,30 @@ public class GrantAction {
     private final String resourceId;
     private final SdkTransport transport;
     private final String[] relations;
+    private final @Nullable SchemaCache schemaCache;
     private Instant expiresAt;
     private CaveatRef caveat;
 
     /** Internal — use {@link com.authx.sdk.ResourceHandle} entry points. */
     public GrantAction(String resourceType, String resourceId, SdkTransport transport,
                        String[] relations) {
+        this(resourceType, resourceId, transport, relations, null);
+    }
+
+    /**
+     * Internal — constructor used by {@link com.authx.sdk.ResourceHandle} when
+     * schema-aware subject validation is available. When {@code schemaCache}
+     * is {@code null} or empty, validation is skipped (fail-open) — the
+     * action behaves exactly like the 4-arg constructor and the wire call
+     * proceeds unchanged.
+     */
+    public GrantAction(String resourceType, String resourceId, SdkTransport transport,
+                       String[] relations, @Nullable SchemaCache schemaCache) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
         this.relations = relations;
+        this.schemaCache = schemaCache;
     }
 
     /** Set expiration time for the granted relationships. */
@@ -93,6 +114,150 @@ public class GrantAction {
     }
 
     /**
+     * Bare-id form with single-type inference. Resolves as follows:
+     *
+     * <ol>
+     *   <li>If {@code id} contains {@code ':'} it is treated as canonical
+     *       and forwarded to {@link #to(String...)}.</li>
+     *   <li>Otherwise — and only when a {@link SchemaCache} is attached —
+     *       the SDK inspects each target relation's declared subject
+     *       types. When <b>every</b> relation declares exactly one
+     *       non-wildcard type (wildcards are ignored) <i>and</i> all
+     *       relations agree on the same type, the id is wrapped as
+     *       {@code inferredType:id}.</li>
+     *   <li>If inference is ambiguous (multi-type relation) the call
+     *       throws with a message naming the allowed shapes and
+     *       pointing at {@link #to(com.authx.sdk.ResourceType, String)}.</li>
+     *   <li>If the relation is wildcard-only the call throws pointing
+     *       at {@link #toWildcard(com.authx.sdk.ResourceType)}.</li>
+     *   <li>When no cache is attached (e.g. {@code loadSchemaOnStart(false)})
+     *       the bare id falls through to the canonical-parse path and is
+     *       rejected by {@link SubjectRef#parse(String)} for lack of a
+     *       type prefix.</li>
+     * </ol>
+     *
+     * <p>This overload is the "sugar" path for business code that knows
+     * the relation locks the subject type. It is intentionally <b>not</b>
+     * a fallback — inference refuses to guess a default subject type so
+     * call sites stay honest.
+     *
+     * @throws IllegalArgumentException when inference is impossible
+     *         (ambiguous / wildcard-only) or when the id is a bare string
+     *         with no schema to infer from.
+     */
+    public GrantResult to(String id) {
+        // 1) Canonical form → hand to the varargs path directly.
+        if (id.indexOf(':') >= 0) {
+            return to(new String[]{id});
+        }
+        // 2) No schema → nothing to infer from. Delegate to the
+        //    canonical path which will reject the bare id.
+        if (schemaCache == null) {
+            return to(new String[]{id});
+        }
+        SubjectType inferred = null;
+        for (String rel : relations) {
+            List<SubjectType> sts = schemaCache.getSubjectTypes(resourceType, rel);
+            if (sts.isEmpty()) {
+                // No declared shape — nothing to infer from. Fall through
+                // to canonical parse (which will throw for a bare id).
+                return to(new String[]{id});
+            }
+            if (sts.stream().allMatch(SubjectType::wildcard)) {
+                throw new IllegalArgumentException(
+                        resourceType + "." + rel + " only accepts wildcards (" + shapes(sts)
+                                + "); use toWildcard(ResourceType) instead");
+            }
+            var single = SubjectType.inferSingleType(sts);
+            if (single.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "ambiguous subject type for " + resourceType + "." + rel
+                                + " (allowed: " + shapes(sts)
+                                + "); use to(ResourceType, id) instead");
+            }
+            if (inferred == null) {
+                inferred = single.get();
+            } else if (!inferred.type().equals(single.get().type())) {
+                throw new IllegalArgumentException(
+                        "cannot infer single subject type across " + relations.length
+                                + " relations with differing declared types ("
+                                + inferred.type() + " vs " + single.get().type()
+                                + "); use to(ResourceType, id) instead");
+            }
+        }
+        // inferred is guaranteed non-null here (relations is non-empty and
+        // the `sts.isEmpty()` / empty early-returns would have fired above).
+        String canonical = inferred.type() + ":" + id;
+        return to(new String[]{canonical});
+    }
+
+    private static String shapes(List<SubjectType> sts) {
+        return sts.stream()
+                .map(SubjectType::toRef)
+                .distinct()
+                .collect(Collectors.joining(", ", "[", "]"));
+    }
+
+    /**
+     * Typed subject form: {@code grant(...).to(User, "alice")} —
+     * constructs the canonical {@code "user:alice"} ref and routes through
+     * {@link #to(String...)} so the schema validation runs as normal.
+     *
+     * <p>Use this when the schema has multiple declared subject types on
+     * the relation (so bare-id inference refuses to guess) and you want
+     * to be explicit about which one you mean without hand-crafting a
+     * canonical string.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    GrantResult to(ResourceType<R, P> subjectType, String id) {
+        return to(new String[]{subjectType.name() + ":" + id});
+    }
+
+    /**
+     * Typed subject with a sub-relation (subject-set form):
+     * {@code grant(...).to(Group, "eng", "member")} constructs
+     * {@code "group:eng#member"}.
+     *
+     * <p>Use this when a relation accepts a typed subject-set such as
+     * {@code group#member} — the {@code #relation} piece is the access
+     * rule from the subject's schema definition, not this resource's
+     * relation.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    GrantResult to(ResourceType<R, P> subjectType, String id, String subjectRelation) {
+        return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+    }
+
+    /**
+     * Wildcard form for relations that accept {@code type:*}:
+     * {@code grant(...).toWildcard(User)} constructs {@code "user:*"}.
+     *
+     * <p>Still routes through {@link #to(String...)} so schema validation
+     * fires — if the relation does not declare a matching {@code user:*}
+     * allowance, the call throws.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    GrantResult toWildcard(ResourceType<R, P> subjectType) {
+        return to(new String[]{subjectType.name() + ":*"});
+    }
+
+    /**
+     * Typed batch form: same subject type, many ids. Useful for bulk
+     * onboarding flows where you hold a {@code Collection<String>} of
+     * user ids. Each id is wrapped as {@code "type:id"} before being
+     * routed through {@link #to(String...)} for validation.
+     *
+     * <p>Accepts {@link Iterable} so any {@code List} / {@code Set} /
+     * {@code Collection} of ids works without conversion.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    GrantResult to(ResourceType<R, P> subjectType, Iterable<String> ids) {
+        List<String> refs = new ArrayList<>();
+        for (String id : ids) refs.add(subjectType.name() + ":" + id);
+        return to(refs.toArray(String[]::new));
+    }
+
+    /**
      * Grant the relation(s) to the given canonical subject strings and
      * execute the write.
      *
@@ -126,6 +291,16 @@ public class GrantAction {
     }
 
     private GrantResult writeRelationships(List<SubjectRef> subjects) {
+        // Schema-aware subject validation — fail-fast before the RPC so
+        // the caller sees a descriptive error, not a gRPC INVALID_ARGUMENT
+        // with just the offending relation name.
+        if (schemaCache != null) {
+            for (String rel : relations) {
+                for (SubjectRef sub : subjects) {
+                    schemaCache.validateSubject(resourceType, rel, sub.toRefString());
+                }
+            }
+        }
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         List<RelationshipUpdate> updates = new ArrayList<>();
         for (String rel : relations) {

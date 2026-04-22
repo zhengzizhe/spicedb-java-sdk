@@ -6,8 +6,20 @@
  * 层级：organization → space → folder (可嵌套) → document
  * 主体：user, department (层级), group
  * 权限：owner > manager > editor > commenter > viewer
- * 特性：层级继承、部门权限、链接分享、公开文档
+ * 特性：层级继承、部门权限、链接分享、公开文档、IP 白名单条件分享
  */
+
+// ============================================================
+//  Caveats (条件权限)
+// ============================================================
+
+/**
+ * IP 白名单 —— 只有来源 IP 落在 cidrs 列表中任一 CIDR 时权限才生效。
+ * 静态参数 cidrs 在 grant 时绑定，动态参数 client_ip 在 check 时传入。
+ */
+caveat ip_allowlist(cidrs list<string>, client_ip string) {
+    cidrs.exists(c, client_ip.startsWith(c))
+}
 
 // ============================================================
 //  主体定义
@@ -98,8 +110,11 @@ definition document {
     relation commenter: user | group#member | department#all_members
     relation viewer: user | group#member | department#all_members | user:*
 
-    /** 链接分享：任何人可查看/编辑 */
-    relation link_viewer: user:*
+    /**
+     * 链接分享：任何人可查看/编辑。带 ip_allowlist caveat 的 link_viewer
+     * 只在来源 IP 落在允许的 CIDR 列表时才生效（类飞书「仅内网可看」）。
+     */
+    relation link_viewer: user:* with ip_allowlist
     relation link_editor: user:*
 
     /** 管理 = owner + 文件夹管理 + 空间管理 */

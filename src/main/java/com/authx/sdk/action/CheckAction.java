@@ -1,14 +1,17 @@
 package com.authx.sdk.action;
 
+import com.authx.sdk.ResourceType;
 import com.authx.sdk.model.BulkCheckResult;
 import com.authx.sdk.model.CheckRequest;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -96,6 +99,16 @@ public class CheckAction {
         return by(SubjectRef.parse(subjectRef));
     }
 
+    /**
+     * Typed subject form: {@code check(...).by(User, "alice")} —
+     * constructs the canonical {@code "user:alice"} and delegates to
+     * {@link #by(String)}.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    CheckResult by(ResourceType<R, P> subjectType, String id) {
+        return by(subjectType.name() + ":" + id);
+    }
+
     /** Async version. Uses the SDK's configured executor instead of ForkJoinPool.commonPool. */
     public CompletableFuture<CheckResult> byAsync(SubjectRef subject) {
         return CompletableFuture.supplyAsync(() -> by(subject), asyncExecutor);
@@ -133,6 +146,17 @@ public class CheckAction {
     public BulkCheckResult byAll(Iterable<String> subjectRefs) {
         List<SubjectRef> parsed = new java.util.ArrayList<>();
         for (String ref : subjectRefs) parsed.add(SubjectRef.parse(ref));
+        return byAll(parsed);
+    }
+
+    /**
+     * Typed batch form: same subject type, many ids. Each id is wrapped
+     * as {@code "type:id"} and dispatched in a single bulk check.
+     */
+    public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
+    BulkCheckResult byAll(ResourceType<R, P> subjectType, Iterable<String> ids) {
+        List<SubjectRef> parsed = new ArrayList<>();
+        for (String id : ids) parsed.add(SubjectRef.parse(subjectType.name() + ":" + id));
         return byAll(parsed);
     }
 }

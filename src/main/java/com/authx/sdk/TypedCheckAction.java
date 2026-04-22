@@ -114,6 +114,17 @@ public class TypedCheckAction {
         return by(SubjectRef.parse(subjectRef));
     }
 
+    /**
+     * Typed subject form: {@code check(Perm.VIEW).by(User, "alice")}.
+     * Constructs the canonical {@code "user:alice"} and routes through
+     * {@link #by(String)} for the single-cell check.
+     */
+    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+    boolean by(com.authx.sdk.ResourceType<R2, P2> subjectType, String id) {
+        return by(subjectType.name() + ":" + id);
+    }
+
     // ────────────────────────────────────────────────────────────────
     //  Caveat path: full CheckResult
     // ────────────────────────────────────────────────────────────────
@@ -135,6 +146,17 @@ public class TypedCheckAction {
     /** Canonical-string form of {@link #detailedBy(SubjectRef)}. */
     public CheckResult detailedBy(String subjectRef) {
         return detailedBy(SubjectRef.parse(subjectRef));
+    }
+
+    /**
+     * Typed subject form: {@code check(Perm.EDIT).detailedBy(User, "alice")}.
+     * Constructs the canonical subject ref and routes through
+     * {@link #detailedBy(String)} to return the full {@link CheckResult}.
+     */
+    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+    CheckResult detailedBy(com.authx.sdk.ResourceType<R2, P2> subjectType, String id) {
+        return detailedBy(subjectType.name() + ":" + id);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -175,6 +197,18 @@ public class TypedCheckAction {
         java.util.List<String> list = new java.util.ArrayList<>();
         for (String ref : subjectRefs) list.add(ref);
         return byAll(list.toArray(String[]::new));
+    }
+
+    /**
+     * Typed batch form: same subject type, many ids. Each id is wrapped
+     * as {@code "type:id"} before the matrix is built.
+     */
+    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+    CheckMatrix byAll(com.authx.sdk.ResourceType<R2, P2> subjectType, Iterable<String> ids) {
+        java.util.List<String> refs = new java.util.ArrayList<>();
+        for (String id : ids) refs.add(subjectType.name() + ":" + id);
+        return byAll(refs.toArray(String[]::new));
     }
 
     /** Matrix check against explicit {@link SubjectRef}s. */

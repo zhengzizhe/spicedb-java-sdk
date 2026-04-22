@@ -8,11 +8,14 @@ import com.authx.sdk.action.RelationQuery;
 import com.authx.sdk.action.RevokeAction;
 import com.authx.sdk.action.RevokeAllAction;
 import com.authx.sdk.action.WhoBuilder;
+import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.ExpandTree;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.transport.SdkTransport;
+
+import org.jspecify.annotations.Nullable;
 
 import java.util.concurrent.Executor;
 
@@ -38,17 +41,24 @@ public class ResourceHandle {
     private final String resourceId;
     private final SdkTransport transport;
     private final Executor asyncExecutor;
+    private final @Nullable SchemaCache schemaCache;
 
     ResourceHandle(String resourceType, String resourceId, SdkTransport transport) {
-        this(resourceType, resourceId, transport, Runnable::run);
+        this(resourceType, resourceId, transport, Runnable::run, null);
     }
 
     ResourceHandle(String resourceType, String resourceId, SdkTransport transport,
                    Executor asyncExecutor) {
+        this(resourceType, resourceId, transport, asyncExecutor, null);
+    }
+
+    ResourceHandle(String resourceType, String resourceId, SdkTransport transport,
+                   Executor asyncExecutor, @Nullable SchemaCache schemaCache) {
         this.resourceType = resourceType;
         this.resourceId = resourceId;
         this.transport = transport;
         this.asyncExecutor = asyncExecutor;
+        this.schemaCache = schemaCache;
     }
 
     /** Return the resource type (e.g., {@code "document"}). */
@@ -61,14 +71,14 @@ public class ResourceHandle {
 
     /** Start a grant action to add one or more relations on this resource. */
     public GrantAction grant(String... relations) {
-        return new GrantAction(resourceType, resourceId, transport, relations);
+        return new GrantAction(resourceType, resourceId, transport, relations, schemaCache);
     }
 
     // ---- Revoke ----
 
     /** Start a revoke action to remove specific relations from subjects. */
     public RevokeAction revoke(String... relations) {
-        return new RevokeAction(resourceType, resourceId, transport, relations);
+        return new RevokeAction(resourceType, resourceId, transport, relations, schemaCache);
     }
 
     /** Revoke all relationships on this resource using filter-based delete. */
@@ -119,6 +129,17 @@ public class ResourceHandle {
         return new WhoBuilder(resourceType, resourceId, transport, subjectType, asyncExecutor);
     }
 
+    /**
+     * Typed version of {@link #who(String)} — takes a {@link ResourceType}
+     * descriptor (e.g. {@code User}) so business code can avoid
+     * hand-writing the type name string.
+     */
+    public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,
+            P extends Enum<P> & Permission.Named>
+    WhoBuilder who(ResourceType<R, P> subjectType) {
+        return who(subjectType.name());
+    }
+
     // ---- Relations ----
 
     /** Read relationships on this resource, optionally filtered by relation names. */
@@ -130,6 +151,6 @@ public class ResourceHandle {
 
     /** Start a batch builder to combine multiple grant/revoke operations into a single RPC. */
     public BatchBuilder batch() {
-        return new BatchBuilder(resourceType, resourceId, transport);
+        return new BatchBuilder(resourceType, resourceId, transport, schemaCache);
     }
 }

@@ -17,12 +17,12 @@ import java.util.Map;
  * accept only the matching enums.
  *
  * <pre>
- * client.on(Document.TYPE)
+ * client.on(Document)
  *       .select(docId)
  *       .check(Document.Perm.VIEW)
  *       .by(userId);
  *
- * client.on(Document.TYPE)
+ * client.on(Document)
  *       .findByUser(userId)
  *       .limit(100)
  *       .can(Document.Perm.VIEW);
@@ -81,6 +81,27 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
         return new TypedFinder<>(factory, SubjectRef.parse(subjectRef));
     }
 
+    /**
+     * Typed subject form: {@code client.on(Document).findBy(User, "alice")}.
+     * Constructs the canonical subject ref before building the finder.
+     */
+    public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
+    TypedFinder<P> findBy(ResourceType<SR, SP> subjectType, String id) {
+        return findBy(subjectType.name() + ":" + id);
+    }
+
+    /**
+     * Typed batch subject form:
+     * {@code client.on(Document).findBy(User, List.of("alice", "bob"))}.
+     * Wraps each id as {@code type:id} and dispatches as a multi-subject lookup.
+     */
+    public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
+    MultiFinder<R, P> findBy(ResourceType<SR, SP> subjectType, Iterable<String> ids) {
+        java.util.List<String> refs = new java.util.ArrayList<>();
+        for (String id : ids) refs.add(subjectType.name() + ":" + id);
+        return findBy(refs);
+    }
+
     // ────────────────────────────────────────────────────────────────
     //  Multi-subject finder — terminal runs one lookupResources per subject
     // ────────────────────────────────────────────────────────────────
@@ -91,7 +112,7 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
      * RPC per subject and returns a {@code Map<subjectRef, List<resourceId>>}.
      *
      * <pre>
-     * Map&lt;String, List&lt;String&gt;&gt; perUser = client.on(Document.TYPE)
+     * Map&lt;String, List&lt;String&gt;&gt; perUser = client.on(Document)
      *     .findBy(SubjectRef.of("user","alice"), SubjectRef.of("user","bob"))
      *     .can(Document.Perm.EDIT);
      * </pre>
