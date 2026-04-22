@@ -156,7 +156,7 @@ class CompanyWorkspaceServiceTest {
                     "organization:acme#member@department:d-eng#all_members",
                     "organization:acme#member@department:d-marketing#all_members");
 
-            // group members — typed Iterable<String> batch to User.TYPE
+            // group members — typed Iterable<String> batch to User descriptor
             assertThat(w).contains(
                     "group:g-alpha-pms#member@user:u-alice",
                     "group:g-alpha-pms#member@user:u-dan");
