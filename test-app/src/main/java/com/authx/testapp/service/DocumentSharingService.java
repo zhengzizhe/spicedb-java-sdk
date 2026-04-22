@@ -7,6 +7,8 @@ import com.authx.testapp.schema.Group;
 import com.authx.testapp.schema.User;
 import org.springframework.stereotype.Service;
 
+import static com.authx.testapp.schema.Schema.*;
+
 import java.time.Duration;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -17,7 +19,7 @@ import java.util.Map;
  * 文档分享相关的业务逻辑。
  *
  * <p>这个 service 只持有 {@link AuthxClient}。所有操作都从 {@code client}
- * 开始链式调用 —— {@code client.on(Document.TYPE).select(...).xxx(...)} ——
+ * 开始链式调用 —— {@code client.on(Document).select(...).xxx(...)} ——
  * 没有 {@code Document.check(client, ...)} 这种把 client 塞回去的静态方法，
  * 也没有包装对象。{@code Document} 类本身只是类型元数据 (enum + ResourceType 常量)。
  */
@@ -38,14 +40,14 @@ public class DocumentSharingService {
 
     /** 用户能打开这个文档吗? 一个 check RPC. */
     public boolean canOpen(String userId, String docId) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
                 .check(Document.Perm.VIEW)
                 .by(userId);
     }
 
     public boolean canEdit(String userId, String docId) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
                 .check(Document.Perm.EDIT)
                 .by(userId);
@@ -54,10 +56,10 @@ public class DocumentSharingService {
     /**
      * 文档详情页工具栏：一次 RPC 拿 schema 里**所有** permission 的状态。
      * 未来 schema 加 permission，codegen 重跑就自动带上 —— {@code checkAll()}
-     * 的 permission 集合是从 {@code Document.TYPE} 描述符里拿的。
+     * 的 permission 集合是从 {@code Document} 描述符里拿的。
      */
     public EnumMap<Document.Perm, Boolean> computeToolbarFor(String userId, String docId) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
                 .checkAll()
                 .by(userId);
@@ -67,7 +69,7 @@ public class DocumentSharingService {
     public Map<String, EnumMap<Document.Perm, Boolean>> permissionsForList(
             String userId, List<String> docIds) {
         if (docIds.isEmpty()) return Map.of();
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docIds)
                 .checkAll()
                 .byAll(userId);
@@ -76,7 +78,7 @@ public class DocumentSharingService {
     /** 只要 view 的轻量版过滤. */
     public Map<String, Boolean> filterVisible(String userId, List<String> candidateDocIds) {
         if (candidateDocIds.isEmpty()) return Map.of();
-        CheckMatrix m = client.on(Document.TYPE)
+        CheckMatrix m = client.on(Document)
                 .select(candidateDocIds)
                 .check(Document.Perm.VIEW)
                 .byAll(userId);
@@ -93,43 +95,43 @@ public class DocumentSharingService {
 
     /** 单用户分享 —— typed 重载消除 "user:" 字符串拼接. */
     public void shareWithUser(String docId, String targetUserId, ShareLevel level) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(relFor(level))
-                .to(User.TYPE, targetUserId);
+                .to(User, targetUserId);
     }
 
     /** 批量分享 —— 单一 subject type 多 id 的 typed 批量重载. */
     public void shareWithUsers(String docId, List<String> userIds, ShareLevel level) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(relFor(level))
-                .to(User.TYPE, userIds);
+                .to(User, userIds);
     }
 
     /** 分享给一个组 (group#member subject) —— typed sub-relation 重载. */
     public void shareWithGroup(String docId, String groupId, ShareLevel level) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(relFor(level))
-                .to(Group.TYPE, groupId, "member");
+                .to(Group, groupId, Group.Rel.MEMBER);
     }
 
     /** 公开文档 —— 所有用户可见 (user:* 通配符). */
     public void makePublic(String docId) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(Document.Rel.VIEWER)
-                .toWildcard(User.TYPE);
+                .toWildcard(User);
     }
 
     /** 限时分享 —— SpiceDB 关系过期字段, 到期自动失效. */
     public void shareTemporarily(String docId, String targetUserId, ShareLevel level, Duration ttl) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(relFor(level))
                 .expiringIn(ttl)
-                .to(User.TYPE, targetUserId);
+                .to(User, targetUserId);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -137,9 +139,9 @@ public class DocumentSharingService {
     // ═══════════════════════════════════════════════════════════════
 
     public void unshareWithUser(String docId, String targetUserId) {
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.VIEWER).from(User.TYPE, targetUserId);
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.COMMENTER).from(User.TYPE, targetUserId);
-        client.on(Document.TYPE).select(docId).revoke(Document.Rel.EDITOR).from(User.TYPE, targetUserId);
+        client.on(Document).select(docId).revoke(Document.Rel.VIEWER).from(User, targetUserId);
+        client.on(Document).select(docId).revoke(Document.Rel.COMMENTER).from(User, targetUserId);
+        client.on(Document).select(docId).revoke(Document.Rel.EDITOR).from(User, targetUserId);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -152,7 +154,7 @@ public class DocumentSharingService {
      * 单类型推断直接拿 bare id 就够了，SDK 自动拼 {@code "folder:" + id}。
      */
     public void moveIntoFolder(String docId, String folderId) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(Document.Rel.FOLDER)
                 .to(folderId);
@@ -160,7 +162,7 @@ public class DocumentSharingService {
 
     /** 类似地，{@code document.space} 只接 space —— 单类型推断. */
     public void attachToSpace(String docId, String spaceId) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(Document.Rel.SPACE)
                 .to(spaceId);
@@ -172,32 +174,32 @@ public class DocumentSharingService {
 
     /** "谁能编辑这个文档?" (只查 user 主体) */
     public List<String> listEditors(String docId, int max) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
-                .who("user", Document.Perm.EDIT)
+                .who(User, Document.Perm.EDIT)
                 .limit(max)
                 .fetchIds();
     }
 
     public List<String> listViewers(String docId, int max) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
-                .who("user", Document.Perm.VIEW)
+                .who(User, Document.Perm.VIEW)
                 .limit(max)
                 .fetchIds();
     }
 
     /** "用户能看的所有文档" —— 首页 feed / 搜索索引用. */
     public List<String> myReadableDocs(String userId, int max) {
-        return client.on(Document.TYPE)
-                .findBy(User.TYPE, userId)
+        return client.on(Document)
+                .findBy(User, userId)
                 .limit(max)
                 .can(Document.Perm.VIEW);
     }
 
     public List<String> myEditableDocs(String userId, int max) {
-        return client.on(Document.TYPE)
-                .findBy(User.TYPE, userId)
+        return client.on(Document)
+                .findBy(User, userId)
                 .limit(max)
                 .can(Document.Perm.EDIT);
     }
@@ -207,19 +209,19 @@ public class DocumentSharingService {
      * 返回 {@code Map<Perm, List<docId>>}. 用 {@code .can(Perm...)} 多态重载.
      */
     public Map<Document.Perm, List<String>> myDocsByPermissions(String userId, int max) {
-        return client.on(Document.TYPE)
-                .findBy(User.TYPE, userId)
+        return client.on(Document)
+                .findBy(User, userId)
                 .limit(max)
                 .can(Document.Perm.VIEW, Document.Perm.EDIT, Document.Perm.COMMENT);
     }
 
     /**
-     * 多用户反查 —— N 个用户每人能看哪些 doc. 一次 findBy(User.TYPE, ids)
+     * 多用户反查 —— N 个用户每人能看哪些 doc. 一次 findBy(User, ids)
      * 收集成 {@code Map<subjectRef, List<docId>>}.
      */
     public Map<String, List<String>> readableDocsForUsers(List<String> userIds, int max) {
-        return client.on(Document.TYPE)
-                .findBy(User.TYPE, userIds)
+        return client.on(Document)
+                .findBy(User, userIds)
                 .limit(max)
                 .can(Document.Perm.VIEW);
     }
@@ -228,10 +230,10 @@ public class DocumentSharingService {
      * 批量撤销 —— 一次调用把文档从 N 个用户那里收回 VIEWER / COMMENTER / EDITOR 三种关系.
      */
     public void unshareWithMany(String docId, List<String> userIds) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .revoke(Document.Rel.VIEWER, Document.Rel.COMMENTER, Document.Rel.EDITOR)
-                .from(User.TYPE, userIds);
+                .from(User, userIds);
     }
 
     // ─── internal ────────────────────────────────────────────────
