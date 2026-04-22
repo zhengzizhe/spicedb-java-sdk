@@ -94,6 +94,39 @@ public class DocumentService {
                 .result().count();
     }
 
+    // ── Multi-subject atomic share (GrantFlow prototype demo) ────────
+    //
+    // Before (legacy API): each .to(...) is terminal, so N subjects
+    // require N RPCs and aren't atomic:
+    //
+    //     auth.on(Document).select(docId).grant(VIEWER).to(User, alice);
+    //     auth.on(Document).select(docId).grant(VIEWER).to(User, bob);
+    //     auth.on(Document).select(docId).grant(VIEWER).to(Group, eng, MEMBER);
+    //     // 3 RPCs, non-atomic, mid-state visible
+    //
+    // With GrantFlow: accumulate, then commit once.
+
+    /**
+     * Share a document with a heterogeneous set of subjects (users,
+     * groups, folders) in one atomic RPC. Demonstrates the
+     * {@code grantFlow} prototype API — see
+     * {@code specs/2026-04-22-grant-revoke-flow-api/spec.md}.
+     */
+    public int shareWithMany(String docId,
+                             List<String> viewerUserIds,
+                             List<String> viewerGroupIds,
+                             List<String> editorUserIds) {
+        return auth.on(Document).select(docId)
+                .grantFlow(Document.Rel.VIEWER)
+                .to(User, viewerUserIds)
+                .to(Group, viewerGroupIds, Group.Rel.MEMBER)
+                // switch to editor relation for a different cohort
+                .grant(Document.Rel.EDITOR)
+                .to(User, editorUserIds)
+                .commit()
+                .count();
+    }
+
     // ── Public share with IP allow-list caveat ────────────────────────
 
     /**
