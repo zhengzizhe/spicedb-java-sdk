@@ -37,11 +37,19 @@
 
 ### `.to(bareId)` inference is silently absent on the batch chain
 
-**What went wrong:** Wrote `client.batch().on(Space.TYPE, spaceId).grant(Space.Rel.MEMBER).to(userId)` expecting the same single-type inference that works on `client.on(Document.TYPE).select(id).grant(...).to(userId)`. The batch call crashed at runtime with `IllegalArgumentException: Invalid subject ref: u-ceo` from inside `SubjectRef.parse`.
+**What went wrong:** Wrote `client.batch().on(Space, spaceId).grant(Space.Rel.MEMBER).to(userId)` expecting the same single-type inference that works on `client.on(Document).select(id).grant(...).to(userId)`. The batch call crashed at runtime with `IllegalArgumentException: Invalid subject ref: u-ceo` from inside `SubjectRef.parse`.
 
 **Why it's wrong:** The non-batch typed chain (`TypedGrantAction`) holds a `SchemaCache` reference and calls `SubjectType.inferSingleType(...)` when you pass a bare id. The batch chain (`CrossResourceBatchBuilder.GrantScope` etc.) has no schema-cache scope — its `to(String...)` overload goes straight to `SubjectRef.parse`, which requires `type:id` format. Same-looking API, different wiring.
 
-**What to do instead:** On the batch chain always use the typed overloads — `.to(User.TYPE, id)`, `.to(Space.TYPE, id)`, `.toWildcard(User.TYPE)`, `.to(User.TYPE, iterableIds)`, symmetric `.from*` for revoke. Reserve bare-id `.to(userId)` inference for the non-batch typed chain, and only when the client was built with a populated `SchemaCache` (in tests: use `AuthxClient.inMemory(schemaCache)`, not the zero-arg `inMemory()`).
+**What to do instead:** On the batch chain always use the typed overloads — `.to(User, id)`, `.to(Space, id)`, `.toWildcard(User)`, `.to(User, iterableIds)`, symmetric `.from*` for revoke. Reserve bare-id `.to(userId)` inference for the non-batch typed chain, and only when the client was built with a populated `SchemaCache` (in tests: use `AuthxClient.inMemory(schemaCache)`, not the zero-arg `inMemory()`). (Pre-2026-04-22 this entry used `Xxx.TYPE`; the descriptor form `Xxx` supersedes it — see `docs/migration-schema-flat-descriptors.md`.)
+
+### `Xxx.Perm.valueOf(name)` fails after `import static Schema.*`
+
+**What went wrong:** After migrating `test-app/PermissionController` to flat descriptors, `Folder.Perm.valueOf(permission.toUpperCase())` failed to compile — the proxy has no `valueOf`.
+
+**Why it's wrong:** `import static com.your.app.schema.Schema.*` brings the descriptor *field* `Folder` into scope, which obscures the enum container class `Folder` in expression context per JLS §6.4.2. So `Folder.Perm` now resolves to `FolderPermProxy` (a proxy instance), not the enum class — and the proxy exposes named fields, not `valueOf`.
+
+**What to do instead:** When you need the enum `Class` token or `valueOf(String)` inside a file with `import static Schema.*`, use the fully-qualified enum path: `com.your.app.schema.Folder.Perm.valueOf(name)` / `com.your.app.schema.Folder.Perm.class`. For SDK call sites pass the descriptor (`Folder`) and let `ResourceType.permClass()` recover the token. Documented in `docs/migration-schema-flat-descriptors.md` §Caveat.
 
 ### Testing "Redis is down" with bad-from-start config
 

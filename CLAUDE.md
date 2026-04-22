@@ -27,9 +27,13 @@ src/main/java/com/authx/sdk/
 │                              #   relation subject types). Exposed as
 │                              #   AuthxClient.schema().
 ├── AuthxCodegen.java         # Static generator — emits typed schema classes
-│                              #   (Document.Rel, Document.Perm, Document.TYPE,
-│                              #   IpAllowlist.ref(), Caveats, ResourceTypes)
-│                              #   from a live client's schema.
+│                              #   (Document.Rel, Document.Perm, IpAllowlist.ref(),
+│                              #   Caveats) plus a flat Schema.java aggregator
+│                              #   (XxxDescriptor + XxxRel/PermProxy for
+│                              #   `import static Schema.*` ergonomics). From
+│                              #   2026-04-22 the per-type TYPE constant is gone;
+│                              #   descriptor lookup goes through Schema.Xxx.
+│                              #   See docs/migration-schema-flat-descriptors.md.
 ├── cache/                     # Metadata caches only. SchemaCache (definitions +
 │                              #   caveats + per-relation subject types) used by
 │                              #   codegen and runtime fail-fast subject
