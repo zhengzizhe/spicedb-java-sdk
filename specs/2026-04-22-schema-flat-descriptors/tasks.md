@@ -13,26 +13,26 @@
 
 This phase produces one commit (T020). Test-app schema files are **not** touched yet — they remain backward-compatible against the new SDK until T021.
 
-- [ ] T001 [SR:req-8] Create `PermissionProxy<P>` public interface with `Class<P> enumClass()` — `src/main/java/com/authx/sdk/PermissionProxy.java`
-- [ ] T002 [SR:req-4] Un-`final` `ResourceType`, change constructor to `protected`, keep `of(...)` factory + fields — `src/main/java/com/authx/sdk/ResourceType.java`
-- [ ] T003 [SR:req-4] Add `ResourceTypeSubclassTest` — user-defined subclass preserves `name()` / `relClass()` / `permClass()` semantics — `src/test/java/com/authx/sdk/ResourceTypeSubclassTest.java`
-- [ ] T004 [P] [SR:req-6] Add enum-typed `to(ResourceType, id, R2 subRelation)` + `to(ResourceType, id, P2 subPermission)` overloads on `TypedGrantAction`, delegate to existing string-sub-rel path — `src/main/java/com/authx/sdk/TypedGrantAction.java`
-- [ ] T005 [P] [SR:req-6] Symmetric `from(ResourceType, id, R2)` + `from(ResourceType, id, P2)` overloads on `TypedRevokeAction` — `src/main/java/com/authx/sdk/TypedRevokeAction.java`
-- [ ] T006 [P] [SR:req-5] [SR:req-6] Add enum-typed sub-relation overloads on all four `CrossResourceBatchBuilder` nested scopes (`GrantScope`, `RevokeScope`, `MultiGrantScope`, `MultiRevokeScope`) — `src/main/java/com/authx/sdk/CrossResourceBatchBuilder.java`
-- [ ] T007 [P] [SR:req-7] [SR:req-8] Add `checkAll(PermissionProxy<P2>)` overload on `TypedHandle`, delegate to `checkAll(proxy.enumClass())` — `src/main/java/com/authx/sdk/TypedHandle.java`
-- [ ] T008 [SR:req-7] Add `who(ResourceType<R2,P2>, P permission)` overload on `TypedHandle`, delegate to existing `who(String, P)` — `src/main/java/com/authx/sdk/TypedHandle.java`
-- [ ] T009 [P] [SR:req-6] Wire-format identity test for enum-typed grant sub-relation — `src/test/java/com/authx/sdk/TypedGrantActionSubRelationTest.java`
-- [ ] T010 [P] [SR:req-6] Wire-format identity test for enum-typed revoke sub-relation — `src/test/java/com/authx/sdk/TypedRevokeActionSubRelationTest.java`
-- [ ] T011 [P] [SR:req-5] [SR:req-6] Wire-format identity test for enum-typed sub-relation on all four batch scopes — `src/test/java/com/authx/sdk/CrossResourceBatchTypedSubRelationTest.java`
-- [ ] T012 [P] [SR:req-8] `TypedCheckAllProxyTest` — verify `checkAll(proxy)` and `checkAll(proxy.enumClass())` produce identical `CheckBulkPermissions` RPCs — `src/test/java/com/authx/sdk/TypedCheckAllProxyTest.java`
-- [ ] T013 [SR:req-1] Implement `AuthxCodegen.emitSchema(String packageName, List<ResourceTypeDef>, Path out)` — emits `Schema.java` with one Descriptor + RelProxy + PermProxy per type, FQN enum refs in Proxy fields — `src/main/java/com/authx/sdk/AuthxCodegen.java`
-- [ ] T014 [SR:req-2] Modify `AuthxCodegen.emitTypeClass` — drop `public static final ResourceType<Rel,Perm> TYPE = ...` emission, drop ResourceType import from header — `src/main/java/com/authx/sdk/AuthxCodegen.java`
-- [ ] T015 [SR:req-3] Modify `AuthxCodegen.generate` — no longer writes `ResourceTypes.java`, deletes a pre-existing `ResourceTypes.java` on the output path if found, calls `emitSchema(...)` — `src/main/java/com/authx/sdk/AuthxCodegen.java`
-- [ ] T016 [SR:req-1] Extend `AuthxCodegenTest` — `emitsSchemaAggregatorWithDescriptorAndProxies` + FQN assertion — `src/test/java/com/authx/sdk/AuthxCodegenTest.java`
-- [ ] T017 [SR:req-2] Extend `AuthxCodegenTest` — `emitTypeClassDoesNotEmitTypeField` + `doesNotImportResourceType` — `src/test/java/com/authx/sdk/AuthxCodegenTest.java` (same file as T016 → sequential)
-- [ ] T018 [SR:req-3] Extend `AuthxCodegenTest` — `generateRemovesObsoleteResourceTypesFileIfPresent` + `endToEndEmitsSchemaFile` — `src/test/java/com/authx/sdk/AuthxCodegenTest.java` (same file as T016/T017 → sequential)
-- [ ] T019 Phase-1 gate — run `./gradlew compileJava` and `./gradlew test -x :test-app:test`, must be green
-- [ ] T020 Segment-1 commit — stage all files from T001–T018, commit with message "feat(sdk): flat descriptors — PermissionProxy, typed sub-rel overloads, Schema.java codegen"
+- [X] T001 [SR:req-8] Create `PermissionProxy<P>` public interface with `Class<P> enumClass()` — `src/main/java/com/authx/sdk/PermissionProxy.java`
+- [X] T002 [SR:req-4] Un-`final` `ResourceType`, change constructor to `protected`, keep `of(...)` factory + fields — `src/main/java/com/authx/sdk/ResourceType.java`
+- [X] T003 [SR:req-4] Add `ResourceTypeSubclassTest` — user-defined subclass preserves `name()` / `relClass()` / `permClass()` semantics — `src/test/java/com/authx/sdk/ResourceTypeSubclassTest.java`
+- [X] T004 [P] [SR:req-6] Add enum-typed `to(ResourceType, id, R2 subRelation)` + `to(ResourceType, id, P2 subPermission)` overloads on `TypedGrantAction`, delegate to existing string-sub-rel path — `src/main/java/com/authx/sdk/TypedGrantAction.java`
+- [X] T005 [P] [SR:req-6] Symmetric `from(ResourceType, id, R2)` + `from(ResourceType, id, P2)` overloads on `TypedRevokeAction` — `src/main/java/com/authx/sdk/TypedRevokeAction.java`
+- [X] T006 [P] [SR:req-5] [SR:req-6] Add enum-typed sub-relation overloads on all four `CrossResourceBatchBuilder` nested scopes (`GrantScope`, `RevokeScope`, `MultiGrantScope`, `MultiRevokeScope`) — `src/main/java/com/authx/sdk/CrossResourceBatchBuilder.java`
+- [X] T007 [P] [SR:req-7] [SR:req-8] Add `checkAll(PermissionProxy<P2>)` overload on `TypedHandle`, delegate to `checkAll(proxy.enumClass())` — `src/main/java/com/authx/sdk/TypedHandle.java`
+- [X] T008 [SR:req-7] Add `who(ResourceType<R2,P2>, P permission)` overload on `TypedHandle`, delegate to existing `who(String, P)` — `src/main/java/com/authx/sdk/TypedHandle.java`
+- [X] T009 [P] [SR:req-6] Wire-format identity test for enum-typed grant sub-relation — `src/test/java/com/authx/sdk/TypedGrantActionSubRelationTest.java`
+- [X] T010 [P] [SR:req-6] Wire-format identity test for enum-typed revoke sub-relation — `src/test/java/com/authx/sdk/TypedRevokeActionSubRelationTest.java`
+- [X] T011 [P] [SR:req-5] [SR:req-6] Wire-format identity test for enum-typed sub-relation on all four batch scopes — `src/test/java/com/authx/sdk/CrossResourceBatchTypedSubRelationTest.java`
+- [X] T012 [P] [SR:req-8] `TypedCheckAllProxyTest` — verify `checkAll(proxy)` and `checkAll(proxy.enumClass())` produce identical `CheckBulkPermissions` RPCs — `src/test/java/com/authx/sdk/TypedCheckAllProxyTest.java`
+- [X] T013 [SR:req-1] Implement `AuthxCodegen.emitSchema(String packageName, List<ResourceTypeDef>, Path out)` — emits `Schema.java` with one Descriptor + RelProxy + PermProxy per type, FQN enum refs in Proxy fields — `src/main/java/com/authx/sdk/AuthxCodegen.java`
+- [X] T014 [SR:req-2] Modify `AuthxCodegen.emitTypeClass` — drop `public static final ResourceType<Rel,Perm> TYPE = ...` emission, drop ResourceType import from header — `src/main/java/com/authx/sdk/AuthxCodegen.java`
+- [X] T015 [SR:req-3] Modify `AuthxCodegen.generate` — no longer writes `ResourceTypes.java`, deletes a pre-existing `ResourceTypes.java` on the output path if found, calls `emitSchema(...)` — `src/main/java/com/authx/sdk/AuthxCodegen.java`
+- [X] T016 [SR:req-1] Extend `AuthxCodegenTest` — `emitsSchemaAggregatorWithDescriptorAndProxies` + FQN assertion — `src/test/java/com/authx/sdk/AuthxCodegenTest.java`
+- [X] T017 [SR:req-2] Extend `AuthxCodegenTest` — `emitTypeClassDoesNotEmitTypeField` + `doesNotImportResourceType` — `src/test/java/com/authx/sdk/AuthxCodegenTest.java` (same file as T016 → sequential)
+- [X] T018 [SR:req-3] Extend `AuthxCodegenTest` — `generateRemovesObsoleteResourceTypesFileIfPresent` + `endToEndEmitsSchemaFile` — `src/test/java/com/authx/sdk/AuthxCodegenTest.java` (same file as T016/T017 → sequential)
+- [X] T019 Phase-1 gate — run `./gradlew compileJava` and `./gradlew test -x :test-app:test`, must be green
+- [X] T020 Segment-1 commit — stage all files from T001–T018, commit with message "feat(sdk): flat descriptors — PermissionProxy, typed sub-rel overloads, Schema.java codegen"
 
 ---
 
