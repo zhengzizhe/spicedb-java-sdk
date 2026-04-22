@@ -87,10 +87,27 @@ public final class AuthxCodegen {
                     com.authx.sdk.trace.LogCtx.fmt("  Generated: {0}", out));
         }
 
-        Path resourceTypesPath = basePkgDir.resolve("ResourceTypes.java");
-        Files.writeString(resourceTypesPath, emitResourceTypes(packageName, types));
+        // ResourceTypes.java is no longer emitted — type names are carried by
+        // the Schema.Xxx descriptor fields. Delete any lingering file from a
+        // previous generator run so the tree stays clean.
+        Path oldResourceTypesPath = basePkgDir.resolve("ResourceTypes.java");
+        if (Files.exists(oldResourceTypesPath)) {
+            Files.delete(oldResourceTypesPath);
+            LOG.log(System.Logger.Level.INFO,
+                    com.authx.sdk.trace.LogCtx.fmt("  Removed obsolete: {0}", oldResourceTypesPath));
+        }
+
+        // Gather per-type rel/perm sets for the Schema aggregator.
+        var relsByType  = new java.util.LinkedHashMap<String, Set<String>>();
+        var permsByType = new java.util.LinkedHashMap<String, Set<String>>();
+        for (String type : types) {
+            relsByType.put(type, schema.relationsOf(type));
+            permsByType.put(type, schema.permissionsOf(type));
+        }
+        Path schemaPath = basePkgDir.resolve("Schema.java");
+        Files.writeString(schemaPath, emitSchema(packageName, relsByType, permsByType));
         LOG.log(System.Logger.Level.INFO,
-                com.authx.sdk.trace.LogCtx.fmt("  Generated: {0}", resourceTypesPath));
+                com.authx.sdk.trace.LogCtx.fmt("  Generated: {0}", schemaPath));
 
         Set<String> caveatNames = schema.getCaveatNames();
         if (!caveatNames.isEmpty()) {
