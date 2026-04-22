@@ -134,6 +134,28 @@ public class TypedRevokeAction<R extends Relation.Named> {
         return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
     }
 
+    /**
+     * Typed subject with typed {@link Relation.Named} sub-relation —
+     * symmetric to {@link TypedGrantAction#to(ResourceType, String, Enum)}.
+     * Example: {@code .from(Group, "eng", Group.Rel.MEMBER)}.
+     */
+    public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
+    RevokeCompletion from(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+        return from(subjectType, id, subjectRelation.relationName());
+    }
+
+    /**
+     * Typed subject with typed {@link Permission.Named} sub-relation
+     * (e.g. {@code department#all_members}): {@code .from(Department, "hq", Department.Perm.ALL_MEMBERS)}.
+     *
+     * <p>Drops the {@code Enum} bound to sidestep type-erasure conflict with
+     * the {@code R2} overload above — see {@code TypedGrantAction.to} for
+     * the rationale.
+     */
+    public RevokeCompletion from(ResourceType<?, ?> subjectType, String id, Permission.Named subjectPermission) {
+        return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+    }
+
     /** Wildcard typed form: {@code revoke(...).fromWildcard(User.TYPE)}. */
     public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
     RevokeCompletion fromWildcard(ResourceType<R2, P2> subjectType) {
