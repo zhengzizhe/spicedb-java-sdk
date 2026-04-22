@@ -9,6 +9,8 @@ import com.authx.testapp.schema.Space;
 import com.authx.testapp.schema.User;
 import org.springframework.stereotype.Service;
 
+import static com.authx.testapp.schema.Schema.*;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,9 +18,9 @@ import java.util.Map;
 /**
  * 跨资源类型的业务操作。
  *
- * <p>单资源类型的 check / grant 走 {@code client.on(Xxx.TYPE).select(...)}
+ * <p>单资源类型的 check / grant 走 {@code client.on(Xxx).select(...)}
  * 链。跨类型的批量 check 走 {@code client.batchCheck()}, 跨类型的原子批量写
- * 走 {@code client.batch()}。两条批量入口都支持把 {@code Xxx.TYPE} 描述符
+ * 走 {@code client.batch()}。两条批量入口都支持把 {@code Schema.Xxx} 描述符
  * 直接传进去, 不需要手动取字符串.
  */
 @Service
@@ -40,23 +42,23 @@ public class WorkspaceAccessService {
      */
     public WorkspaceView renderWorkspace(String userId, String spaceId, String folderId) {
         CheckMatrix m = client.batchCheck()
-                .add(Space.TYPE,  spaceId,  Space.Perm.VIEW, SubjectRef.of("user", userId))
-                .add(Space.TYPE,  spaceId,  Space.Perm.EDIT, SubjectRef.of("user", userId))
-                .add(Space.TYPE,  spaceId,  Space.Perm.MANAGE, SubjectRef.of("user", userId))
-                .add(Folder.TYPE, folderId, Folder.Perm.VIEW, SubjectRef.of("user", userId))
-                .add(Folder.TYPE, folderId, Folder.Perm.EDIT, SubjectRef.of("user", userId))
-                .add(Folder.TYPE, folderId, Folder.Perm.CREATE_CHILD, SubjectRef.of("user", userId))
-                .add(Folder.TYPE, folderId, Folder.Perm.MANAGE, SubjectRef.of("user", userId))
+                .add(Space,  spaceId,  Space.Perm.VIEW, SubjectRef.of("user", userId))
+                .add(Space,  spaceId,  Space.Perm.EDIT, SubjectRef.of("user", userId))
+                .add(Space,  spaceId,  Space.Perm.MANAGE, SubjectRef.of("user", userId))
+                .add(Folder, folderId, Folder.Perm.VIEW, SubjectRef.of("user", userId))
+                .add(Folder, folderId, Folder.Perm.EDIT, SubjectRef.of("user", userId))
+                .add(Folder, folderId, Folder.Perm.CREATE_CHILD, SubjectRef.of("user", userId))
+                .add(Folder, folderId, Folder.Perm.MANAGE, SubjectRef.of("user", userId))
                 .fetch();
 
         return new WorkspaceView(
-                m.allowed(Space.TYPE  + ":" + spaceId,  "view",         userId),
-                m.allowed(Space.TYPE  + ":" + spaceId,  "edit",         userId),
-                m.allowed(Space.TYPE  + ":" + spaceId,  "manage",       userId),
-                m.allowed(Folder.TYPE + ":" + folderId, "view",         userId),
-                m.allowed(Folder.TYPE + ":" + folderId, "edit",         userId),
-                m.allowed(Folder.TYPE + ":" + folderId, "create_child", userId),
-                m.allowed(Folder.TYPE + ":" + folderId, "manage",       userId));
+                m.allowed(Space  + ":" + spaceId,  "view",         userId),
+                m.allowed(Space  + ":" + spaceId,  "edit",         userId),
+                m.allowed(Space  + ":" + spaceId,  "manage",       userId),
+                m.allowed(Folder + ":" + folderId, "view",         userId),
+                m.allowed(Folder + ":" + folderId, "edit",         userId),
+                m.allowed(Folder + ":" + folderId, "create_child", userId),
+                m.allowed(Folder + ":" + folderId, "manage",       userId));
     }
 
     /**
@@ -68,9 +70,9 @@ public class WorkspaceAccessService {
         var builder = client.batchCheck();
         for (var item : items) {
             switch (item.type()) {
-                case "document" -> builder.add(Document.TYPE, item.id(), Document.Perm.VIEW, SubjectRef.of("user", userId));
-                case "folder"   -> builder.add(Folder.TYPE,   item.id(), Folder.Perm.VIEW, SubjectRef.of("user", userId));
-                case "space"    -> builder.add(Space.TYPE,    item.id(), Space.Perm.VIEW, SubjectRef.of("user", userId));
+                case "document" -> builder.add(Document, item.id(), Document.Perm.VIEW, SubjectRef.of("user", userId));
+                case "folder"   -> builder.add(Folder,   item.id(), Folder.Perm.VIEW, SubjectRef.of("user", userId));
+                case "space"    -> builder.add(Space,    item.id(), Space.Perm.VIEW, SubjectRef.of("user", userId));
                 default -> throw new IllegalArgumentException("Unknown resource type: " + item.type());
             }
         }
@@ -94,14 +96,14 @@ public class WorkspaceAccessService {
                                     String userId, List<String> welcomeDocIds) {
         // Single-id scope for space + folder, then a batched multi-id scope
         // fans the doc viewer grant across every welcome doc in the same
-        // atomic WriteRelationships RPC. typed .to(User.TYPE, userId) avoids
+        // atomic WriteRelationships RPC. typed .to(User, userId) avoids
         // the "alice" → SubjectRef.parse("alice") failure mode of the raw
         // .to(String...) overload.
         var batch = client.batch()
-                .on(Space.TYPE,  spaceId).grant(Space.Rel.MEMBER).to(User.TYPE, userId)
-                .on(Folder.TYPE, defaultFolderId).grant(Folder.Rel.VIEWER).to(User.TYPE, userId);
+                .on(Space,  spaceId).grant(Space.Rel.MEMBER).to(User, userId)
+                .on(Folder, defaultFolderId).grant(Folder.Rel.VIEWER).to(User, userId);
         if (!welcomeDocIds.isEmpty()) {
-            batch.onAll(Document.TYPE, welcomeDocIds).grant(Document.Rel.VIEWER).to(User.TYPE, userId);
+            batch.onAll(Document, welcomeDocIds).grant(Document.Rel.VIEWER).to(User, userId);
         }
         return batch.commit().zedToken();
     }
@@ -110,15 +112,15 @@ public class WorkspaceAccessService {
     public void offboardMember(String spaceId, List<String> folderIds, List<String> docIds,
                                 String userId) {
         var batch = client.batch()
-                .on(Space.TYPE, spaceId).revoke(Space.Rel.MEMBER).from(User.TYPE, userId);
+                .on(Space, spaceId).revoke(Space.Rel.MEMBER).from(User, userId);
         for (String fid : folderIds) {
-            batch.on(Folder.TYPE, fid).revoke(Folder.Rel.VIEWER).from(User.TYPE, userId);
-            batch.on(Folder.TYPE, fid).revoke(Folder.Rel.EDITOR).from(User.TYPE, userId);
+            batch.on(Folder, fid).revoke(Folder.Rel.VIEWER).from(User, userId);
+            batch.on(Folder, fid).revoke(Folder.Rel.EDITOR).from(User, userId);
         }
         for (String did : docIds) {
-            batch.on(Document.TYPE, did).revoke(Document.Rel.VIEWER).from(User.TYPE, userId);
-            batch.on(Document.TYPE, did).revoke(Document.Rel.EDITOR).from(User.TYPE, userId);
-            batch.on(Document.TYPE, did).revoke(Document.Rel.COMMENTER).from(User.TYPE, userId);
+            batch.on(Document, did).revoke(Document.Rel.VIEWER).from(User, userId);
+            batch.on(Document, did).revoke(Document.Rel.EDITOR).from(User, userId);
+            batch.on(Document, did).revoke(Document.Rel.COMMENTER).from(User, userId);
         }
         batch.commit();
     }
