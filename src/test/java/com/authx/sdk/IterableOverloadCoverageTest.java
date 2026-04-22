@@ -98,69 +98,70 @@ class IterableOverloadCoverageTest {
                 "fromWildcard", ResourceType.class)).isTrue();
     }
 
-    // ---- Typed chain mirrors (TypedGrantAction / TypedRevokeAction) ----
-    // The typed chain is what business code enters via
+    // ---- Typed flow mirrors (GrantFlow / RevokeFlow) ----
+    // The typed flow is what business code enters via
     //   client.on(ResourceType).select(...).grant(Rel)
     // so every user-facing typed overload on the untyped action classes
-    // must also exist here, or the typed chain goes stale.
+    // must also exist here, or the typed flow goes stale.
 
     @Test
-    void typedGrantActionHasTypedTo() {
-        assertThat(methodExists(TypedGrantAction.class,
+    void grantFlowHasTypedTo() {
+        assertThat(methodExists(GrantFlow.class,
                 "to", ResourceType.class, String.class)).isTrue();
     }
 
     @Test
-    void typedGrantActionHasTypedToSubRelation() {
-        assertThat(methodExists(TypedGrantAction.class,
-                "to", ResourceType.class, String.class, String.class)).isTrue();
+    void grantFlowHasTypedToSubRelation() {
+        // Bounded-generic SR erases to Enum — check the bytecode shape.
+        assertThat(methodExists(GrantFlow.class,
+                "to", ResourceType.class, String.class, Enum.class)).isTrue();
     }
 
     @Test
-    void typedGrantActionHasTypedToWildcard() {
-        assertThat(methodExists(TypedGrantAction.class,
+    void grantFlowHasTypedToWildcard() {
+        assertThat(methodExists(GrantFlow.class,
                 "toWildcard", ResourceType.class)).isTrue();
     }
 
     @Test
-    void typedGrantActionHasTypedIterableTo() {
-        assertThat(methodExists(TypedGrantAction.class,
+    void grantFlowHasTypedIterableTo() {
+        assertThat(methodExists(GrantFlow.class,
                 "to", ResourceType.class, Iterable.class)).isTrue();
     }
 
     @Test
-    void typedGrantActionHasBareIdTo() {
-        assertThat(methodExists(TypedGrantAction.class,
+    void grantFlowHasCanonicalStringTo() {
+        assertThat(methodExists(GrantFlow.class,
                 "to", String.class)).isTrue();
     }
 
     @Test
-    void typedRevokeActionHasTypedFrom() {
-        assertThat(methodExists(TypedRevokeAction.class,
+    void revokeFlowHasTypedFrom() {
+        assertThat(methodExists(RevokeFlow.class,
                 "from", ResourceType.class, String.class)).isTrue();
     }
 
     @Test
-    void typedRevokeActionHasTypedFromSubRelation() {
-        assertThat(methodExists(TypedRevokeAction.class,
-                "from", ResourceType.class, String.class, String.class)).isTrue();
+    void revokeFlowHasTypedFromSubRelation() {
+        assertThat(methodExists(RevokeFlow.class,
+                "from", ResourceType.class, String.class, Enum.class)).isTrue();
     }
 
     @Test
-    void typedRevokeActionHasTypedFromWildcard() {
-        assertThat(methodExists(TypedRevokeAction.class,
+    void revokeFlowHasTypedFromWildcard() {
+        assertThat(methodExists(RevokeFlow.class,
                 "fromWildcard", ResourceType.class)).isTrue();
     }
 
     @Test
-    void typedRevokeActionHasTypedIterableFrom() {
-        assertThat(methodExists(TypedRevokeAction.class,
+    void revokeFlowHasTypedIterableFrom() {
+        assertThat(methodExists(RevokeFlow.class,
                 "from", ResourceType.class, Iterable.class)).isTrue();
     }
 
     @Test
-    void typedRevokeActionHasBareIdFrom() {
-        assertThat(methodExists(TypedRevokeAction.class,
+    void revokeFlowHasCanonicalStringFrom() {
+        assertThat(methodExists(RevokeFlow.class,
                 "from", String.class)).isTrue();
     }
 

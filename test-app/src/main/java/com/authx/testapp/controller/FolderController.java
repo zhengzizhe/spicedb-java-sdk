@@ -39,7 +39,8 @@ public class FolderController {
                                              @PathVariable String spaceId) {
         auth.on(Folder).select(folderId)
                 .grant(Folder.Rel.SPACE)
-                .to(Space, spaceId);
+                .to(Space, spaceId)
+                .commit();
         return ResponseEntity.noContent().build();
     }
 
@@ -49,7 +50,8 @@ public class FolderController {
                                                @PathVariable String parentFolderId) {
         auth.on(Folder).select(folderId)
                 .grant(Folder.Rel.PARENT)
-                .to(Folder, parentFolderId);
+                .to(Folder, parentFolderId)
+                .commit();
         return ResponseEntity.noContent().build();
     }
 
@@ -60,7 +62,7 @@ public class FolderController {
         int writes = auth.on(Folder).select(folderId)
                 .grant(Folder.Rel.OWNER)
                 .to(User, body.userId())
-                .result().count();
+                .commit().count();
         return ResponseEntity.status(HttpStatus.CREATED).body(new WriteResponse(writes));
     }
 }

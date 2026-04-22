@@ -41,7 +41,7 @@ public class DepartmentController {
         int writes = auth.on(Department).select(deptId)
                 .grant(Department.Rel.MEMBER)
                 .to(User, body.userIds())
-                .result().count();
+                .commit().count();
         return ResponseEntity.status(HttpStatus.CREATED).body(new WriteResponse(writes));
     }
 
@@ -51,7 +51,8 @@ public class DepartmentController {
                                             @PathVariable String parentDeptId) {
         auth.on(Department).select(deptId)
                 .grant(Department.Rel.PARENT)
-                .to(Department, parentDeptId);
+                .to(Department, parentDeptId)
+                .commit();
         return ResponseEntity.noContent().build();
     }
 }

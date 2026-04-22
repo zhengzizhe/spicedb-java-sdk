@@ -93,8 +93,9 @@ public class ResourceFactory {
 
     /**
      * Package-private accessor for the schema cache (may be {@code null}).
-     * Used by typed action classes that need schema-aware subject inference
-     * (e.g. {@link TypedGrantAction#to(String)} bare-id single-type inference).
+     * Used by flow / action classes that need schema-aware subject validation
+     * (e.g. {@link GrantFlow} passes every accumulated subject through
+     * {@link com.authx.sdk.cache.SchemaCache#validateSubject} before commit).
      */
     @Nullable SchemaCache schemaCache() { return schemaCache; }
 

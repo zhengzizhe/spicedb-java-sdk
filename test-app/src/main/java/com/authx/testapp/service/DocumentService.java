@@ -44,7 +44,8 @@ public class DocumentService {
     public void linkToFolder(String docId, String folderId) {
         auth.on(Document).select(docId)
                 .grant(Document.Rel.FOLDER)
-                .to(Folder, folderId);
+                .to(Folder, folderId)
+                .commit();
     }
 
     // ── Direct-user grants ────────────────────────────────────────────
@@ -53,27 +54,28 @@ public class DocumentService {
         return auth.on(Document).select(docId)
                 .grant(Document.Rel.OWNER)
                 .to(User, userId)
-                .result().count();
+                .commit().count();
     }
 
     public int addEditor(String docId, String userId) {
         return auth.on(Document).select(docId)
                 .grant(Document.Rel.EDITOR)
                 .to(User, userId)
-                .result().count();
+                .commit().count();
     }
 
     public int addViewer(String docId, String userId) {
         return auth.on(Document).select(docId)
                 .grant(Document.Rel.VIEWER)
                 .to(User, userId)
-                .result().count();
+                .commit().count();
     }
 
     public void removeEditor(String docId, String userId) {
         auth.on(Document).select(docId)
                 .revoke(Document.Rel.EDITOR)
-                .from(User, userId);
+                .from(User, userId)
+                .commit();
     }
 
     // ── Subject-set grants (group / department) ───────────────────────
@@ -83,7 +85,7 @@ public class DocumentService {
         return auth.on(Document).select(docId)
                 .grant(Document.Rel.VIEWER)
                 .to(Group, groupId, Group.Rel.MEMBER)           // typed sub-relation
-                .result().count();
+                .commit().count();
     }
 
     /** Share with the entire {@code deptId} sub-tree via {@code all_members}. */
@@ -91,33 +93,22 @@ public class DocumentService {
         return auth.on(Document).select(docId)
                 .grant(Document.Rel.VIEWER)
                 .to(Department, deptId, Department.Perm.ALL_MEMBERS)  // typed sub-permission
-                .result().count();
+                .commit().count();
     }
 
-    // ── Multi-subject atomic share (GrantFlow prototype demo) ────────
-    //
-    // Before (legacy API): each .to(...) is terminal, so N subjects
-    // require N RPCs and aren't atomic:
-    //
-    //     auth.on(Document).select(docId).grant(VIEWER).to(User, alice);
-    //     auth.on(Document).select(docId).grant(VIEWER).to(User, bob);
-    //     auth.on(Document).select(docId).grant(VIEWER).to(Group, eng, MEMBER);
-    //     // 3 RPCs, non-atomic, mid-state visible
-    //
-    // With GrantFlow: accumulate, then commit once.
+    // ── Multi-subject atomic share (GrantFlow) ────────────────────────
 
     /**
      * Share a document with a heterogeneous set of subjects (users,
-     * groups, folders) in one atomic RPC. Demonstrates the
-     * {@code grantFlow} prototype API — see
-     * {@code specs/2026-04-22-grant-revoke-flow-api/spec.md}.
+     * groups) in one atomic RPC — accumulate via {@code .to(...)} across
+     * both {@code viewer} and {@code editor} relations, commit once.
      */
     public int shareWithMany(String docId,
                              List<String> viewerUserIds,
                              List<String> viewerGroupIds,
                              List<String> editorUserIds) {
         return auth.on(Document).select(docId)
-                .grantFlow(Document.Rel.VIEWER)
+                .grant(Document.Rel.VIEWER)
                 .to(User, viewerUserIds)
                 .to(Group, viewerGroupIds, Group.Rel.MEMBER)
                 // switch to editor relation for a different cohort
@@ -138,9 +129,9 @@ public class DocumentService {
     public int shareWithPublic(String docId, List<String> allowedCidrs) {
         return auth.on(Document).select(docId)
                 .grant(Document.Rel.VIEWER)
-                .withCaveat(IpAllowlist.ref(IpAllowlist.CIDRS, allowedCidrs))
                 .toWildcard(User)
-                .result().count();
+                    .withCaveat(IpAllowlist.ref(IpAllowlist.CIDRS, allowedCidrs))
+                .commit().count();
     }
 
     // ── Checks ────────────────────────────────────────────────────────

@@ -39,7 +39,7 @@ public class OrganizationController {
         int writes = auth.on(Organization).select(orgId)
                 .grant(Organization.Rel.ADMIN)
                 .to(User, body.userId())
-                .result().count();
+                .commit().count();
         return ResponseEntity.status(HttpStatus.CREATED).body(new WriteResponse(writes));
     }
 
@@ -50,7 +50,7 @@ public class OrganizationController {
         int writes = auth.on(Organization).select(orgId)
                 .grant(Organization.Rel.MEMBER)
                 .to(User, body.userIds())
-                .result().count();
+                .commit().count();
         return ResponseEntity.status(HttpStatus.CREATED).body(new WriteResponse(writes));
     }
 }

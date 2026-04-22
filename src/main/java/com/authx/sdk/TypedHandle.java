@@ -54,61 +54,33 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
     //  Grant / revoke
     // ────────────────────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
-    public TypedGrantAction<R> grant(R... relations) {
-        return new TypedGrantAction<>(factory, ids, relations);
-    }
-
-    /** Collection overload — hand it a {@code List<Rel>}, {@code EnumSet<Rel>}, etc. */
-    @SuppressWarnings("unchecked")
-    public TypedGrantAction<R> grant(Collection<R> relations) {
-        return new TypedGrantAction<>(factory, ids, (R[]) relations.toArray(Relation.Named[]::new));
-    }
-
-    @SuppressWarnings("unchecked")
-    public TypedRevokeAction<R> revoke(R... relations) {
-        return new TypedRevokeAction<>(factory, ids, relations);
-    }
-
-    /** Collection overload for revoke. */
-    @SuppressWarnings("unchecked")
-    public TypedRevokeAction<R> revoke(Collection<R> relations) {
-        return new TypedRevokeAction<>(factory, ids, (R[]) relations.toArray(Relation.Named[]::new));
-    }
-
-    // ────────────────────────────────────────────────────────────────
-    //  Grant / revoke flow (prototype — parallel to grant/revoke above)
-    //
-    //  See specs/2026-04-22-grant-revoke-flow-api/spec.md. Terminates
-    //  explicitly via .commit() after accumulating any number of
-    //  (relation, subject) pairs in one atomic WriteRelationships RPC.
-    // ────────────────────────────────────────────────────────────────
-
     /**
      * Start a flow-style grant: accumulate multiple (relation, subject)
-     * pairs and commit them in one RPC. Requires exactly one selected
-     * resource id; for multi-id atomic writes use
-     * {@link CrossResourceBatchBuilder}.
+     * pairs and commit them in one atomic {@code WriteRelationships} RPC.
+     * Requires exactly one selected resource id; for multi-id atomic writes
+     * use {@link CrossResourceBatchBuilder}.
      *
      * <pre>
      * client.on(Document).select(docId)
-     *     .grantFlow(Document.Rel.VIEWER)
+     *     .grant(Document.Rel.VIEWER)
      *     .to(User, "alice")
      *     .to(User, "bob", "carol")
      *     .to(Group, "eng", Group.Rel.MEMBER)
      *     .commit();
      * </pre>
+     *
+     * <p>See {@code specs/2026-04-22-grant-revoke-flow-api/spec.md}.
      */
-    public GrantFlow grantFlow(R relation) {
-        requireSingleId("grantFlow");
+    public GrantFlow grant(R relation) {
+        requireSingleId("grant");
         return new GrantFlow(factory.resourceType(), ids[0],
                 factory.transport(), factory.schemaCache())
                 .grant(relation);
     }
 
-    /** Start a flow-style revoke. See {@link #grantFlow(Relation.Named)}. */
-    public RevokeFlow revokeFlow(R relation) {
-        requireSingleId("revokeFlow");
+    /** Start a flow-style revoke. See {@link #grant(Relation.Named)}. */
+    public RevokeFlow revoke(R relation) {
+        requireSingleId("revoke");
         return new RevokeFlow(factory.resourceType(), ids[0],
                 factory.transport(), factory.schemaCache())
                 .revoke(relation);

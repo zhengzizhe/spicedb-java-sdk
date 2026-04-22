@@ -38,7 +38,7 @@ public class GroupController {
         int writes = auth.on(Group).select(groupId)
                 .grant(Group.Rel.MEMBER)
                 .to(User, body.userId())
-                .result().count();
+                .commit().count();
         return ResponseEntity.status(HttpStatus.CREATED).body(new WriteResponse(writes));
     }
 
@@ -48,7 +48,8 @@ public class GroupController {
                                               @PathVariable String userId) {
         auth.on(Group).select(groupId)
                 .revoke(Group.Rel.MEMBER)
-                .from(User, userId);
+                .from(User, userId)
+                .commit();
         return ResponseEntity.noContent().build();
     }
 }

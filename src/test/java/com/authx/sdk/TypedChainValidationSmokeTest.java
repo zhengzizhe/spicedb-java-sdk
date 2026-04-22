@@ -86,7 +86,10 @@ class TypedChainValidationSmokeTest {
     void typedGrantRejectsWrongSubjectType() {
         var cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
         try (var c = client(cache)) {
-            assertThatThrownBy(() -> c.on(DOC_TYPE).select("d-1").grant(TestRel.FOLDER).to("user:alice"))
+            // GrantFlow defers validation to .commit() — that's where the
+            // schema check fires for the whole accumulated batch.
+            assertThatThrownBy(() -> c.on(DOC_TYPE).select("d-1")
+                    .grant(TestRel.FOLDER).to("user:alice").commit())
                     .isInstanceOf(InvalidRelationException.class)
                     .hasMessageContaining("[folder]");
         }
@@ -97,7 +100,7 @@ class TypedChainValidationSmokeTest {
         var cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
         try (var c = client(cache)) {
             // No throw — validation lets folder subjects through.
-            c.on(DOC_TYPE).select("d-1").grant(TestRel.FOLDER).to("folder:f-1");
+            c.on(DOC_TYPE).select("d-1").grant(TestRel.FOLDER).to("folder:f-1").commit();
         }
     }
 
@@ -106,8 +109,9 @@ class TypedChainValidationSmokeTest {
         var cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
         try (var c = client(cache)) {
             // Prime the store so there's something to revoke, with a matching subject.
-            c.on(DOC_TYPE).select("d-1").grant(TestRel.FOLDER).to("folder:f-1");
-            assertThatThrownBy(() -> c.on(DOC_TYPE).select("d-1").revoke(TestRel.FOLDER).from("user:alice"))
+            c.on(DOC_TYPE).select("d-1").grant(TestRel.FOLDER).to("folder:f-1").commit();
+            assertThatThrownBy(() -> c.on(DOC_TYPE).select("d-1")
+                    .revoke(TestRel.FOLDER).from("user:alice").commit())
                     .isInstanceOf(InvalidRelationException.class)
                     .hasMessageContaining("[folder]");
         }

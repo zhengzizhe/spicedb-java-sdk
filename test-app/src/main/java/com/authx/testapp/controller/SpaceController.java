@@ -38,7 +38,8 @@ public class SpaceController {
                                                    @PathVariable String orgId) {
         auth.on(Space).select(spaceId)
                 .grant(Space.Rel.ORG)
-                .to(Organization, orgId);
+                .to(Organization, orgId)
+                .commit();
         return ResponseEntity.noContent().build();
     }
 
@@ -49,7 +50,7 @@ public class SpaceController {
         int writes = auth.on(Space).select(spaceId)
                 .grant(Space.Rel.MEMBER)
                 .to(User, body.userId())
-                .result().count();
+                .commit().count();
         return ResponseEntity.status(HttpStatus.CREATED).body(new WriteResponse(writes));
     }
 }

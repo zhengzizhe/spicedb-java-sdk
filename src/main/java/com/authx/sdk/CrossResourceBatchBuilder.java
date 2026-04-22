@@ -216,7 +216,7 @@ public class CrossResourceBatchBuilder {
             return to(subjects.toArray(SubjectRef[]::new));
         }
 
-        // ────── Typed subject overloads (mirror TypedGrantAction) ─────
+        // ────── Typed subject overloads (mirror GrantFlow) ─────
 
         /** Typed single subject: {@code .grant(...).to(User, "alice")}. */
         public ResourceScope to(ResourceType<?, ?> subjectType, String id) {
@@ -344,7 +344,7 @@ public class CrossResourceBatchBuilder {
             return to(subjects.toArray(SubjectRef[]::new));
         }
 
-        // ────── Typed subject overloads (mirror TypedGrantAction) ─────
+        // ────── Typed subject overloads (mirror GrantFlow) ─────
 
         /** Typed single subject across every resource id in the fan. */
         public MultiResourceScope to(ResourceType<?, ?> subjectType, String id) {
@@ -419,7 +419,7 @@ public class CrossResourceBatchBuilder {
             return from(subjects.toArray(SubjectRef[]::new));
         }
 
-        // ────── Typed subject overloads (mirror TypedRevokeAction) ─────
+        // ────── Typed subject overloads (mirror RevokeFlow) ─────
 
         /** Typed single subject across every resource id in the fan. */
         public MultiResourceScope from(ResourceType<?, ?> subjectType, String id) {
@@ -493,7 +493,7 @@ public class CrossResourceBatchBuilder {
             return from(subjects.toArray(SubjectRef[]::new));
         }
 
-        // ────── Typed subject overloads (mirror TypedRevokeAction) ─────
+        // ────── Typed subject overloads (mirror RevokeFlow) ─────
 
         /** Typed single subject: {@code .revoke(...).from(User, "alice")}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, String id) {
