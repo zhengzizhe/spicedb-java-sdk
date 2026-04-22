@@ -128,6 +128,21 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
     }
 
     /**
+     * Enum-typed proxy overload of {@link #checkAll(Class)}. Pass a
+     * generated {@code PermissionProxy} instance (e.g. {@code Document.Perm})
+     * — the SDK recovers the enum class from the proxy and delegates.
+     *
+     * <pre>
+     * EnumMap&lt;Document.Perm, Boolean&gt; toolbar =
+     *     client.on(Document).select(id).checkAll(Document.Perm).by(User, userId);
+     * </pre>
+     */
+    public <E extends Enum<E> & Permission.Named> TypedCheckAllAction<E> checkAll(
+            com.authx.sdk.PermissionProxy<E> proxy) {
+        return checkAll(proxy.enumClass());
+    }
+
+    /**
      * Parameterless overload — only works when the handle was produced
      * via {@link TypedResourceEntry#select(String...)}, which wires the
      * permission enum class through from {@link ResourceType#permClass()}.
@@ -164,5 +179,16 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
                     "who(...) requires exactly one selected resource id; got " + ids.length);
         }
         return new TypedWhoQuery(factory, ids[0], subjectType, permission.permissionName());
+    }
+
+    /**
+     * Typed subject-type overload of {@link #who(String, Permission.Named)}:
+     * {@code client.on(Document).select(id).who(User, Document.Perm.EDIT)}.
+     * The subject type name is read from the {@code ResourceType} descriptor.
+     */
+    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+            P2 extends Enum<P2> & Permission.Named>
+    TypedWhoQuery who(ResourceType<R2, P2> subjectType, P permission) {
+        return who(subjectType.name(), permission);
     }
 }
