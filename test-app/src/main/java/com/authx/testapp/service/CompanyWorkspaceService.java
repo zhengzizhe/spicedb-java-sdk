@@ -14,6 +14,8 @@ import com.authx.testapp.schema.Space;
 import com.authx.testapp.schema.User;
 import org.springframework.stereotype.Service;
 
+import static com.authx.testapp.schema.Schema.*;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -34,7 +36,7 @@ import java.util.Map;
  * <p>核心约束（来自项目 CLAUDE.md）：
  * <ul>
  *   <li>业务代码里不手写 {@code "user:"} / {@code "group#member"} 等 wire 字符串 —
- *       所有 subject ref 都通过 {@code Xxx.TYPE} 常量和 typed 重载构造；</li>
+ *       所有 subject ref 都通过 {@code Schema.Xxx} 描述符和 typed 重载构造；</li>
  *   <li>caveat name / parameter name 从 codegen 常量读（{@code IpAllowlist.NAME}、
  *       {@code IpAllowlist.CIDRS}、{@code IpAllowlist.CLIENT_IP}），
  *       业务代码零字符串拼接；</li>
@@ -71,49 +73,50 @@ public class CompanyWorkspaceService {
      * <ul>
      *   <li>{@code .to(userId)} — {@code organization.admin} 只接 {@code user}，
      *       单类型推断，bare id 即可；</li>
-     *   <li>{@code .to(User.TYPE, userId)} — 跨类型显式 typed ref；</li>
-     *   <li>{@code .to(Department.TYPE, deptId, "all_members")} — typed
+     *   <li>{@code .to(User, userId)} — 跨类型显式 typed ref；</li>
+     *   <li>{@code .to(Department, deptId, "all_members")} — typed
      *       sub-relation，消除 {@code "department:eng#all_members"} 手拼。</li>
      * </ul>
      */
     public String bootstrapOrganization(OrgSeed seed) {
         // NOTE: inside client.batch() there is no single-type inference —
         // the batch chain has no SchemaCache in scope — so we always hand
-        // in an explicit typed subject via .to(User.TYPE, id) etc. Outside
+        // in an explicit typed subject via .to(User, id) etc. Outside
         // of batch (client.on(T).select(id).grant(R).to(bareId)) the typed
         // chain does have the cache and can infer.
         var batch = client.batch()
                 // Organization admin（typed subject — batch chain 强制类型显式）
-                .on(Organization.TYPE, seed.orgId())
+                .on(Organization, seed.orgId())
                 .grant(Organization.Rel.ADMIN)
-                .to(User.TYPE, seed.adminUserId());
+                .to(User, seed.adminUserId());
 
         // 每个部门挂上 member（User typed batch），再把部门当作 member 挂到 organization
         for (var dept : seed.departments()) {
             if (!dept.memberUserIds().isEmpty()) {
                 // typed Iterable 批量 — 一次 append 所有 member tuples
-                batch.on(Department.TYPE, dept.id())
+                batch.on(Department, dept.id())
                         .grant(Department.Rel.MEMBER)
-                        .to(User.TYPE, dept.memberUserIds());
+                        .to(User, dept.memberUserIds());
             }
             // organization.member 接 user 或 department#all_members 两种 subject，
             // typed sub-relation 重载把整个部门作为 group-like 成员挂进 org。
-            batch.on(Organization.TYPE, seed.orgId())
+            batch.on(Organization, seed.orgId())
                     .grant(Organization.Rel.MEMBER)
-                    .to(Department.TYPE, dept.id(), "all_members");
+                    .to(Department, dept.id(), Department.Perm.ALL_MEMBERS);
         }
 
         // group.member 接 user 或 department#all_members。演示两种都能往同一个 relation 上挂：
         for (var group : seed.groups()) {
             if (!group.memberUserIds().isEmpty()) {
-                batch.on(Group.TYPE, group.id())
+                batch.on(Group, group.id())
                         .grant(Group.Rel.MEMBER)
-                        .to(User.TYPE, group.memberUserIds());   // typed Iterable<String>
+                        .to(User, group.memberUserIds());   // typed Iterable<String>
             }
             for (String deptId : group.memberDepartmentIds()) {
-                batch.on(Group.TYPE, group.id())
+                // 保留一处字符串 sub-relation，演示 string-form 多态路径仍然有效
+                batch.on(Group, group.id())
                         .grant(Group.Rel.MEMBER)
-                        .to(Department.TYPE, deptId, "all_members");
+                        .to(Department, deptId, "all_members");
             }
         }
 
@@ -137,7 +140,7 @@ public class CompanyWorkspaceService {
      * 不会默默写错。
      */
     public void linkDepartmentToParent(String childDeptId, String parentDeptId) {
-        client.on(Department.TYPE)
+        client.on(Department)
                 .select(childDeptId)
                 .grant(Department.Rel.PARENT)
                 .to(parentDeptId);    // 单类型推断 — SDK 自动补 "department:" 前缀
@@ -154,34 +157,34 @@ public class CompanyWorkspaceService {
      * <p>演示重载矩阵：
      * <ul>
      *   <li>{@code space.org} 单类型 → {@code .to(orgId)} 推断</li>
-     *   <li>{@code space.owner} 单类型 {@code user} → {@code .to(User.TYPE, id)} 显式</li>
-     *   <li>{@code space.admin} 多类型 → {@code .to(Group.TYPE, id, "member")} typed sub-rel</li>
-     *   <li>{@code space.member} 多类型 → {@code .to(Department.TYPE, id, "all_members")}</li>
-     *   <li>{@code space.viewer} 含 {@code user:*} → {@code .toWildcard(User.TYPE)}</li>
+     *   <li>{@code space.owner} 单类型 {@code user} → {@code .to(User, id)} 显式</li>
+     *   <li>{@code space.admin} 多类型 → {@code .to(Group, id, "member")} typed sub-rel</li>
+     *   <li>{@code space.member} 多类型 → {@code .to(Department, id, "all_members")}</li>
+     *   <li>{@code space.viewer} 含 {@code user:*} → {@code .toWildcard(User)}</li>
      * </ul>
      */
     public void provisionSpace(SpaceSeed seed) {
-        var on = client.on(Space.TYPE).select(seed.spaceId());
+        var on = client.on(Space).select(seed.spaceId());
 
         // org 绑定 — space.org 只接 organization 一种类型，推断即可
         on.grant(Space.Rel.ORG).to(seed.orgId());
 
         // owner 是个具体 user
-        on.grant(Space.Rel.OWNER).to(User.TYPE, seed.ownerUserId());
+        on.grant(Space.Rel.OWNER).to(User, seed.ownerUserId());
 
-        // admin 权限给 "alpha-pms" 整个 group，typed sub-relation
+        // admin 权限给 "alpha-pms" 整个 group，typed sub-relation (enum Rel form)
         if (seed.adminGroupId() != null) {
-            on.grant(Space.Rel.ADMIN).to(Group.TYPE, seed.adminGroupId(), "member");
+            on.grant(Space.Rel.ADMIN).to(Group, seed.adminGroupId(), Group.Rel.MEMBER);
         }
 
-        // member 权限给多个部门 — 每个部门都是 department#all_members
+        // member 权限给多个部门 — 每个部门都是 department#all_members (enum Perm form)
         for (String deptId : seed.memberDepartmentIds()) {
-            on.grant(Space.Rel.MEMBER).to(Department.TYPE, deptId, "all_members");
+            on.grant(Space.Rel.MEMBER).to(Department, deptId, Department.Perm.ALL_MEMBERS);
         }
 
         // 开放给全员只读 — wildcard typed 重载，消除 "user:*" 手拼
         if (seed.publicViewer()) {
-            on.grant(Space.Rel.VIEWER).toWildcard(User.TYPE);
+            on.grant(Space.Rel.VIEWER).toWildcard(User);
         }
     }
 
@@ -199,16 +202,16 @@ public class CompanyWorkspaceService {
         var batch = client.batch();
         for (var node : breadthFirst) {
             // typed subject — 批量链上没有单类型推断
-            batch.on(Folder.TYPE, node.id())
+            batch.on(Folder, node.id())
                     .grant(Folder.Rel.SPACE)
-                    .to(Space.TYPE, spaceId);
-            batch.on(Folder.TYPE, node.id())
+                    .to(Space, spaceId);
+            batch.on(Folder, node.id())
                     .grant(Folder.Rel.OWNER)
-                    .to(User.TYPE, node.ownerUserId());
+                    .to(User, node.ownerUserId());
             if (node.parentFolderId() != null) {
-                batch.on(Folder.TYPE, node.id())
+                batch.on(Folder, node.id())
                         .grant(Folder.Rel.PARENT)
-                        .to(Folder.TYPE, node.parentFolderId());
+                        .to(Folder, node.parentFolderId());
             }
         }
         batch.commit();
@@ -220,10 +223,10 @@ public class CompanyWorkspaceService {
      * 的允许主体包含 {@code department#all_members}，走 typed sub-relation。
      */
     public void shareFolderWithDepartment(String folderId, String deptId) {
-        client.on(Folder.TYPE)
+        client.on(Folder)
                 .select(folderId)
                 .grant(Folder.Rel.VIEWER)
-                .to(Department.TYPE, deptId, "all_members");
+                .to(Department, deptId, Department.Perm.ALL_MEMBERS);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -238,9 +241,9 @@ public class CompanyWorkspaceService {
      */
     public void publishDocument(String docId, String folderId, String spaceId, String ownerUserId) {
         client.batch()
-                .on(Document.TYPE, docId).grant(Document.Rel.FOLDER).to(Folder.TYPE, folderId)
-                .on(Document.TYPE, docId).grant(Document.Rel.SPACE).to(Space.TYPE, spaceId)
-                .on(Document.TYPE, docId).grant(Document.Rel.OWNER).to(User.TYPE, ownerUserId)
+                .on(Document, docId).grant(Document.Rel.FOLDER).to(Folder, folderId)
+                .on(Document, docId).grant(Document.Rel.SPACE).to(Space, spaceId)
+                .on(Document, docId).grant(Document.Rel.OWNER).to(User, ownerUserId)
                 .commit();
     }
 
@@ -250,10 +253,10 @@ public class CompanyWorkspaceService {
      * 这是 ReBAC 相比 "把 user 一个个挂"的核心优势。
      */
     public void shareWithGroup(String docId, String groupId, Document.Rel relation) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(relation)
-                .to(Group.TYPE, groupId, "member");
+                .to(Group, groupId, Group.Rel.MEMBER);
     }
 
     /**
@@ -262,10 +265,10 @@ public class CompanyWorkspaceService {
      * SpiceDB 会在 check 时递归展开子部门。
      */
     public void shareWithDepartment(String docId, String deptId, Document.Rel relation) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(relation)
-                .to(Department.TYPE, deptId, "all_members");
+                .to(Department, deptId, Department.Perm.ALL_MEMBERS);
     }
 
     /**
@@ -273,18 +276,18 @@ public class CompanyWorkspaceService {
      * 每个 id 自动补 {@code "user:"} 前缀。
      */
     public void shareWithUsers(String docId, Iterable<String> userIds, Document.Rel relation) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(relation)
-                .to(User.TYPE, userIds);
+                .to(User, userIds);
     }
 
     /** 公开文档：挂 {@code link_viewer: user:*} —— typed wildcard 重载。 */
     public void publishPublicly(String docId) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(Document.Rel.LINK_VIEWER)
-                .toWildcard(User.TYPE);
+                .toWildcard(User);
     }
 
     /**
@@ -292,11 +295,11 @@ public class CompanyWorkspaceService {
      * 自动让这个关系失效 — 不需要业务代码跑定时任务删关系。
      */
     public void shareTemporarily(String docId, String userId, Document.Rel relation, Duration ttl) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(relation)
                 .expiringIn(ttl)
-                .to(User.TYPE, userId);
+                .to(User, userId);
     }
 
     /**
@@ -310,11 +313,11 @@ public class CompanyWorkspaceService {
      * 参数名来自 {@link IpAllowlist#CIDRS}。
      */
     public void shareBehindIpAllowlist(String docId, List<String> allowedCidrs) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .grant(Document.Rel.LINK_VIEWER)
                 .onlyIf(IpAllowlist.ref(IpAllowlist.CIDRS, allowedCidrs))
-                .toWildcard(User.TYPE);
+                .toWildcard(User);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -323,26 +326,26 @@ public class CompanyWorkspaceService {
 
     /** 从一个 group 回收文档编辑权。与 {@link #shareWithGroup} 对称。 */
     public void unshareFromGroup(String docId, String groupId, Document.Rel relation) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .revoke(relation)
-                .from(Group.TYPE, groupId, "member");
+                .from(Group, groupId, Group.Rel.MEMBER);
     }
 
     /** 批量从多个 user 收权。typed Iterable from 重载。 */
     public void unshareFromUsers(String docId, Iterable<String> userIds, Document.Rel relation) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .revoke(relation)
-                .from(User.TYPE, userIds);
+                .from(User, userIds);
     }
 
     /** 取消公开。typed {@code fromWildcard} 重载。 */
     public void unpublishPublicly(String docId) {
-        client.on(Document.TYPE)
+        client.on(Document)
                 .select(docId)
                 .revoke(Document.Rel.LINK_VIEWER)
-                .fromWildcard(User.TYPE);
+                .fromWildcard(User);
     }
 
     /**
@@ -351,8 +354,8 @@ public class CompanyWorkspaceService {
      */
     public String transferOwnership(String docId, String oldOwnerId, String newOwnerId) {
         return client.batch()
-                .on(Document.TYPE, docId).revoke(Document.Rel.OWNER).from(User.TYPE, oldOwnerId)
-                .on(Document.TYPE, docId).grant(Document.Rel.OWNER).to(User.TYPE, newOwnerId)
+                .on(Document, docId).revoke(Document.Rel.OWNER).from(User, oldOwnerId)
+                .on(Document, docId).grant(Document.Rel.OWNER).to(User, newOwnerId)
                 .commit()
                 .zedToken();
     }
@@ -366,10 +369,10 @@ public class CompanyWorkspaceService {
      * 消除 {@code by("user:alice")} 的手拼。
      */
     public boolean canView(String userId, String docId) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
                 .check(Document.Perm.VIEW)
-                .by(User.TYPE, userId);
+                .by(User, userId);
     }
 
     /**
@@ -378,11 +381,11 @@ public class CompanyWorkspaceService {
      * 有 caveat 的路径（link_viewer→view）才会评估 CEL。
      */
     public boolean canViewFrom(String userId, String docId, String clientIp) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
                 .check(Document.Perm.VIEW)
                 .given(IpAllowlist.CLIENT_IP, clientIp)
-                .by(User.TYPE, userId);
+                .by(User, userId);
     }
 
     /**
@@ -390,29 +393,29 @@ public class CompanyWorkspaceService {
      * schema 新增 permission 后只要重跑 codegen，工具栏自动带上。
      */
     public EnumMap<Document.Perm, Boolean> toolbar(String userId, String docId) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
                 .checkAll()
-                .by(User.TYPE, userId);
+                .by(User, userId);
     }
 
     /** 文档列表批量检查：N 个文档 × 所有 perm，一次 RPC。 */
     public Map<String, EnumMap<Document.Perm, Boolean>> listPermissions(
             String userId, List<String> docIds) {
         if (docIds.isEmpty()) return Map.of();
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docIds)
                 .checkAll()
-                .byAll(User.TYPE, userId);
+                .byAll(User, userId);
     }
 
     /** N 个 doc × 单 perm × 1 user 矩阵 — 用 typed subject 批量 byAll。 */
     public Map<String, Boolean> filterVisible(String userId, List<String> docIds) {
         if (docIds.isEmpty()) return Map.of();
-        CheckMatrix m = client.on(Document.TYPE)
+        CheckMatrix m = client.on(Document)
                 .select(docIds)
                 .check(Document.Perm.VIEW)
-                .byAll(User.TYPE, List.of(userId));
+                .byAll(User, List.of(userId));
         var out = new LinkedHashMap<String, Boolean>();
         for (String id : docIds) {
             out.put(id, m.allowed(id, "view", userId));
@@ -428,12 +431,12 @@ public class CompanyWorkspaceService {
     public Map<String, Boolean> renderSidebar(String userId, List<ResourceKey> items) {
         if (items.isEmpty()) return Map.of();
         var builder = client.batchCheck();
-        var subject = SubjectRef.of(User.TYPE.name(), userId);
+        var subject = SubjectRef.of(User.name(), userId);
         for (var item : items) {
             switch (item.type()) {
-                case "space"    -> builder.add(Space.TYPE,    item.id(), Space.Perm.VIEW,    subject);
-                case "folder"   -> builder.add(Folder.TYPE,   item.id(), Folder.Perm.VIEW,   subject);
-                case "document" -> builder.add(Document.TYPE, item.id(), Document.Perm.VIEW, subject);
+                case "space"    -> builder.add(Space,    item.id(), Space.Perm.VIEW,    subject);
+                case "folder"   -> builder.add(Folder,   item.id(), Folder.Perm.VIEW,   subject);
+                case "document" -> builder.add(Document, item.id(), Document.Perm.VIEW, subject);
                 default         -> throw new IllegalArgumentException("unknown item type: " + item.type());
             }
         }
@@ -452,33 +455,33 @@ public class CompanyWorkspaceService {
 
     /** "谁是这篇文档的 editor?"（只列 user 主体） */
     public List<String> whoCanEdit(String docId, int max) {
-        return client.on(Document.TYPE)
+        return client.on(Document)
                 .select(docId)
-                .who(User.TYPE.name(), Document.Perm.EDIT)
+                .who(User, Document.Perm.EDIT)
                 .limit(max)
                 .fetchIds();
     }
 
     /** "alice 能看的所有文档 id" — typed findBy + single perm. */
     public List<String> myReadableDocs(String userId, int max) {
-        return client.on(Document.TYPE)
-                .findBy(User.TYPE, userId)
+        return client.on(Document)
+                .findBy(User, userId)
                 .limit(max)
                 .can(Document.Perm.VIEW);
     }
 
     /** "alice 能看 / 能编辑 / 能评论的文档分别有哪些" — 多 perm 一次返回. */
     public Map<Document.Perm, List<String>> myDocsByPermission(String userId, int max) {
-        return client.on(Document.TYPE)
-                .findBy(User.TYPE, userId)
+        return client.on(Document)
+                .findBy(User, userId)
                 .limit(max)
                 .can(Document.Perm.VIEW, Document.Perm.EDIT, Document.Perm.COMMENT);
     }
 
     /** "团队每人能看的 doc" — typed 多 subject findBy. */
     public Map<String, List<String>> readableDocsForTeam(List<String> userIds, int max) {
-        return client.on(Document.TYPE)
-                .findBy(User.TYPE, userIds)
+        return client.on(Document)
+                .findBy(User, userIds)
                 .limit(max)
                 .can(Document.Perm.VIEW);
     }
@@ -497,35 +500,35 @@ public class CompanyWorkspaceService {
 
         // 部门成员关系
         for (String deptId : targets.departmentIds()) {
-            batch.on(Department.TYPE, deptId).revoke(Department.Rel.MEMBER).from(User.TYPE, userId);
+            batch.on(Department, deptId).revoke(Department.Rel.MEMBER).from(User, userId);
         }
 
         // group 成员关系 — 因为 group#member 的级联（文档/folder/space
         // 的 editor 等可能来自 group#member），所以离职也要从 group 退出
         for (String groupId : targets.groupIds()) {
-            batch.on(Group.TYPE, groupId).revoke(Group.Rel.MEMBER).from(User.TYPE, userId);
+            batch.on(Group, groupId).revoke(Group.Rel.MEMBER).from(User, userId);
         }
 
         // space 成员关系 — 可能同时占多种角色，一次清
         for (String spaceId : targets.spaceIds()) {
-            batch.on(Space.TYPE, spaceId).revoke(
+            batch.on(Space, spaceId).revoke(
                     Space.Rel.OWNER, Space.Rel.ADMIN, Space.Rel.MEMBER, Space.Rel.VIEWER
-            ).from(User.TYPE, userId);
+            ).from(User, userId);
         }
 
         // folder：viewer/editor/commenter/owner 四种，一次清
         for (String folderId : targets.folderIds()) {
-            batch.on(Folder.TYPE, folderId).revoke(
+            batch.on(Folder, folderId).revoke(
                     Folder.Rel.OWNER, Folder.Rel.EDITOR, Folder.Rel.COMMENTER, Folder.Rel.VIEWER
-            ).from(User.TYPE, userId);
+            ).from(User, userId);
         }
 
         // document：owner/editor/commenter/viewer 四种，一次清
         for (String docId : targets.documentIds()) {
-            batch.on(Document.TYPE, docId).revoke(
+            batch.on(Document, docId).revoke(
                     Document.Rel.OWNER, Document.Rel.EDITOR,
                     Document.Rel.COMMENTER, Document.Rel.VIEWER
-            ).from(User.TYPE, userId);
+            ).from(User, userId);
         }
 
         return batch.commit().zedToken();
