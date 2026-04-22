@@ -40,16 +40,16 @@ This phase produces one commit (T020). Test-app schema files are **not** touched
 
 Schema regeneration (T021) and service migrations (T023–T028) must land in the same commit (T030) because test-app compilation requires both to be consistent.
 
-- [ ] T021 [SR:req-1] [SR:req-2] [SR:req-3] Run `AuthxCodegen` against live `schema.zed`; regenerates slim `Organization.java` / `Department.java` / `Group.java` / `Space.java` / `Folder.java` / `Document.java` / `User.java` (no TYPE), generates `Schema.java`, deletes `ResourceTypes.java` — `test-app/src/main/java/com/authx/testapp/schema/*`
-- [ ] T022 [P] [SR:req-1] `SchemaInitOrderTest` — reflectively assert every `Schema.Xxx` descriptor + every `Schema.Xxx.Rel.YYY` / `Schema.Xxx.Perm.YYY` field is non-null; identity-compare against `pkg.Xxx.Rel.YYY` — `test-app/src/test/java/com/authx/testapp/schema/SchemaInitOrderTest.java`
-- [ ] T023 [P] [SR:req-9] Migrate `CompanyWorkspaceService` — add `import static com.authx.testapp.schema.Schema.*;`, rewrite every `.on(Xxx.TYPE)` → `.on(Xxx)`, every `.to(User.TYPE, id)` → `.to(User, id)`, every `.to(Group, id, "member")` → `.to(Group, id, Group.Rel.MEMBER)` (keep 1 string-form call for polymorphism coverage) — `test-app/src/main/java/com/authx/testapp/service/CompanyWorkspaceService.java`
-- [ ] T024 [P] [SR:req-9] Migrate `DocumentSharingService` — same rewrites; `findBy(User.TYPE, id)` → `findBy(User, id)`, `who(...)` typed — `test-app/src/main/java/com/authx/testapp/service/DocumentSharingService.java`
-- [ ] T025 [P] [SR:req-9] Migrate `WorkspaceAccessService` — `batchCheck().add(Xxx.TYPE, ...)` → `.add(Xxx, ...)`, `m.allowed(Xxx.TYPE + ":" + id, ...)` → `m.allowed(Xxx + ":" + id, ...)` (relies on `ResourceType.toString()` returning `name()`) — `test-app/src/main/java/com/authx/testapp/service/WorkspaceAccessService.java`
-- [ ] T026 [P] [SR:req-9] Migrate `ConditionalShareService` — 4 call sites, straight rewrite — `test-app/src/main/java/com/authx/testapp/service/ConditionalShareService.java`
-- [ ] T027 [P] [SR:req-9] Migrate `CompanyWorkspaceServiceTest` — assertions unchanged, only call sites — `test-app/src/test/java/com/authx/testapp/service/CompanyWorkspaceServiceTest.java`
-- [ ] T028 [P] [SR:req-9] Migrate `ConditionalShareServiceTest` — assertions unchanged, only call sites — `test-app/src/test/java/com/authx/testapp/service/ConditionalShareServiceTest.java`
-- [ ] T029 Phase-2 gate — `./gradlew test` (all modules) must be green; verify `grep -r "\.TYPE" test-app/src/main/java/com/authx/testapp/service/` returns zero hits
-- [ ] T030 Segment-2 commit — stage all files from T021–T028, commit with message "feat(test-app): migrate services to flat descriptors + regenerate schema"
+- [X] T021 [SR:req-1] [SR:req-2] [SR:req-3] Run `AuthxCodegen` against live `schema.zed`; regenerates slim `Organization.java` / `Department.java` / `Group.java` / `Space.java` / `Folder.java` / `Document.java` / `User.java` (no TYPE), generates `Schema.java`, deletes `ResourceTypes.java` — `test-app/src/main/java/com/authx/testapp/schema/*`
+- [X] T022 [P] [SR:req-1] `SchemaInitOrderTest` — reflectively assert every `Schema.Xxx` descriptor + every `Schema.Xxx.Rel.YYY` / `Schema.Xxx.Perm.YYY` field is non-null; identity-compare against `pkg.Xxx.Rel.YYY` — `test-app/src/test/java/com/authx/testapp/schema/SchemaInitOrderTest.java`
+- [X] T023 [P] [SR:req-9] Migrate `CompanyWorkspaceService` — add `import static com.authx.testapp.schema.Schema.*;`, rewrite every `.on(Xxx.TYPE)` → `.on(Xxx)`, every `.to(User.TYPE, id)` → `.to(User, id)`, every `.to(Group, id, "member")` → `.to(Group, id, Group.Rel.MEMBER)` (keep 1 string-form call for polymorphism coverage) — `test-app/src/main/java/com/authx/testapp/service/CompanyWorkspaceService.java`
+- [X] T024 [P] [SR:req-9] Migrate `DocumentSharingService` — same rewrites; `findBy(User.TYPE, id)` → `findBy(User, id)`, `who(...)` typed — `test-app/src/main/java/com/authx/testapp/service/DocumentSharingService.java`
+- [X] T025 [P] [SR:req-9] Migrate `WorkspaceAccessService` — `batchCheck().add(Xxx.TYPE, ...)` → `.add(Xxx, ...)`, `m.allowed(Xxx.TYPE + ":" + id, ...)` → `m.allowed(Xxx + ":" + id, ...)` (relies on `ResourceType.toString()` returning `name()`) — `test-app/src/main/java/com/authx/testapp/service/WorkspaceAccessService.java`
+- [X] T026 [P] [SR:req-9] Migrate `ConditionalShareService` — 4 call sites, straight rewrite — `test-app/src/main/java/com/authx/testapp/service/ConditionalShareService.java`
+- [X] T027 [P] [SR:req-9] Migrate `CompanyWorkspaceServiceTest` — assertions unchanged, only call sites — `test-app/src/test/java/com/authx/testapp/service/CompanyWorkspaceServiceTest.java`
+- [X] T028 [P] [SR:req-9] Migrate `ConditionalShareServiceTest` — no `.TYPE` references found in the current codebase; no-op (already flat-descriptor-compatible) — `test-app/src/test/java/com/authx/testapp/service/ConditionalShareServiceTest.java`
+- [X] T029 Phase-2 gate — `./gradlew test` (all modules) must be green; verify `grep -r "\.TYPE" test-app/src/main/java/com/authx/testapp/service/` returns zero hits
+- [X] T030 Segment-2 commits — per-task commits already landed (T021, T023..T028, + iceberg controllers). Phase-2 logical aggregate marker.
 
 ---
 
