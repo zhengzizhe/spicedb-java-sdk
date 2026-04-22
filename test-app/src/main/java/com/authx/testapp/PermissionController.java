@@ -221,7 +221,10 @@ public class PermissionController {
     public Map<String, Object> folderCheck(@RequestParam String id,
                                              @RequestParam String permission,
                                              @RequestParam String user) {
-        var perm = Folder.Perm.valueOf(permission.toUpperCase());
+        // FQN: static import brings Schema.Folder descriptor into scope, which
+        // obscures the Folder enum container class in expression context (JLS §6.4.2).
+        // valueOf(String) lives on the enum, not on the proxy — reach it via FQN.
+        var perm = com.authx.testapp.schema.Folder.Perm.valueOf(permission.toUpperCase());
         boolean allowed = client.on(Folder).select(id).check(perm).by(user);
         return Map.of("allowed", allowed, "folder", id, "permission", perm.permissionName(), "user", user);
     }
@@ -230,7 +233,7 @@ public class PermissionController {
     public Map<String, Object> spaceCheck(@RequestParam String id,
                                             @RequestParam String permission,
                                             @RequestParam String user) {
-        var perm = Space.Perm.valueOf(permission.toUpperCase());
+        var perm = com.authx.testapp.schema.Space.Perm.valueOf(permission.toUpperCase());
         boolean allowed = client.on(Space).select(id).check(perm).by(user);
         return Map.of("allowed", allowed, "space", id, "permission", perm.permissionName(), "user", user);
     }
