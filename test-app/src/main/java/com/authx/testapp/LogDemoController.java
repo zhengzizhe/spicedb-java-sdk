@@ -6,6 +6,7 @@ import com.authx.sdk.trace.LogCtx;
 import com.authx.sdk.trace.LogFields;
 import com.authx.sdk.trace.Slf4jMdcBridge;
 import com.authx.testapp.schema.Document;
+import static com.authx.testapp.schema.Schema.*;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.TraceFlags;
@@ -66,7 +67,7 @@ public class LogDemoController {
 
             boolean allowed;
             try {
-                allowed = client.on(Document.TYPE)
+                allowed = client.on(Document)
                         .select(doc)
                         .check(Document.Perm.VIEW)
                         .by(user);
@@ -172,7 +173,7 @@ public class LogDemoController {
     @GetMapping("/listener")
     public Map<String, Object> listenerDemo(@RequestParam(defaultValue = "gary") String user,
                                               @RequestParam(defaultValue = "doc-42") String doc) {
-        var completion = client.on(Document.TYPE)
+        var completion = client.on(Document)
                 .select(doc)
                 .grant(Document.Rel.VIEWER)
                 .to(SubjectRef.of("user", user));

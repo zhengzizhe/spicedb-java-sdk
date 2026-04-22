@@ -9,6 +9,8 @@ import com.authx.testapp.service.DocumentSharingService;
 import com.authx.testapp.service.WorkspaceAccessService;
 import org.springframework.web.bind.annotation.*;
 
+import static com.authx.testapp.schema.Schema.*;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +21,7 @@ import java.util.Map;
  *
  * <p>Controller 只持有 {@link AuthxClient} + 两个 Service。业务代码需要
  * check/grant 时, 直接从 {@code client} 开始链：
- * {@code client.on(Document.TYPE).select(id).check(Document.Perm.VIEW).by(user)}.
+ * {@code client.on(Document).select(id).check(Document.Perm.VIEW).by(user)}.
  */
 @RestController
 public class PermissionController {
@@ -220,7 +222,7 @@ public class PermissionController {
                                              @RequestParam String permission,
                                              @RequestParam String user) {
         var perm = Folder.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = client.on(Folder.TYPE).select(id).check(perm).by(user);
+        boolean allowed = client.on(Folder).select(id).check(perm).by(user);
         return Map.of("allowed", allowed, "folder", id, "permission", perm.permissionName(), "user", user);
     }
 
@@ -229,7 +231,7 @@ public class PermissionController {
                                             @RequestParam String permission,
                                             @RequestParam String user) {
         var perm = Space.Perm.valueOf(permission.toUpperCase());
-        boolean allowed = client.on(Space.TYPE).select(id).check(perm).by(user);
+        boolean allowed = client.on(Space).select(id).check(perm).by(user);
         return Map.of("allowed", allowed, "space", id, "permission", perm.permissionName(), "user", user);
     }
 
@@ -246,7 +248,7 @@ public class PermissionController {
     @GetMapping("/demo/invalid-grant")
     public Map<String, Object> invalidGrantDemo(@RequestParam String doc) {
         try {
-            client.on(Document.TYPE)
+            client.on(Document)
                     .select(doc)
                     .grant(Document.Rel.EDITOR)
                     .to(SubjectRef.of("folder", "f-invalid", null));
