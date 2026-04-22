@@ -105,6 +105,17 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
         return by(SubjectRef.parse(subjectRef));
     }
 
+    /**
+     * Typed subject form: {@code checkAll().by(User.TYPE, "alice")} —
+     * mirrors {@link TypedCheckAction#by(com.authx.sdk.ResourceType, String)}
+     * so business code doesn't need to hand-compose {@code "user:alice"}.
+     */
+    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+    EnumMap<E, Boolean> by(com.authx.sdk.ResourceType<R2, P2> subjectType, String id) {
+        return by(subjectType.name() + ":" + id);
+    }
+
     // ────────────────────────────────────────────────────────────────
     //  Multi-resource terminators
     // ────────────────────────────────────────────────────────────────
@@ -148,5 +159,15 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     /** Canonical-string form of {@link #byAll(SubjectRef)}. */
     public Map<String, EnumMap<E, Boolean>> byAll(String subjectRef) {
         return byAll(SubjectRef.parse(subjectRef));
+    }
+
+    /**
+     * Typed subject form: {@code checkAll().byAll(User.TYPE, "alice")} —
+     * single subject, many resource ids × all permissions in one RPC.
+     */
+    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
+    Map<String, EnumMap<E, Boolean>> byAll(com.authx.sdk.ResourceType<R2, P2> subjectType, String id) {
+        return byAll(subjectType.name() + ":" + id);
     }
 }

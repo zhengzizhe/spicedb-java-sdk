@@ -1,12 +1,12 @@
 package com.authx.testapp.service;
 
-import com.authx.sdk.model.SubjectRef;
-
 import com.authx.sdk.AuthxClient;
 import com.authx.sdk.model.CheckMatrix;
+import com.authx.sdk.model.SubjectRef;
 import com.authx.testapp.schema.Document;
 import com.authx.testapp.schema.Folder;
 import com.authx.testapp.schema.Space;
+import com.authx.testapp.schema.User;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -94,12 +94,14 @@ public class WorkspaceAccessService {
                                     String userId, List<String> welcomeDocIds) {
         // Single-id scope for space + folder, then a batched multi-id scope
         // fans the doc viewer grant across every welcome doc in the same
-        // atomic WriteRelationships RPC.
+        // atomic WriteRelationships RPC. typed .to(User.TYPE, userId) avoids
+        // the "alice" → SubjectRef.parse("alice") failure mode of the raw
+        // .to(String...) overload.
         var batch = client.batch()
-                .on(Space.TYPE,  spaceId).grant(Space.Rel.MEMBER).to(userId)
-                .on(Folder.TYPE, defaultFolderId).grant(Folder.Rel.VIEWER).to(userId);
+                .on(Space.TYPE,  spaceId).grant(Space.Rel.MEMBER).to(User.TYPE, userId)
+                .on(Folder.TYPE, defaultFolderId).grant(Folder.Rel.VIEWER).to(User.TYPE, userId);
         if (!welcomeDocIds.isEmpty()) {
-            batch.onAll(Document.TYPE, welcomeDocIds).grant(Document.Rel.VIEWER).to(userId);
+            batch.onAll(Document.TYPE, welcomeDocIds).grant(Document.Rel.VIEWER).to(User.TYPE, userId);
         }
         return batch.commit().zedToken();
     }
@@ -108,15 +110,15 @@ public class WorkspaceAccessService {
     public void offboardMember(String spaceId, List<String> folderIds, List<String> docIds,
                                 String userId) {
         var batch = client.batch()
-                .on(Space.TYPE, spaceId).revoke(Space.Rel.MEMBER).from(userId);
+                .on(Space.TYPE, spaceId).revoke(Space.Rel.MEMBER).from(User.TYPE, userId);
         for (String fid : folderIds) {
-            batch.on(Folder.TYPE, fid).revoke(Folder.Rel.VIEWER).from(userId);
-            batch.on(Folder.TYPE, fid).revoke(Folder.Rel.EDITOR).from(userId);
+            batch.on(Folder.TYPE, fid).revoke(Folder.Rel.VIEWER).from(User.TYPE, userId);
+            batch.on(Folder.TYPE, fid).revoke(Folder.Rel.EDITOR).from(User.TYPE, userId);
         }
         for (String did : docIds) {
-            batch.on(Document.TYPE, did).revoke(Document.Rel.VIEWER).from(userId);
-            batch.on(Document.TYPE, did).revoke(Document.Rel.EDITOR).from(userId);
-            batch.on(Document.TYPE, did).revoke(Document.Rel.COMMENTER).from(userId);
+            batch.on(Document.TYPE, did).revoke(Document.Rel.VIEWER).from(User.TYPE, userId);
+            batch.on(Document.TYPE, did).revoke(Document.Rel.EDITOR).from(User.TYPE, userId);
+            batch.on(Document.TYPE, did).revoke(Document.Rel.COMMENTER).from(User.TYPE, userId);
         }
         batch.commit();
     }

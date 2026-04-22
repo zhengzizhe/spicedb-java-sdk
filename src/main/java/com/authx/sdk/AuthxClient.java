@@ -92,13 +92,26 @@ public class AuthxClient implements AutoCloseable {
 
     /** Create an in-memory client for testing (no SpiceDB connection required). */
     public static AuthxClient inMemory() {
+        return inMemory(null);
+    }
+
+    /**
+     * Create an in-memory client with an attached {@link SchemaCache}. Use
+     * this when tests / demos need single-type {@code .to(id)} inference,
+     * which depends on per-relation subject-type metadata carried by the
+     * cache. Pass {@code null} (or call {@link #inMemory()}) for the plain
+     * no-schema setup; in that mode a bare-id {@code .to(id)} falls through
+     * to {@code SubjectRef.parse} and throws if the id has no {@code ':'}.
+     */
+    public static AuthxClient inMemory(@Nullable SchemaCache schemaCache) {
         var bus = new DefaultTypedEventBus();
         var lm = new LifecycleManager(bus);
         lm.begin(); lm.complete();
         var infra = new SdkInfrastructure(null, null, Runnable::run, lm);
         var observability = new SdkObservability(new SdkMetrics(), bus, null);
         var config = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
-        return new AuthxClient(new InMemoryTransport(), infra, observability, config, HealthProbe.up());
+        return new AuthxClient(new InMemoryTransport(), infra, observability, config,
+                HealthProbe.up(), new SchemaClient(schemaCache), schemaCache);
     }
 
     // ---- Business API ----

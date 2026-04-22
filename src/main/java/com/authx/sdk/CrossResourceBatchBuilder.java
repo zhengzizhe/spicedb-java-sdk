@@ -215,6 +215,30 @@ public class CrossResourceBatchBuilder {
             for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
             return to(subjects.toArray(SubjectRef[]::new));
         }
+
+        // ────── Typed subject overloads (mirror TypedGrantAction) ─────
+
+        /** Typed single subject: {@code .grant(...).to(User.TYPE, "alice")}. */
+        public ResourceScope to(ResourceType<?, ?> subjectType, String id) {
+            return to(new String[]{subjectType.name() + ":" + id});
+        }
+
+        /** Typed sub-relation: {@code .grant(...).to(Group.TYPE, "eng", "member")}. */
+        public ResourceScope to(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
+            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Typed wildcard: {@code .grant(...).toWildcard(User.TYPE)}. */
+        public ResourceScope toWildcard(ResourceType<?, ?> subjectType) {
+            return to(new String[]{subjectType.name() + ":*"});
+        }
+
+        /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
+        public ResourceScope to(ResourceType<?, ?> subjectType, Iterable<String> ids) {
+            java.util.List<String> refs = new java.util.ArrayList<>();
+            for (String id : ids) refs.add(subjectType.name() + ":" + id);
+            return to(refs.toArray(String[]::new));
+        }
     }
 
     /**
@@ -306,6 +330,30 @@ public class CrossResourceBatchBuilder {
             for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
             return to(subjects.toArray(SubjectRef[]::new));
         }
+
+        // ────── Typed subject overloads (mirror TypedGrantAction) ─────
+
+        /** Typed single subject across every resource id in the fan. */
+        public MultiResourceScope to(ResourceType<?, ?> subjectType, String id) {
+            return to(new String[]{subjectType.name() + ":" + id});
+        }
+
+        /** Typed sub-relation across every resource id in the fan. */
+        public MultiResourceScope to(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
+            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Typed wildcard across every resource id in the fan. */
+        public MultiResourceScope toWildcard(ResourceType<?, ?> subjectType) {
+            return to(new String[]{subjectType.name() + ":*"});
+        }
+
+        /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
+        public MultiResourceScope to(ResourceType<?, ?> subjectType, Iterable<String> ids) {
+            java.util.List<String> refs = new java.util.ArrayList<>();
+            for (String id : ids) refs.add(subjectType.name() + ":" + id);
+            return to(refs.toArray(String[]::new));
+        }
     }
 
     public static class MultiRevokeScope {
@@ -344,6 +392,30 @@ public class CrossResourceBatchBuilder {
             for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
             return from(subjects.toArray(SubjectRef[]::new));
         }
+
+        // ────── Typed subject overloads (mirror TypedRevokeAction) ─────
+
+        /** Typed single subject across every resource id in the fan. */
+        public MultiResourceScope from(ResourceType<?, ?> subjectType, String id) {
+            return from(new String[]{subjectType.name() + ":" + id});
+        }
+
+        /** Typed sub-relation across every resource id in the fan. */
+        public MultiResourceScope from(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
+            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Typed wildcard across every resource id in the fan. */
+        public MultiResourceScope fromWildcard(ResourceType<?, ?> subjectType) {
+            return from(new String[]{subjectType.name() + ":*"});
+        }
+
+        /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
+        public MultiResourceScope from(ResourceType<?, ?> subjectType, Iterable<String> ids) {
+            java.util.List<String> refs = new java.util.ArrayList<>();
+            for (String id : ids) refs.add(subjectType.name() + ":" + id);
+            return from(refs.toArray(String[]::new));
+        }
     }
 
     /** Revoke scope within a cross-resource batch, targeting specific relations. */
@@ -380,6 +452,30 @@ public class CrossResourceBatchBuilder {
             java.util.List<SubjectRef> subjects = new java.util.ArrayList<>();
             for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
             return from(subjects.toArray(SubjectRef[]::new));
+        }
+
+        // ────── Typed subject overloads (mirror TypedRevokeAction) ─────
+
+        /** Typed single subject: {@code .revoke(...).from(User.TYPE, "alice")}. */
+        public ResourceScope from(ResourceType<?, ?> subjectType, String id) {
+            return from(new String[]{subjectType.name() + ":" + id});
+        }
+
+        /** Typed sub-relation: {@code .revoke(...).from(Group.TYPE, "eng", "member")}. */
+        public ResourceScope from(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
+            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+        }
+
+        /** Typed wildcard: {@code .revoke(...).fromWildcard(User.TYPE)}. */
+        public ResourceScope fromWildcard(ResourceType<?, ?> subjectType) {
+            return from(new String[]{subjectType.name() + ":*"});
+        }
+
+        /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
+        public ResourceScope from(ResourceType<?, ?> subjectType, Iterable<String> ids) {
+            java.util.List<String> refs = new java.util.ArrayList<>();
+            for (String id : ids) refs.add(subjectType.name() + ":" + id);
+            return from(refs.toArray(String[]::new));
         }
     }
 }
