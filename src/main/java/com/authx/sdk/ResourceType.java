@@ -8,36 +8,33 @@ import java.util.Objects;
 /**
  * Typed descriptor for a SpiceDB resource type, carrying the canonical
  * type name plus the {@link Relation.Named} and {@link Permission.Named}
- * enum classes declared on that type. Declared (hand-written or from
- * external codegen) per-type and exposed as {@code Xxx.TYPE}:
+ * enum classes declared on that type.
+ *
+ * <p>Normally obtained from a generated {@code Schema} aggregator:
  *
  * <pre>
- * public static final ResourceType&lt;Document.Rel, Document.Perm&gt; TYPE =
- *     ResourceType.of("document", Document.Rel.class, Document.Perm.class);
+ * import static com.authx.testapp.schema.Schema.*;
+ * client.on(Document).select(id).check(Document.Perm.VIEW).by(User, userId);
  * </pre>
  *
- * <p>Used as the token the business code hands to {@link AuthxClient#on(ResourceType)}
- * to get a fully typed chain entry:
+ * <p>This class is open for subclassing <em>only</em> so AuthxCodegen can
+ * emit per-resource-type descriptor subclasses with typed {@code Rel} /
+ * {@code Perm} proxy fields attached. End users should not subclass
+ * directly — regenerate your {@code Schema.java} via AuthxCodegen instead.
  *
- * <pre>
- * client.on(Document.TYPE)
- *       .select(docId)
- *       .check(Document.Perm.VIEW)
- *       .by(userId);
- * </pre>
- *
- * <p>Implements {@link CharSequence} and overrides {@link #toString()} so
- * it also slots into any string-based API (e.g. log lines, matrix keys)
- * as the bare type name.
+ * <p>Instances implement value equality on {@link #name()} only — two
+ * descriptors with the same type name are equal regardless of subclass
+ * identity. {@link #toString()} returns the bare name so instances slot
+ * into string-based APIs (log lines, matrix keys) transparently.
  */
-public final class ResourceType<R extends Enum<R> & Relation.Named,
-                                P extends Enum<P> & Permission.Named> {
+public class ResourceType<R extends Enum<R> & Relation.Named,
+                          P extends Enum<P> & Permission.Named> {
 
     private final String name;
     private final Class<R> relClass;
     private final Class<P> permClass;
 
-    private ResourceType(String name, Class<R> relClass, Class<P> permClass) {
+    protected ResourceType(String name, Class<R> relClass, Class<P> permClass) {
         this.name = Objects.requireNonNull(name, "name");
         this.relClass = relClass;
         this.permClass = permClass;
