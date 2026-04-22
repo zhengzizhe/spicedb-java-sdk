@@ -35,6 +35,14 @@
 
 **What to do instead:** Before writing a spec entry from a review finding, Read the cited file+lines. Grep for any claimed class name. If the claim doesn't survive verification, either reclassify the SR (current code already satisfies the invariant → regression test only, no impl) or drop it entirely. Never let a plan task reach execution with an unverified premise.
 
+### `.to(bareId)` inference is silently absent on the batch chain
+
+**What went wrong:** Wrote `client.batch().on(Space.TYPE, spaceId).grant(Space.Rel.MEMBER).to(userId)` expecting the same single-type inference that works on `client.on(Document.TYPE).select(id).grant(...).to(userId)`. The batch call crashed at runtime with `IllegalArgumentException: Invalid subject ref: u-ceo` from inside `SubjectRef.parse`.
+
+**Why it's wrong:** The non-batch typed chain (`TypedGrantAction`) holds a `SchemaCache` reference and calls `SubjectType.inferSingleType(...)` when you pass a bare id. The batch chain (`CrossResourceBatchBuilder.GrantScope` etc.) has no schema-cache scope — its `to(String...)` overload goes straight to `SubjectRef.parse`, which requires `type:id` format. Same-looking API, different wiring.
+
+**What to do instead:** On the batch chain always use the typed overloads — `.to(User.TYPE, id)`, `.to(Space.TYPE, id)`, `.toWildcard(User.TYPE)`, `.to(User.TYPE, iterableIds)`, symmetric `.from*` for revoke. Reserve bare-id `.to(userId)` inference for the non-batch typed chain, and only when the client was built with a populated `SchemaCache` (in tests: use `AuthxClient.inMemory(schemaCache)`, not the zero-arg `inMemory()`).
+
 ### Testing "Redis is down" with bad-from-start config
 
 **What went wrong:** To test that `RedissonTokenStore.set/get` swallow errors when Redis is unreachable, the first attempt built a `RedissonClient` pointed at `127.0.0.1:1` with `retryAttempts=0`. `Redisson.create()` itself threw `RedisConnectionException` before any test code ran.
