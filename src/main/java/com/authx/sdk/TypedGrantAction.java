@@ -230,6 +230,37 @@ public class TypedGrantAction<R extends Relation.Named> {
     }
 
     /**
+     * Typed subject with a typed {@link Relation.Named} sub-relation:
+     * {@code .to(Group, "eng", Group.Rel.MEMBER)} — compile-time rejects
+     * a relation enum that doesn't belong to the target type.
+     *
+     * <p>Produces identical wire format to the string form
+     * {@link #to(ResourceType, String, String)}; use whichever reads
+     * better at the call site.
+     */
+    public <R2 extends Enum<R2> & Relation.Named, P2 extends Enum<P2> & Permission.Named>
+    GrantCompletion to(ResourceType<R2, P2> subjectType, String id, R2 subjectRelation) {
+        return to(subjectType, id, subjectRelation.relationName());
+    }
+
+    /**
+     * Typed subject with a typed {@link Permission.Named} "sub-relation"
+     * (SpiceDB treats a permission on a subject resource exactly like a
+     * sub-relation at the wire level — e.g. {@code department#all_members}):
+     * {@code .to(Department, "hq", Department.Perm.ALL_MEMBERS)}.
+     *
+     * <p>Takes {@link Permission.Named} rather than a bounded enum to
+     * avoid type-erasure conflict with the {@code R2} overload above —
+     * both would otherwise erase to {@code (ResourceType, String, Enum)}.
+     * The call site is still readable: {@code Department.Perm.ALL_MEMBERS}
+     * reaches the right overload because {@code Department.Perm}
+     * implements {@code Permission.Named} but not {@code Relation.Named}.
+     */
+    public GrantCompletion to(ResourceType<?, ?> subjectType, String id, Permission.Named subjectPermission) {
+        return to(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+    }
+
+    /**
      * Wildcard form: {@code grant(...).toWildcard(User.TYPE)} constructs
      * {@code "user:*"}. Still routes through {@link #to(String...)} so
      * schema validation fires — if the relation does not declare a
