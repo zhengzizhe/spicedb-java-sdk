@@ -17,6 +17,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 /**
  * Fluent flow for revoking relationships. Mirrors {@link GrantFlow} but
@@ -56,7 +58,11 @@ public final class RevokeFlow {
 
     private @Nullable String currentRelation;
     private final List<RelationshipUpdate> pending = new ArrayList<>();
+    private List<Consumer<RevokeResult>> syncListeners;
+    private List<AsyncListener<RevokeResult>> asyncListeners;
     private boolean committed = false;
+
+    private record AsyncListener<T>(Consumer<T> callback, Executor executor) {}
 
     RevokeFlow(String resourceType,
                String resourceId,
@@ -173,6 +179,27 @@ public final class RevokeFlow {
     }
 
     // ──────────────────────────────────────────────────────────────────
+    //  Listeners — see GrantFlow.listener for semantics
+    // ──────────────────────────────────────────────────────────────────
+
+    public RevokeFlow listener(Consumer<RevokeResult> callback) {
+        checkOpen();
+        Objects.requireNonNull(callback, "callback");
+        if (syncListeners == null) syncListeners = new ArrayList<>(2);
+        syncListeners.add(callback);
+        return this;
+    }
+
+    public RevokeFlow listenerAsync(Consumer<RevokeResult> callback, Executor executor) {
+        checkOpen();
+        Objects.requireNonNull(callback, "callback");
+        Objects.requireNonNull(executor, "executor");
+        if (asyncListeners == null) asyncListeners = new ArrayList<>(2);
+        asyncListeners.add(new AsyncListener<>(callback, executor));
+        return this;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
     //  Termination
     // ──────────────────────────────────────────────────────────────────
 
@@ -185,7 +212,9 @@ public final class RevokeFlow {
         }
         committed = true;
         validateSchemaFailFast();
-        return transport.deleteRelationships(List.copyOf(pending));
+        RevokeResult result = transport.deleteRelationships(List.copyOf(pending));
+        fireListeners(result);
+        return result;
     }
 
     public CompletableFuture<RevokeResult> commitAsync() {
@@ -201,7 +230,11 @@ public final class RevokeFlow {
             return CompletableFuture.failedFuture(e);
         }
         List<RelationshipUpdate> snapshot = List.copyOf(pending);
-        return CompletableFuture.supplyAsync(() -> transport.deleteRelationships(snapshot));
+        return CompletableFuture.supplyAsync(() -> {
+            RevokeResult result = transport.deleteRelationships(snapshot);
+            fireListeners(result);
+            return result;
+        });
     }
 
     public List<RelationshipUpdate> pending() {
@@ -254,6 +287,27 @@ public final class RevokeFlow {
                     u.resource().type(),
                     u.relation().name(),
                     u.subject().toRefString());
+        }
+    }
+
+    private void fireListeners(RevokeResult result) {
+        if (syncListeners != null) {
+            for (Consumer<RevokeResult> l : syncListeners) {
+                l.accept(result);
+            }
+        }
+        if (asyncListeners != null) {
+            for (AsyncListener<RevokeResult> al : asyncListeners) {
+                al.executor().execute(() -> {
+                    try {
+                        al.callback().accept(result);
+                    } catch (Throwable t) {
+                        System.getLogger(RevokeFlow.class.getName()).log(
+                                System.Logger.Level.WARNING,
+                                "RevokeFlow async listener threw — swallowed", t);
+                    }
+                });
+            }
         }
     }
 }

@@ -385,6 +385,143 @@ class GrantFlowTest {
                 && u.resource().id().equals("doc-1"));
     }
 
+    // ──────────────────────────────────────────────────────────────────
+    //  Listeners
+    // ──────────────────────────────────────────────────────────────────
+
+    @Test
+    void listener_firesAfterCommitOnCallingThread() {
+        var fired = new java.util.concurrent.atomic.AtomicInteger(0);
+        var threadName = new java.util.concurrent.atomic.AtomicReference<String>();
+        newFlow()
+                .grant(DocRel.VIEWER)
+                .to(User, "alice")
+                .listener(r -> {
+                    fired.incrementAndGet();
+                    threadName.set(Thread.currentThread().getName());
+                })
+                .commit();
+
+        assertThat(fired.get()).isEqualTo(1);
+        assertThat(threadName.get()).isEqualTo(Thread.currentThread().getName());
+    }
+
+    @Test
+    void listener_multipleFireInOrder() {
+        var order = new java.util.ArrayList<Integer>();
+        newFlow()
+                .grant(DocRel.VIEWER)
+                .to(User, "alice")
+                .listener(r -> order.add(1))
+                .listener(r -> order.add(2))
+                .listener(r -> order.add(3))
+                .commit();
+
+        assertThat(order).containsExactly(1, 2, 3);
+    }
+
+    @Test
+    void listener_syncThrowStopsSubsequentSyncListeners() {
+        var fired = new java.util.ArrayList<Integer>();
+        assertThatThrownBy(() -> newFlow()
+                .grant(DocRel.VIEWER)
+                .to(User, "alice")
+                .listener(r -> fired.add(1))
+                .listener(r -> { throw new RuntimeException("boom"); })
+                .listener(r -> fired.add(3))      // must not fire
+                .commit())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("boom");
+
+        assertThat(fired).containsExactly(1);
+    }
+
+    @Test
+    void listenerAsync_dispatchesToExecutor() throws Exception {
+        var exec = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            var t = new Thread(r);
+            t.setName("listener-async-pool");
+            return t;
+        });
+        try {
+            var done = new java.util.concurrent.CountDownLatch(1);
+            var threadName = new java.util.concurrent.atomic.AtomicReference<String>();
+
+            newFlow()
+                    .grant(DocRel.VIEWER)
+                    .to(User, "alice")
+                    .listenerAsync(r -> {
+                        threadName.set(Thread.currentThread().getName());
+                        done.countDown();
+                    }, exec)
+                    .commit();
+
+            assertThat(done.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(threadName.get()).isEqualTo("listener-async-pool");
+        } finally {
+            exec.shutdown();
+        }
+    }
+
+    @Test
+    void listenerAsync_exceptionSwallowed() {
+        var exec = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // commit must not throw; the async listener's exception is logged and swallowed.
+            var result = newFlow()
+                    .grant(DocRel.VIEWER)
+                    .to(User, "alice")
+                    .listenerAsync(r -> { throw new RuntimeException("async-boom"); }, exec)
+                    .commit();
+            assertThat(result).isNotNull();
+        } finally {
+            exec.shutdown();
+        }
+    }
+
+    @Test
+    void listener_doesNotFireWhenNoCommit() {
+        var fired = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var flow = newFlow()
+                .grant(DocRel.VIEWER)
+                .to(User, "alice")
+                .listener(r -> fired.set(true));
+        // no commit — flow is discarded
+        assertThat(fired.get()).isFalse();
+        assertThat(flow.pendingCount()).isEqualTo(1);
+    }
+
+    @Test
+    void listener_null_throws() {
+        assertThatThrownBy(() -> newFlow()
+                .grant(DocRel.VIEWER).to(User, "alice")
+                .listener(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void listenerAsync_nullCallback_throws() {
+        var exec = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            assertThatThrownBy(() -> newFlow()
+                    .grant(DocRel.VIEWER).to(User, "alice")
+                    .listenerAsync(null, exec))
+                    .isInstanceOf(NullPointerException.class);
+        } finally { exec.shutdown(); }
+    }
+
+    @Test
+    void listenerAsync_nullExecutor_throws() {
+        assertThatThrownBy(() -> newFlow()
+                .grant(DocRel.VIEWER).to(User, "alice")
+                .listenerAsync(r -> {}, null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  Wire-level sanity
+    // ──────────────────────────────────────────────────────────────────
+
     @Test
     void relationSwitching_tracksCurrentRelation() {
         var pending = newFlow()
