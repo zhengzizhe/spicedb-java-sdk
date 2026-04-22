@@ -55,35 +55,42 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
     // ────────────────────────────────────────────────────────────────
 
     /**
-     * Start a flow-style grant: accumulate multiple (relation, subject)
-     * pairs and commit them in one atomic {@code WriteRelationships} RPC.
-     * Requires exactly one selected resource id; for multi-id atomic writes
-     * use {@link CrossResourceBatchBuilder}.
+     * Start a {@link WriteFlow} in GRANT mode. Accumulate multiple
+     * (relation, subject) pairs — and optionally mix in {@code .revoke()}
+     * / {@code .from()} — then commit them in one atomic
+     * {@code WriteRelationships} RPC. Requires exactly one selected
+     * resource id; for multi-id atomic writes use
+     * {@link CrossResourceBatchBuilder}.
      *
      * <pre>
+     * // Grant-only
      * client.on(Document).select(docId)
      *     .grant(Document.Rel.VIEWER)
      *     .to(User, "alice")
-     *     .to(User, "bob", "carol")
      *     .to(Group, "eng", Group.Rel.MEMBER)
      *     .commit();
-     * </pre>
      *
-     * <p>See {@code specs/2026-04-22-grant-revoke-flow-api/spec.md}.
+     * // Mixed — change role atomically
+     * client.on(Document).select(docId)
+     *     .revoke(Document.Rel.EDITOR).from(User, "alice")
+     *     .grant(Document.Rel.VIEWER).to(User, "alice")
+     *     .commit();
+     * </pre>
      */
-    public GrantFlow grant(R relation) {
+    public WriteFlow grant(R relation) {
         requireSingleId("grant");
-        return new GrantFlow(factory.resourceType(), ids[0],
-                factory.transport(), factory.schemaCache())
-                .grant(relation);
+        return newFlow().grant(relation);
     }
 
-    /** Start a flow-style revoke. See {@link #grant(Relation.Named)}. */
-    public RevokeFlow revoke(R relation) {
+    /** Start a {@link WriteFlow} in REVOKE mode. See {@link #grant(Relation.Named)}. */
+    public WriteFlow revoke(R relation) {
         requireSingleId("revoke");
-        return new RevokeFlow(factory.resourceType(), ids[0],
-                factory.transport(), factory.schemaCache())
-                .revoke(relation);
+        return newFlow().revoke(relation);
+    }
+
+    private WriteFlow newFlow() {
+        return new WriteFlow(factory.resourceType(), ids[0],
+                factory.transport(), factory.schemaCache());
     }
 
     private void requireSingleId(String method) {

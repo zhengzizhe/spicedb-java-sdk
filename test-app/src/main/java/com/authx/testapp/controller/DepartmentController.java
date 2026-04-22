@@ -52,7 +52,7 @@ public class DepartmentController {
         auth.on(Department).select(deptId)
                 .grant(Department.Rel.PARENT)
                 .to(Department, parentDeptId)
-                .commit();
+                .commit().listener(null);
         return ResponseEntity.noContent().build();
     }
 }
