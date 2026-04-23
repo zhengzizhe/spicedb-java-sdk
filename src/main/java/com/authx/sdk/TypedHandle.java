@@ -3,6 +3,8 @@ package com.authx.sdk;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 
+import com.google.errorprone.annotations.CheckReturnValue;
+
 import java.util.Collection;
 
 /**
@@ -77,12 +79,14 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
      *     .commit();
      * </pre>
      */
+    @CheckReturnValue
     public WriteFlow grant(R relation) {
         requireSingleId("grant");
         return newFlow().grant(relation);
     }
 
     /** Start a {@link WriteFlow} in REVOKE mode. See {@link #grant(Relation.Named)}. */
+    @CheckReturnValue
     public WriteFlow revoke(R relation) {
         requireSingleId("revoke");
         return newFlow().revoke(relation);

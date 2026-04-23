@@ -10,6 +10,8 @@ import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.google.errorprone.annotations.CheckReturnValue;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
@@ -75,7 +77,16 @@ import java.util.concurrent.CompletableFuture;
  * </ul>
  *
  * <p>Not thread-safe.
+ *
+ * <p><b>ErrorProne note</b>: this class is marked
+ * {@link CheckReturnValue @CheckReturnValue} — returned {@code WriteFlow}
+ * instances must be used in a chain or assigned. Terminal accessors
+ * ({@link #commit()}, {@link #commitAsync()}, {@link #pending()},
+ * {@link #pendingCount()}) opt out via
+ * {@link CanIgnoreReturnValue @CanIgnoreReturnValue}. This catches the
+ * common bug where a chain is built but {@code .commit()} is forgotten.
  */
+@CheckReturnValue
 public final class WriteFlow {
 
     private enum Mode { GRANT, REVOKE }
@@ -349,6 +360,7 @@ public final class WriteFlow {
      * for optional listener chaining. SpiceDB applies all updates
      * atomically.
      */
+    @CanIgnoreReturnValue
     public WriteCompletion commit() {
         checkOpen();
         if (pending.isEmpty()) {
@@ -363,6 +375,7 @@ public final class WriteFlow {
                 pending.size());
     }
 
+    @CanIgnoreReturnValue
     public CompletableFuture<WriteCompletion> commitAsync() {
         checkOpen();
         if (pending.isEmpty()) {
@@ -385,10 +398,12 @@ public final class WriteFlow {
     //  Introspection
     // ──────────────────────────────────────────────────────────────────
 
+    @CanIgnoreReturnValue
     public List<RelationshipUpdate> pending() {
         return List.copyOf(pending);
     }
 
+    @CanIgnoreReturnValue
     public int pendingCount() {
         return pending.size();
     }
@@ -397,6 +412,7 @@ public final class WriteFlow {
     //  Internals
     // ──────────────────────────────────────────────────────────────────
 
+    @CanIgnoreReturnValue
     private WriteFlow beginBatch(Mode expected) {
         checkOpen();
         if (currentMode == null || currentRelation == null) {
@@ -416,6 +432,7 @@ public final class WriteFlow {
         return this;
     }
 
+    @CanIgnoreReturnValue
     private WriteFlow addSubject(SubjectRef subject) {
         Operation op = (currentMode == Mode.GRANT) ? Operation.TOUCH : Operation.DELETE;
         pending.add(new RelationshipUpdate(

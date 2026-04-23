@@ -13,65 +13,31 @@ Resolve by linking to the PR or spec that closed it.
 
 ## Open
 
-### GUIDE-1 `[open]` · Jar-bundled `META-INF/authx-sdk/GUIDE.md` is severely out of date
+### GUIDE-1 `[partial]` · Jar-bundled `META-INF/authx-sdk/GUIDE.md` cleanup pass
 
 **Found**: 2026-04-23 hygiene pass
 **Location**: `src/main/resources/META-INF/authx-sdk/GUIDE.md` (688 lines,
-shipped inside the published jar as authoritative AI-agent reference)
-**Details**: Multiple fundamentally wrong sections:
-- **Installation** (lines 36-56): wrong Maven coordinates
-  (`com.authx:authx-sdk` — actual is `io.github.authxkit:authx-spicedb-sdk`),
-  wrong version (1.0.0 → 2.0.1), and references nonexistent artifacts
-  `authx-sdk-typed` and uses `authx-sdk-redisson` where current module is
-  `authx-spicedb-sdk-redisson`.
-- **Schema validation** (lines 393-397): claims "Client-side schema
-  validation was removed on 2026-04-18" — actually **restored 2026-04-21**
-  as metadata-only (see ADR 2026-04-18 Addendum). This is the opposite of
-  current behavior.
-- **Section 11 — Typed Constants (sdk-typed)**: references a `sdk-typed`
-  submodule that does not exist (codegen is in main SDK, produces nested
-  `Document.Rel.EDITOR` not flat `Document.EDITOR`).
-- **Section 4 API examples**: uses `doc.grant("editor").to("alice")`-style
-  immediate-write calls and `doc.batch().grant().to().execute()` — needs
-  reconciliation with current `WriteFlow`-based typed write path and the
-  untyped `action/` chain.
-- **Section 10 Transport Architecture**: describes the post-L1 layer stack
-  correctly but misses that `PolicyAwareConsistencyTransport` and
-  `ResilientTransport` order is codified in builder, not arbitrary.
+shipped inside the published jar)
 
-**Resolution direction**: Rewrite as a fresh spec. This is the canonical
-AI-agent reference so accuracy matters more than for README. Consider
-whether to keep a jar-bundled version at all vs. linking to an online
-canonical source (the bundled copy will always drift).
+**Resolved in 2026-04-23 pre-release-hygiene follow-up**:
+- Installation coordinates: `com.authx:authx-sdk` → `io.github.authxkit:authx-spicedb-sdk`, version 1.0.0 → 2.0.1, dropped nonexistent `authx-sdk-typed` submodule line.
+- Section 7 (Schema Validation): reversed the "removed" narrative to the actual "metadata-only restored 2026-04-21" state.
+- Section 11 (Typed Constants): rewrote to describe `AuthxCodegen` in the main SDK + flat descriptors, removed `sdk-typed` references.
+- Section 4 & 12 & 14: replaced bare-id examples (`by("alice")`, `to("alice")` — which throw in most overloads) with canonical `"user:alice"` form; removed fictional `toSubjects()` / `fromSubjects()` methods (use `.to(...)` / `.from(...)` with canonical string); added required subject-type arg to `doc.who(...)`.
+- Top-of-file banner added noting partial-update status.
 
-**Interim mitigation**: Consider adding a top-of-file `> **Note**: this
-guide was last fully reviewed for a pre-2.0 release; see CHANGELOG.md for
-current API shapes.` banner before 2.0.1 publish to warn readers.
+**Still deferred**: full re-review of sections 5, 6, 8, 9, 10, 13, 15 against current code; decision on whether to keep a jar-bundled guide at all (the bundled copy will always drift from repo reality). Revisit as part of the 2.0-convergence spec.
 
 ---
 
-### README-1 `[open]` · Two README sections cite non-existent top-level API
+### README-1 `[closed]` · Two README sections cited non-existent top-level API
 
 **Found**: 2026-04-23 hygiene pass
-**Location**: `README.md` lines 83-106, `README_en.md` lines 69-95
-**Details**: The "权限检查" / "授权 / 撤权" (Chinese) and "Permission checks" /
-"Grant / Revoke" (English) sections use top-level convenience methods on
-`AuthxClient` that do not exist:
-- `client.check(type, id, perm, subject)`
-- `client.checkAll(type, id, subject, perm...)`
-- `client.grant(type, id, rel, subject)`
-- `client.grantToSubjects(...)`
-- `client.revoke(type, id, rel, subject)`
-- `client.revokeAll(...)`
-
-`grep -n "public.*\\s(check|grant|revoke|checkAll|grantToSubjects|revokeAll)\\s*\\(" AuthxClient.java` → zero matches.
-Users copying these examples hit compile errors.
-
-**Resolution direction**: Either rewrite both sections to use the real
-API (`client.on(...)` + TypedHandle chain, or untyped `client.on(string).resource(...)`),
-or add thin top-level convenience methods on `AuthxClient` if the ergonomics
-are considered worth it. Prefer rewriting the docs; top-level methods would
-be a 5th grant entry point (see API-1).
+**Closed by**: 2026-04-23 pre-release-hygiene follow-up commit. Both
+`README.md` and `README_en.md` "权限检查" / "Permission Check" + "授权 /
+撤权" / "Grant / Revoke" sections now use the real APIs:
+`client.on("document").resource(id).check(perm).by("user:alice")` for the
+untyped path, and `client.on(Document).select(id).check(Document.Perm.X).by(User, id)` / `.grant(...).commit()` for the typed path.
 
 ---
 
@@ -102,20 +68,29 @@ lands.
 
 ---
 
-### WriteFlow-1 `[open]` · No compile-time guard against forgotten `.commit()`
+### WriteFlow-1 `[closed]` · Compile-time guard against forgotten `.commit()`
 
 **Found**: ADR 2026-04-22 (Open Questions, Option A)
-**Details**: `WriteFlow` returned from `TypedHandle.grant(R)` / `.revoke(R)`
-must be terminated with `.commit()` or the write is silently dropped.
-ADR 2026-04-22 explicitly says "by code review / lint", but no lint is
-actually wired in `build.gradle` today (no ErrorProne, SpotBugs, or
-`@CheckReturnValue` usage anywhere in the repo).
+**Closed by**: 2026-04-23 pre-release-hygiene follow-up commit.
+- `net.ltgt.errorprone` plugin 4.0.1 + `error_prone_core` 2.28.0 wired
+  into `build.gradle`. All ErrorProne checks disabled except
+  `CheckReturnValue` (WARN severity) — conservative rollout to avoid
+  unrelated findings flooding the build.
+- `WriteFlow` marked `@CheckReturnValue` at class level;
+  `commit`/`commitAsync`/`pending`/`pendingCount` opt out via
+  `@CanIgnoreReturnValue`. Private helpers `beginBatch`/`addSubject`
+  also opt out to keep internal plumbing noise-free.
+- `TypedHandle.grant(R)` / `.revoke(R)` marked `@CheckReturnValue`
+  (catches "started but never chained").
+- `WriteCompletion.listener(...)` / `.listenerAsync(...)` marked
+  `@CanIgnoreReturnValue` (chainable but commonly called as a
+  statement).
+- Clean compile of main SDK + test sources + test-app; 788 SDK tests
+  still pass.
 
-**Resolution direction**: Planned in `specs/2026-04-24-2.0-convergence`
-block A. Wire ErrorProne + annotate
-`TypedHandle.grant/revoke` with `@CheckReturnValue` and
-`WriteCompletion.listener/listenerAsync` with `@CanIgnoreReturnValue`.
-Cost: ~1 dev-day.
+**Follow-up**: consider extending the plugin to `sdk-redisson` and
+`test-app` as a separate pass (low priority; those modules don't own
+the `WriteFlow` surface).
 
 ---
 

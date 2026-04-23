@@ -2,7 +2,10 @@ plugins {
     id "java-library"
     id "signing"
     id "com.vanniktech.maven.publish" version "0.36.0"
+    id "net.ltgt.errorprone" version "4.0.1"
 }
+
+import net.ltgt.gradle.errorprone.CheckSeverity
 
 group = "io.github.authxkit"
 version = rootProject.findProperty("sdkVersion") ?: "1.0.0"
@@ -14,6 +17,15 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
+    // ErrorProne — only the single CheckReturnValue check is enabled.
+    // Rationale: backlog WriteFlow-1 — `WriteFlow` chains that forget
+    // `.commit()` are silently dropped. Annotating WriteFlow +
+    // TypedHandle.grant/revoke with @CheckReturnValue turns this into
+    // a compile-time warning. All other ErrorProne checks are disabled
+    // so this introduction does not flood the build with unrelated
+    // findings.
+    options.errorprone.disableAllChecks = true
+    options.errorprone.check("CheckReturnValue", CheckSeverity.WARN)
 }
 
 test {
@@ -51,6 +63,13 @@ dependencies {
 
     // Null-safety annotations (transitive to consumers)
     implementation("org.jspecify:jspecify:1.0.0")
+
+    // ErrorProne annotations on the API surface (@CheckReturnValue /
+    // @CanIgnoreReturnValue on WriteFlow + TypedHandle entry points).
+    // compileOnly keeps them out of consumer classpaths — they are
+    // source-retention markers only.
+    compileOnly("com.google.errorprone:error_prone_annotations:2.28.0")
+    errorprone("com.google.errorprone:error_prone_core:2.28.0")
 
     // Optional
     compileOnly("com.github.ben-manes.caffeine:caffeine:3.1.8")

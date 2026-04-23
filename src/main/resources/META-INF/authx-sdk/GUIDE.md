@@ -1,8 +1,13 @@
-# AuthCSES SDK — Complete Reference
+# AuthX SpiceDB SDK — Reference
 
-> AI assistants: this is the authoritative reference for the AuthCSES Java SDK.
-> Read this file to understand ALL available APIs, configuration options, and best practices.
-> This file is bundled inside the SDK JAR at META-INF/authx-sdk/GUIDE.md.
+> AI assistants: this file is bundled inside the SDK JAR at
+> META-INF/authx-sdk/GUIDE.md as a quick reference.
+>
+> **Partial 2.0 update (2026-04-23)**: installation coordinates, the
+> schema-validation section, and the bare-id examples have been
+> corrected for 2.0. Other sections may still reflect pre-2.0 shapes —
+> cross-check against `README.md`, `docs/adr/`, and `CHANGELOG.md` in
+> the repository before relying on any API surface here.
 
 ---
 
@@ -36,26 +41,28 @@ dispatch cache for low-latency reads.
 ```groovy
 // Gradle
 dependencies {
-    implementation("com.authx:authx-sdk:1.0.0")
+    implementation("io.github.authxkit:authx-spicedb-sdk:2.0.1")
 
-    // Optional: cross-JVM SESSION consistency via Redis
-    implementation("com.authx:authx-sdk-redisson:1.0.0")
-
-    // Optional: generated type-safe constants for your schema
-    implementation("com.authx:authx-sdk-typed:1.0.0")
+    // Optional: Redisson-backed DistributedTokenStore for cross-JVM
+    // SESSION consistency. Main SDK stays Redisson-free.
+    implementation("io.github.authxkit:authx-spicedb-sdk-redisson:2.0.1")
 }
 ```
 
 ```xml
 <!-- Maven -->
 <dependency>
-    <groupId>com.authx</groupId>
-    <artifactId>authx-sdk</artifactId>
-    <version>1.0.0</version>
+    <groupId>io.github.authxkit</groupId>
+    <artifactId>authx-spicedb-sdk</artifactId>
+    <version>2.0.1</version>
 </dependency>
 ```
 
 **Requirements:** Java 21+
+
+Typed constants (`Document.Rel`, `Document.Perm`, caveats) are generated
+from your schema by `AuthxCodegen` in this SDK — there is no separate
+`sdk-typed` module. See `docs/migration-schema-flat-descriptors.md`.
 
 ---
 
@@ -138,22 +145,32 @@ var doc = client.resource("document", "doc-123");
 
 ### 4.1 grant — Write relationships
 
+Subjects must be canonical `type:id` / `type:id#relation` / `type:*`
+(no default subject type). Bare ids like `"alice"` only work for single
+arguments when the schema is loaded and the relation declares exactly
+one non-wildcard subject type; prefer canonical form in documentation.
+
 ```java
-// Single user
-GrantResult r = doc.grant("editor").to("alice");
+// Single subject (canonical)
+GrantResult r = doc.grant("editor").to("user:alice");
 
-// Multiple users (atomic — one gRPC call)
-GrantResult r = doc.grant("editor").to("alice", "bob", "carol");
+// Multiple subjects — atomic single RPC
+GrantResult r = doc.grant("editor").to("user:alice", "user:bob", "user:carol");
 
-// Collection
-GrantResult r = doc.grant("editor").to(userIdList);
+// Collection of canonical refs
+GrantResult r = doc.grant("editor").to(List.of("user:alice", "user:bob"));
 
-// Multiple relations at once
-GrantResult r = doc.grant("editor", "can_download").to("alice");
+// Multiple relations in one call
+GrantResult r = doc.grant("editor", "can_download").to("user:alice");
 
 // Non-user subject types
-GrantResult r = doc.grant("viewer").toSubjects("group:engineering#member");
-GrantResult r = doc.grant("viewer").toSubjects(subjectRefList);
+GrantResult r = doc.grant("viewer").to("group:engineering#member");
+GrantResult r = doc.grant("viewer").to("user:*");   // wildcard
+
+// Typed subject form (no string-assembly)
+GrantResult r = doc.grant("viewer").to(User, "alice");
+GrantResult r = doc.grant("viewer").to(Group, "eng", "member");
+GrantResult r = doc.grant("viewer").toWildcard(User);
 ```
 
 **GrantResult fields:**
@@ -161,20 +178,30 @@ GrantResult r = doc.grant("viewer").toSubjects(subjectRefList);
 - `count()` — number of relationship updates sent (TOUCH is idempotent)
 - `asConsistency()` — shortcut for `Consistency.atLeast(zedToken)`
 
+For the **typed write path** (`client.on(Document).select(id).grant(...)...`),
+writes are batched into a `WriteFlow` and require an explicit `.commit()`
+— see the WriteFlow section in `README.md`.
+
 ### 4.2 revoke — Delete relationships
 
+Mirrors the grant API. All overloads require canonical subject strings
+(bare-id inference applies only to the single-string overload with
+schema loaded).
+
 ```java
-// Mirror of grant API
-doc.revoke("editor").from("alice");
-doc.revoke("editor").from("alice", "bob");
-doc.revoke("editor").from(userIdList);
-doc.revoke("editor").fromSubjects("group:engineering#member");
+doc.revoke("editor").from("user:alice");
+doc.revoke("editor").from("user:alice", "user:bob");
+doc.revoke("editor").from(List.of("user:alice", "user:bob"));
+doc.revoke("editor").from("group:engineering#member");
 
-// Remove ALL relations for a user (reads then deletes)
-doc.revokeAll().from("alice");
+// Typed subject form
+doc.revoke("editor").from(User, "alice");
 
-// Remove all of specific relations for a user
-doc.revokeAll("editor", "viewer").from("alice");
+// Filter-based: remove ALL relations of this subject on this resource
+doc.revokeAll().from("user:alice");
+
+// Filter-based: remove only the listed relations
+doc.revokeAll("editor", "viewer").from("user:alice");
 ```
 
 **Returns:** `RevokeResult` (same shape as GrantResult)
@@ -183,67 +210,76 @@ doc.revokeAll("editor", "viewer").from("alice");
 
 ```java
 // Single check → CheckResult
-CheckResult r = doc.check("view").by("alice");
+CheckResult r = doc.check("view").by("user:alice");
 r.hasPermission();     // boolean
 r.isConditional();     // boolean (caveat-based conditional)
 r.permissionship();    // Permissionship enum: HAS_PERMISSION / NO_PERMISSION / CONDITIONAL_PERMISSION
 r.zedToken();          // consistency token
 
 // With explicit consistency
-doc.check("view").withConsistency(Consistency.full()).by("alice");
+doc.check("view").withConsistency(Consistency.full()).by("user:alice");
+
+// Typed subject form
+doc.check("view").by(User, "alice");
 
 // Write-after-read pattern
-GrantResult gr = doc.grant("editor").to("bob");
-doc.check("edit").withConsistency(gr.asConsistency()).by("bob"); // guaranteed to see the grant
+GrantResult gr = doc.grant("editor").to("user:bob");
+doc.check("edit").withConsistency(gr.asConsistency()).by("user:bob"); // guaranteed to see the grant
 
-// Bulk check — one permission, multiple users → BulkCheckResult
-BulkCheckResult bulk = doc.check("view").byAll("alice", "bob", "carol");
-bulk.get("alice");        // CheckResult
+// Bulk check — one permission, multiple subjects → BulkCheckResult
+BulkCheckResult bulk = doc.check("view").byAll("user:alice", "user:bob", "user:carol");
+bulk.get("user:alice");   // CheckResult
 bulk.asMap();             // Map<String, CheckResult>
-bulk.allowed();           // List<String> — users WITH permission
-bulk.denied();            // List<String> — users WITHOUT permission
+bulk.allowed();           // List<String> — subjects WITH permission
+bulk.denied();            // List<String> — subjects WITHOUT permission
 bulk.allowedSet();        // Set<String>
-bulk.allAllowed();        // boolean — ALL users have permission?
-bulk.anyAllowed();        // boolean — ANY user has permission?
+bulk.allAllowed();        // boolean — ALL subjects have permission?
+bulk.anyAllowed();        // boolean — ANY subject has permission?
 bulk.allowedCount();      // int
 ```
 
 ### 4.4 checkAll — Multiple permissions
 
 ```java
-// One user, multiple permissions → PermissionSet
-PermissionSet perms = doc.checkAll("view", "edit", "delete", "share").by("alice");
+// One subject, multiple permissions → PermissionSet
+PermissionSet perms = doc.checkAll("view", "edit", "delete", "share").by("user:alice");
 perms.can("edit");        // boolean
 perms.toMap();            // Map<String, Boolean>
 perms.allowed();          // Set<String> of granted permissions
 perms.denied();           // Set<String> of denied permissions
 
-// Multiple users × multiple permissions → PermissionMatrix
-PermissionMatrix matrix = doc.checkAll("view", "edit").byAll("alice", "bob");
-matrix.get("alice");               // PermissionSet
-matrix.get("alice").can("edit");   // boolean
-matrix.whoCanAll("view", "edit");  // List<String> — users with ALL permissions
-matrix.whoCanAny("view", "edit");  // List<String> — users with ANY permission
+// Multiple subjects × multiple permissions → PermissionMatrix
+PermissionMatrix matrix = doc.checkAll("view", "edit").byAll("user:alice", "user:bob");
+matrix.get("user:alice");              // PermissionSet
+matrix.get("user:alice").can("edit");  // boolean
+matrix.whoCanAll("view", "edit");      // List<String> — subjects with ALL
+matrix.whoCanAny("view", "edit");      // List<String> — subjects with ANY
 ```
 
 ### 4.5 who — Reverse lookup (who has access?)
 
+`who()` requires the subject type to look up — SpiceDB's LookupSubjects
+RPC always filters by subject type.
+
 ```java
 // By permission (recursive — computes through permission tree)
-List<String> viewers = doc.who().withPermission("view").fetch();
+List<String> viewerIds = doc.who("user").withPermission("view").fetch();
 
 // By relation (exact match — only direct relationships)
-Set<String> editors = doc.who().withRelation("editor").fetchSet();
+Set<String> editorIds = doc.who("user").withRelation("editor").fetchSet();
+
+// Typed subject-type form
+List<String> viewerIds = doc.who(User).withPermission("view").fetch();
 
 // Terminal methods
-doc.who().withPermission("view").fetch();          // List<String>
-doc.who().withPermission("view").fetchSet();        // Set<String>
-doc.who().withPermission("view").fetchFirst();      // Optional<String>
-doc.who().withPermission("view").fetchCount();      // int
-doc.who().withPermission("view").fetchExists();     // boolean
+doc.who("user").withPermission("view").fetch();          // List<String>
+doc.who("user").withPermission("view").fetchSet();        // Set<String>
+doc.who("user").withPermission("view").fetchFirst();      // Optional<String>
+doc.who("user").withPermission("view").fetchCount();      // int
+doc.who("user").withPermission("view").fetchExists();     // boolean
 
 // With consistency
-doc.who().withPermission("view")
+doc.who("user").withPermission("view")
     .withConsistency(Consistency.full())
     .fetch();
 ```
@@ -282,14 +318,17 @@ doc.relations().groupByRelation();                         // Map<String, List<S
 ```java
 // Mixed grant + revoke in a single atomic gRPC call
 BatchResult r = doc.batch()
-    .grant("owner").to("carol")
-    .grant("editor").to("dave")
-    .revoke("owner").from("alice")
+    .grant("owner").to("user:carol")
+    .grant("editor").to("user:dave")
+    .revoke("owner").from("user:alice")
     .execute();
 
 r.zedToken();
 r.asConsistency();
 ```
+
+For cross-resource atomic writes (grant on doc1 AND revoke on doc2 in
+one RPC), use `client.batch()` → `CrossResourceBatchBuilder`.
 
 ### 4.8 lookup — Cross-resource query
 
@@ -297,18 +336,18 @@ r.asConsistency();
 // Which documents can alice view?
 List<String> docIds = client.lookup("document")
     .withPermission("view")
-    .by("alice")
+    .by("user:alice")
     .fetch();
 
 // Terminal methods (same as who())
-client.lookup("document").withPermission("view").by("alice").fetch();
-client.lookup("document").withPermission("view").by("alice").fetchSet();
-client.lookup("document").withPermission("view").by("alice").fetchFirst();
-client.lookup("document").withPermission("view").by("alice").fetchCount();
-client.lookup("document").withPermission("view").by("alice").fetchExists();
+client.lookup("document").withPermission("view").by("user:alice").fetch();
+client.lookup("document").withPermission("view").by("user:alice").fetchSet();
+client.lookup("document").withPermission("view").by("user:alice").fetchFirst();
+client.lookup("document").withPermission("view").by("user:alice").fetchCount();
+client.lookup("document").withPermission("view").by("user:alice").fetchExists();
 
 // With consistency
-client.lookup("document").withPermission("view").by("alice")
+client.lookup("document").withPermission("view").by("user:alice")
     .withConsistency(Consistency.full())
     .fetch();
 ```
@@ -351,9 +390,9 @@ subsequent reads using the default consistency (session) will automatically use
 `atLeast(lastWriteToken)` — preventing stale reads.
 
 ```java
-doc.grant("editor").to("bob");
+doc.grant("editor").to("user:bob");
 // SDK internally tracks the write token
-doc.check("edit").by("bob").hasPermission();  // guaranteed true (session consistency)
+doc.check("edit").by("user:bob").hasPermission();  // guaranteed true (session consistency)
 ```
 
 If you pass an explicit consistency, it takes precedence over the policy.
@@ -362,39 +401,68 @@ If you pass an explicit consistency, it takes precedence over the policy.
 
 ## 6. Subject References
 
-The SDK defaults bare string IDs to `"user"` type:
+Subjects are canonical `type:id` / `type:id#relation` / `type:*`. The
+SDK **does not** assume a default subject type — `"alice"` is rejected;
+write `"user:alice"`.
 
 ```java
-doc.grant("editor").to("alice");
-// equivalent to: subject = user:alice
+doc.grant("editor").to("user:alice");
+doc.grant("viewer").to("group:engineering#member");
+doc.grant("viewer").to("department:sales#member", "group:admins#member");
+doc.grant("viewer").to("user:*");  // wildcard
 ```
 
-For non-user subjects, use `toSubjects()` / `fromSubjects()`:
+Bare-id sugar: when a `SchemaCache` is loaded and a relation declares
+exactly one non-wildcard subject type, the single-string overloads of
+`.to(id)` / `.from(id)` infer the type. The varargs / iterable / byAll
+overloads never infer and always require canonical strings.
+
+Typed ergonomics: prefer the generated typed entry points for
+compile-time safety. After running `AuthxCodegen` against your schema:
 
 ```java
-doc.grant("viewer").toSubjects("group:engineering#member");
-doc.grant("viewer").toSubjects("department:sales#member", "group:admins#member");
-```
+import static com.your.app.schema.Schema.*;
 
-Format: `"type:id"` or `"type:id#relation"`
+doc.grant("viewer").to(Group, "engineering", "member");   // → group:engineering#member
+doc.grant("viewer").toWildcard(User);                     // → user:*
 
-Helper class (from sdk-typed, if available):
-```java
-import com.authx.sdk.typed.Subjects;
-
-doc.grant("viewer").toSubjects(Subjects.groupMember("engineering"));
-// → "group:engineering#member"
+// Or go fully typed from the top:
+client.on(Document).select("doc-1")
+    .grant(Document.Rel.VIEWER).to(User, "alice")
+    .commit();
 ```
 
 ---
 
 ## 7. Schema Validation
 
-Client-side schema validation was removed on 2026-04-18 alongside the
-SchemaCache subsystem (see ADR). Invalid resource types, relations, or
-subject types now fail at the SpiceDB boundary with
-`AuthxInvalidArgumentException`. The SpiceDB error message carries the
-same diagnostic detail.
+Schema metadata (resource types, relations, permissions, per-relation
+allowed subject types, caveat definitions) is loaded once at
+`AuthxClient.build()` via SpiceDB's `ExperimentalReflectSchema` RPC
+and stored in a metadata-only `SchemaCache`. This powers:
+
+- **Fail-fast subject-type validation** on every grant / revoke /
+  WriteFlow commit — invalid subject types raise
+  `InvalidRelationException` locally before any RPC.
+- **Typed-overload inference** — `grant(...).to(User, "alice")` and the
+  bare-id single-string path use the cached schema to construct the
+  canonical ref.
+- **`AuthxCodegen`** — emits typed constants (`Document.Rel.VIEWER`,
+  `Document.Perm.VIEW`, `Caveats`) from the same metadata.
+
+The `SchemaCache` holds **no decision cache** — decisions always go to
+SpiceDB (see ADR 2026-04-18). Schema load is non-fatal: if SpiceDB is
+older and returns `UNIMPLEMENTED`, the cache stays empty, fail-fast
+validation becomes a no-op, and the SDK still works (invalid subjects
+will surface as `AuthxInvalidArgumentException` from SpiceDB instead).
+
+Disable schema load for offline / unit-test setups:
+```java
+AuthxClient.builder()
+    .connection(...)
+    .loadSchemaOnStart(false)
+    .build();
+```
 
 ---
 
@@ -489,24 +557,33 @@ InterceptorTransport        — user-supplied SdkInterceptor hooks
 
 ---
 
-## 11. Typed Constants (sdk-typed)
+## 11. Typed Constants (AuthxCodegen)
 
-If you add `authx-sdk-typed`, you get compile-time-safe constants:
+Typed constants are generated by `AuthxCodegen` in the main SDK —
+there is no separate `sdk-typed` module. After running codegen against
+your schema, use:
 
 ```java
-import com.authx.sdk.typed.constants.Document;
-import com.authx.sdk.typed.Subjects;
+import static com.your.app.schema.Schema.*;   // flat descriptors
 
-doc.grant(Document.EDITOR).to("alice");
-doc.check(Document.VIEW).by("alice");
-doc.grant(Document.VIEWER).toSubjects(Subjects.groupMember("engineering"));
+// Typed check
+client.on(Document).select(id)
+    .check(Document.Perm.VIEW).by(User, "alice");
 
-// Available arrays
-Document.ALL_RELATIONS;    // String[]
-Document.ALL_PERMISSIONS;  // String[]
+// Typed grant (WriteFlow — must commit)
+client.on(Document).select(id)
+    .grant(Document.Rel.EDITOR).to(User, "alice")
+    .commit();
+
+// Typed reverse lookup
+client.on(Document).select(id)
+    .who(User, Document.Perm.VIEW).fetchIds();
 ```
 
-Generate with: `./gradlew :sdk-codegen:run --args="--namespace dev"`
+Generated enums implement `Relation.Named` / `Permission.Named` and
+carry the schema-declared subject-type metadata used by runtime
+fail-fast validation. See `docs/migration-schema-flat-descriptors.md`
+for the 2026-04-22 import-static-based ergonomics.
 
 ---
 
@@ -522,36 +599,36 @@ void setup() {
 @Test
 void editorCanEdit() {
     var doc = client.resource("document", "doc-1");
-    doc.grant("editor").to("alice");
+    doc.grant("editor").to("user:alice");
 
     // InMemory: check matches on relation name (no recursive permission computation)
-    assertTrue(doc.check("editor").by("alice").hasPermission());
-    assertFalse(doc.check("editor").by("bob").hasPermission());
+    assertTrue(doc.check("editor").by("user:alice").hasPermission());
+    assertFalse(doc.check("editor").by("user:bob").hasPermission());
 }
 
 @Test
 void revokeRemovesAccess() {
     var doc = client.resource("document", "doc-1");
-    doc.grant("editor").to("alice");
-    doc.revoke("editor").from("alice");
+    doc.grant("editor").to("user:alice");
+    doc.revoke("editor").from("user:alice");
 
-    assertFalse(doc.check("editor").by("alice").hasPermission());
+    assertFalse(doc.check("editor").by("user:alice").hasPermission());
 }
 
 @Test
 void batchIsAtomic() {
     var doc = client.resource("document", "doc-1");
-    doc.grant("owner").to("alice");
+    doc.grant("owner").to("user:alice");
 
     doc.batch()
-        .revoke("owner").from("alice")
-        .grant("owner").to("bob")
-        .grant("editor").to("alice")
+        .revoke("owner").from("user:alice")
+        .grant("owner").to("user:bob")
+        .grant("editor").to("user:alice")
         .execute();
 
-    assertFalse(doc.check("owner").by("alice").hasPermission());
-    assertTrue(doc.check("owner").by("bob").hasPermission());
-    assertTrue(doc.check("editor").by("alice").hasPermission());
+    assertFalse(doc.check("owner").by("user:alice").hasPermission());
+    assertTrue(doc.check("owner").by("user:bob").hasPermission());
+    assertTrue(doc.check("editor").by("user:alice").hasPermission());
 }
 ```
 
@@ -577,7 +654,7 @@ All constants use enums (no magic strings):
 ```java
 @GetMapping("/documents/{id}")
 public Document getDocument(@PathVariable String id, @RequestHeader("X-User-Id") String userId) {
-    if (!client.resource("document", id).check("view").by(userId).hasPermission()) {
+    if (!client.resource("document", id).check("view").by("user:" + userId).hasPermission()) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
     return documentService.findById(id);
@@ -589,7 +666,7 @@ public Document getDocument(@PathVariable String id, @RequestHeader("X-User-Id")
 ```java
 PermissionSet perms = client.resource("document", docId)
     .checkAll("view", "edit", "delete", "share")
-    .by(currentUserId);
+    .by("user:" + currentUserId);
 
 model.addAttribute("canEdit", perms.can("edit"));
 model.addAttribute("canDelete", perms.can("delete"));
@@ -601,7 +678,7 @@ model.addAttribute("canShare", perms.can("share"));
 ```java
 List<String> docIds = client.lookup("document")
     .withPermission("view")
-    .by(userId)
+    .by("user:" + userId)
     .fetch();
 ```
 
@@ -609,9 +686,9 @@ List<String> docIds = client.lookup("document")
 
 ```java
 client.resource("document", docId).batch()
-    .revoke("owner").from(oldOwner)
-    .grant("owner").to(newOwner)
-    .grant("editor").to(oldOwner)  // demote to editor
+    .revoke("owner").from("user:" + oldOwner)
+    .grant("owner").to("user:" + newOwner)
+    .grant("editor").to("user:" + oldOwner)  // demote to editor
     .execute();
 ```
 
@@ -620,7 +697,7 @@ client.resource("document", docId).batch()
 ```java
 client.resource("document", docId)
     .grant("viewer")
-    .toSubjects("group:engineering#member");
+    .to("group:engineering#member");
 ```
 
 ---

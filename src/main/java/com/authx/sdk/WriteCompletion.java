@@ -2,6 +2,8 @@ package com.authx.sdk;
 
 import com.authx.sdk.model.GrantResult;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -70,6 +72,7 @@ public final class WriteCompletion {
      * this completion. Exceptions propagate; subsequent chained
      * listeners after a throw do not fire.
      */
+    @CanIgnoreReturnValue
     public WriteCompletion listener(Consumer<WriteCompletion> callback) {
         Objects.requireNonNull(callback, "callback").accept(this);
         return this;
@@ -79,6 +82,7 @@ public final class WriteCompletion {
      * Dispatch {@code callback} to {@code executor}. Returns immediately.
      * Callback exceptions are caught, logged at WARNING, and swallowed.
      */
+    @CanIgnoreReturnValue
     public WriteCompletion listenerAsync(Consumer<WriteCompletion> callback, Executor executor) {
         Objects.requireNonNull(callback, "callback");
         Objects.requireNonNull(executor, "executor");

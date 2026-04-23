@@ -73,32 +73,48 @@ AuthxClient client = AuthxClient.builder()
 
 ### Permission Check
 
+Two parallel fluent APIs; pick one. Subjects must be canonical `type:id`
+form (no default subject type).
+
 ```java
-// Concise
-boolean canView = client.check("document", "doc-1", "view", "alice");
+// Untyped (string-driven)
+ResourceHandle doc = client.on("document").resource("doc-1");
 
-// Chained (reuse the factory)
-ResourceFactory doc = client.on("document");
-boolean canEdit = doc.check("doc-1", "edit", "alice");
+boolean canView = doc.check("view").by("user:alice").hasPermission();
 
-// Multiple permissions in one call
-Map<String, Boolean> perms = client.checkAll("document", "doc-1", "alice", "view", "edit", "delete");
+// Multiple permissions in one bulk RPC → PermissionSet
+PermissionSet perms = doc.checkAll("view", "edit", "delete").by("user:alice");
+perms.can("edit");   // boolean
+perms.allowed();     // Set<String>
+
+// Typed (using codegen enums — recommended)
+boolean canView = client.on(Document).select("doc-1")
+    .check(Document.Perm.VIEW).by(User, "alice");
 ```
 
 ### Grant / Revoke
 
+**Untyped path**: `.to(...)` / `.from(...)` are terminal — the write
+happens immediately.
+
 ```java
-client.grant("document", "doc-1", "editor", "bob");
-client.grantToSubjects("document", "doc-1", "viewer", "department:eng#member", "user:*");
-client.revoke("document", "doc-1", "editor", "bob");
-client.revokeAll("document", "doc-1", "bob");
+ResourceHandle doc = client.on("document").resource("doc-1");
+
+// grant — writes immediately, returns GrantResult (zedToken + count)
+doc.grant("editor").to("user:bob");
+doc.grant("viewer").to("group:engineering#member", "user:*");
+
+// revoke — writes immediately
+doc.revoke("editor").from("user:bob");
+
+// revokeAll — filter-based delete of all relationships for this subject
+doc.revokeAll().from("user:bob");
+doc.revokeAll("editor", "viewer").from("user:bob");  // scoped to relations
 ```
 
-### Writes (grant / revoke / atomic mixed)
-
-From 2.0, `TypedHandle.grant(R)` / `.revoke(R)` return a `WriteFlow`:
-accumulate `.to(...)` / `.from(...)` calls and commit them atomically in
-one `WriteRelationships` RPC via `.commit()`.
+**Typed path**: `TypedHandle.grant(R)` / `.revoke(R)` return a
+`WriteFlow`. Accumulate `.to(...)` / `.from(...)` calls and commit them
+atomically in one `WriteRelationships` RPC via `.commit()`.
 
 ```java
 // Single relation, multiple subjects
@@ -126,9 +142,10 @@ CompletableFuture<WriteCompletion> f = client.on(Document).select("doc-1")
 logging. The write itself has already happened by the time the listener
 runs.
 
-**`.commit()` is mandatory** — forgetting it neither throws nor writes;
-this is guarded by code review (see
+**`.commit()` is mandatory on the typed path** — forgetting it neither
+throws nor writes (see
 [ADR 2026-04-22](docs/adr/2026-04-22-grant-revoke-flow-api.md)).
+Guarded at the code-review layer today; ErrorProne wiring planned.
 
 ### Close the Client
 

@@ -84,25 +84,55 @@ AuthxClient client = AuthxClient.builder()
 
 ### 权限检查
 
+两套链式 API，选一套。主体必须是 canonical 形式 `type:id`（无默认主体类型）。
+
 ```java
-// 简洁写法
-boolean canView = client.check("document", "doc-1", "view", "alice");
+// Untyped（动态字符串）
+ResourceHandle doc = client.on("document").resource("doc-1");
 
-// 链式写法（推荐复用 factory）
-ResourceFactory doc = client.on("document");
-boolean canEdit = doc.check("doc-1", "edit", "alice");
+boolean canView = doc.check("view").by("user:alice").hasPermission();
 
-// 一次检查多个权限
-Map<String, Boolean> perms = client.checkAll("document", "doc-1", "alice", "view", "edit", "delete");
+// 一次检查多个权限 → PermissionSet
+PermissionSet perms = doc.checkAll("view", "edit", "delete").by("user:alice");
+perms.can("edit");   // boolean
+perms.allowed();     // Set<String>
+
+// Typed（使用 codegen 的枚举，推荐）
+boolean canView = client.on(Document).select("doc-1")
+    .check(Document.Perm.VIEW).by(User, "alice");
 ```
 
 ### 授权 / 撤权
 
+**Untyped 路径**：`.to(...)` / `.from(...)` 是终结方法，立即写入。
+
 ```java
-client.grant("document", "doc-1", "editor", "bob");
-client.grantToSubjects("document", "doc-1", "viewer", "department:eng#member", "user:*");
-client.revoke("document", "doc-1", "editor", "bob");
-client.revokeAll("document", "doc-1", "bob");
+ResourceHandle doc = client.on("document").resource("doc-1");
+
+// grant —— 立即写入
+doc.grant("editor").to("user:bob");
+doc.grant("viewer").to("group:engineering#member", "user:*");
+
+// revoke —— 立即写入
+doc.revoke("editor").from("user:bob");
+
+// revokeAll —— 过滤式删除该主体在此资源上的所有关系
+doc.revokeAll().from("user:bob");
+doc.revokeAll("editor", "viewer").from("user:bob");  // 限定 relation
+```
+
+**Typed 路径**：返回 `WriteFlow`，**必须以 `.commit()` 结尾**，否则静默不写入。
+
+```java
+client.on(Document).select("doc-1")
+    .grant(Document.Rel.EDITOR).to(User, "bob")
+    .commit();
+
+// 混合 grant + revoke 原子写入
+client.on(Document).select("doc-1")
+    .revoke(Document.Rel.EDITOR).from(User, "alice")
+    .grant(Document.Rel.VIEWER).to(User, "alice")
+    .commit();
 ```
 
 ### 写入（grant / revoke / 混合原子写）
