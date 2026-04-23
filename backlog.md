@@ -111,22 +111,32 @@ block B. Cost: ~0.5 dev-day.
 
 ---
 
-### cluster-test-1 `[open]` · cluster-test is not in CI
+### cluster-test-1 `[open]` · no automated benchmark vs current main
 
 **Found**: 2026-04-23 review; premise of ADR 2026-04-18
 **Details**: The "no client-side decision cache, rely on SpiceDB
 server-side dispatch cache" decision is predicated on cluster
-benchmark numbers that were produced manually. Reports under
-`docs/archive/benchmark-report-*.md` dated 2026-04-08 through
-2026-04-11 are the last public artifacts. There is no automated
-CI job that reruns them against current main; regressions would
-go unnoticed.
+benchmark numbers produced manually in April 2026. Reports under
+`docs/archive/benchmark-report-*.md` (2026-04-08 through
+2026-04-11) are the last public artifacts, and they reflect the
+pre-L1-removal SDK against a Docker-based 3+3 cluster that no
+longer exists — `deploy/docker-compose.yml` and the
+`cluster-test/` Gradle module were deleted in `6af9f2c`, and the
+Docker-era specs (`specs/2026-04-08-cluster-benchmark/`,
+`specs/2026-04-14-cluster-stress-test/`) were deleted in the
+2026-04-23 hygiene pass. No current artifact validates the
+post-L1 performance claim against 2.0.1 HEAD.
 
-**Resolution direction**: GitHub Actions nightly job that runs
-the `cluster-test` suite and publishes results as an artifact. Do
-not fail CI on benchmark regression initially; observe for one
-release cycle, then decide thresholds. Planned in
-`specs/2026-04-24-2.0-convergence` block D. Cost: ~2 dev-days.
+**Resolution direction**: rebuild the benchmark harness against
+the native host cluster planned in
+`specs/2026-04-23-native-cluster-config/` (3 native CockroachDB
++ 3 native SpiceDB, no Docker — matches user's operator
+preference and survives the removal of the Docker-era harness).
+Once the native cluster scripts land, wire a nightly / on-tag CI
+job (or local `./gradlew :benchmark:run` driver) that replays the
+core workload and produces a report artifact for comparison
+against a stored baseline. Do not fail CI on regression initially;
+observe one release cycle, then decide thresholds.
 
 ---
 
