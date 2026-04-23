@@ -43,7 +43,7 @@ public class R6BreakerEvictionTest {
         for (int i = 0; i < distinctTypes; i++) {
             String type = "type-r6-" + i;
             try {
-                client.on(type).check("x", "view", "user-r6");
+                client.on(type).resource("x").check("view").by("user-r6").hasPermission();
             } catch (Throwable t) {
                 churnErrors.incrementAndGet();
             }
@@ -63,7 +63,7 @@ public class R6BreakerEvictionTest {
         // fail consistently without memory/thread blowup).
         for (int i = 0; i < hotRepeats; i++) {
             try {
-                client.on("hot_type").check("x", "view", "user-r6");
+                client.on("hot_type").resource("x").check("view").by("user-r6").hasPermission();
             } catch (Throwable t) {
                 hotErrors.incrementAndGet();
             }

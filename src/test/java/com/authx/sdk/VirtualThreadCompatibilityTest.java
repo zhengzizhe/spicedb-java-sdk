@@ -87,9 +87,9 @@ class VirtualThreadCompatibilityTest {
     @Test
     void clientWithVirtualThreads_basicOperationsWork() {
         var doc = client.on("document");
-        doc.grant("doc-1", "editor", "user:alice");
-        assertThat(doc.check("doc-1", "editor", "user:alice")).isTrue();
-        assertThat(doc.check("doc-1", "editor", "user:bob")).isFalse();
+        doc.resource("doc-1").grant("editor").to("user:alice");
+        assertThat(doc.resource("doc-1").check("editor").by("user:alice").hasPermission()).isTrue();
+        assertThat(doc.resource("doc-1").check("editor").by("user:bob").hasPermission()).isFalse();
     }
 
     // ================================================================
@@ -101,7 +101,7 @@ class VirtualThreadCompatibilityTest {
         // Seed data
         var doc = client.on("document");
         for (int i = 0; i < 100; i++) {
-            doc.grant("doc-" + i, "viewer", "user:user-" + (i % 10));
+            doc.resource("doc-" + i).grant("viewer").to("user:user-" + (i % 10));
         }
 
         int concurrency = 500;
@@ -118,11 +118,11 @@ class VirtualThreadCompatibilityTest {
                         int userIdx = docIdx % 10;
 
                         // This user SHOULD have permission
-                        boolean allowed = doc.check("doc-" + docIdx, "viewer", "user:user-" + userIdx);
+                        boolean allowed = doc.resource("doc-" + docIdx).check("viewer").by("user:user-" + userIdx).hasPermission();
                         if (!allowed) wrongResults.incrementAndGet();
 
                         // This user should NOT have permission (off by one)
-                        boolean denied = doc.check("doc-" + docIdx, "viewer", "user:user-" + ((userIdx + 5) % 10));
+                        boolean denied = doc.resource("doc-" + docIdx).check("viewer").by("user:user-" + ((userIdx + 5) % 10)).hasPermission();
                         if (denied) wrongResults.incrementAndGet();
                     } catch (Exception e) {
                         errors.incrementAndGet();
@@ -161,10 +161,10 @@ class VirtualThreadCompatibilityTest {
                         var doc = client.on("document");
                         if (idx % 3 == 0) {
                             // Write
-                            doc.grant("mixed-doc-" + (idx % 20), "editor", "user:mixed-user-" + idx);
+                            doc.resource("mixed-doc-" + (idx % 20)).grant("editor").to("user:mixed-user-" + idx);
                         } else {
                             // Read
-                            doc.check("mixed-doc-" + (idx % 20), "viewer", "user:mixed-user-" + (idx % 10));
+                            doc.resource("mixed-doc-" + (idx % 20)).check("viewer").by("user:mixed-user-" + (idx % 10)).hasPermission();
                         }
                     } catch (Exception e) {
                         errors.incrementAndGet();
@@ -329,7 +329,7 @@ class VirtualThreadCompatibilityTest {
         // Seed some data first
         var doc = client.on("document");
         for (int i = 0; i < 50; i++) {
-            doc.grant("burst-doc-" + i, "viewer", "user:burst-user-" + (i % 5));
+            doc.resource("burst-doc-" + i).grant("viewer").to("user:burst-user-" + (i % 5));
         }
 
         long startNanos = System.nanoTime();
@@ -341,9 +341,9 @@ class VirtualThreadCompatibilityTest {
                     try {
                         // Mix operations
                         if (idx % 10 == 0) {
-                            doc.grant("burst-doc-" + (idx % 50), "commenter", "user:burst-vt-" + idx);
+                            doc.resource("burst-doc-" + (idx % 50)).grant("commenter").to("user:burst-vt-" + idx);
                         } else {
-                            doc.check("burst-doc-" + (idx % 50), "viewer", "user:burst-user-" + (idx % 5));
+                            doc.resource("burst-doc-" + (idx % 50)).check("viewer").by("user:burst-user-" + (idx % 5)).hasPermission();
                         }
                         completed.incrementAndGet();
                     } catch (Exception e) {

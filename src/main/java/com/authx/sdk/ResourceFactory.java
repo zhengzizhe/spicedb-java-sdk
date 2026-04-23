@@ -1,42 +1,35 @@
 package com.authx.sdk;
 
 import com.authx.sdk.cache.SchemaCache;
-import com.authx.sdk.model.Consistency;
-import com.authx.sdk.model.GrantResult;
-import com.authx.sdk.model.RevokeResult;
 import com.authx.sdk.transport.SdkTransport;
 
 import org.jspecify.annotations.Nullable;
 
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executor;
 
 /**
- * Factory for a specific resource type. Two usage patterns:
+ * Factory for a specific resource type. All operations go through a
+ * chain that starts with {@link #resource(String)} or {@link #lookup()}:
  *
- * <p><b>Primary (typed chain via codegen):</b>
+ * <p><b>Typed chain (preferred):</b>
  * <pre>
- * DocumentResource doc = new DocumentResource(client);
- * doc.on("doc-1").grant(Document.Rel.EDITOR).toUser("bob");
- * doc.on("doc-1").check(Document.Perm.VIEW).by("alice");
+ * client.on(Document).select("doc-1")
+ *     .grant(Document.Rel.EDITOR).to(User, "bob").commit();
+ * client.on(Document).select("doc-1")
+ *     .check(Document.Perm.VIEW).by(User, "alice");
  * </pre>
  *
- * <p><b>String fallback (dynamic cases):</b>
+ * <p><b>Untyped chain (dynamic / string-driven cases):</b>
  * <pre>
  * ResourceFactory doc = client.on("document");
- * doc.check("doc-1", "view", "alice");
- * doc.grant("doc-1", "editor", "bob");
- * </pre>
- *
- * <p>For advanced operations (batch, expand, who, relations), use {@link #resource(String)}:
- * <pre>
+ * doc.resource("doc-1").grant("editor").to("user:bob");
+ * doc.resource("doc-1").check("view").by("user:alice").hasPermission();
  * doc.resource("doc-1").batch().grant("editor").to("bob").revoke("owner").from("old").execute();
  * doc.resource("doc-1").who().withPermission("view").fetch();
  * doc.resource("doc-1").expand("view");
  * </pre>
  *
- * Thread-safe — safe to store as a field and share across requests.
+ * <p>Thread-safe — safe to store as a field and share across requests.
  */
 public class ResourceFactory {
 
@@ -109,40 +102,6 @@ public class ResourceFactory {
     /** Reverse lookup: find all resources of this type a subject can access. */
     public LookupQuery lookup() {
         return new LookupQuery(resourceType, transport);
-    }
-
-    // ---- String-based operations (escape hatch for dynamic cases) ----
-
-    /**
-     * Check permission for a canonical subject string ({@code "user:alice"},
-     * {@code "group:eng#member"}).
-     */
-    public boolean check(String id, String permission, String subjectRef) {
-        return resource(id).check(permission).by(subjectRef).hasPermission();
-    }
-
-    /** Check with explicit consistency. */
-    public boolean check(String id, String permission, String subjectRef, Consistency consistency) {
-        return resource(id).check(permission).withConsistency(consistency).by(subjectRef).hasPermission();
-    }
-
-    /**
-     * Grant relation to canonical subject refs
-     * (e.g., {@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}).
-     * Returns result with zedToken for write-after-read consistency.
-     */
-    public GrantResult grant(String id, String relation, String... subjectRefs) {
-        return resource(id).grant(relation).to(subjectRefs);
-    }
-
-    /** Revoke relation from canonical subject refs. */
-    public RevokeResult revoke(String id, String relation, String... subjectRefs) {
-        return resource(id).revoke(relation).from(subjectRefs);
-    }
-
-    /** Get all relations grouped by relation name. */
-    public Map<String, List<String>> allRelations(String id) {
-        return resource(id).relations().groupByRelation();
     }
 
     /** Return the resource type this factory is bound to. */

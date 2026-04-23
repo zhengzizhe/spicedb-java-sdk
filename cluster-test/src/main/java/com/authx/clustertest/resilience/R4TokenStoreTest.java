@@ -115,10 +115,10 @@ public class R4TokenStoreTest {
             String docId = "doc-" + tag + "-" + i;
             String user = "user-" + tag + "-" + i;
             try {
-                client.on("document").grant(docId, "viewer", user);
+                client.on("document").resource(docId).grant("viewer").to(user);
             } catch (Exception ignored) { /* mock store failures must not throw per SPI contract */ }
             try {
-                client.on("document").revoke(docId, "viewer", user);
+                client.on("document").resource(docId).revoke("viewer").from(user);
             } catch (Exception ignored) { /* best-effort */ }
         }
     }

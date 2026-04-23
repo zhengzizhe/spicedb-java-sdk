@@ -61,9 +61,9 @@ public class R5ConcurrencyConsistencyTest {
                     boolean grant = rnd.nextBoolean();
                     try {
                         if (grant) {
-                            client.on("document").grant(doc, "viewer", user);
+                            client.on("document").resource(doc).grant("viewer").to(user);
                         } else {
-                            client.on("document").revoke(doc, "viewer", user);
+                            client.on("document").resource(doc).revoke("viewer").from(user);
                         }
                         expected.put(key, grant);
                         writes.incrementAndGet();
@@ -84,7 +84,7 @@ public class R5ConcurrencyConsistencyTest {
                     String user = "user-r5";
                     String key = doc + "|" + user;
                     try {
-                        boolean actual = client.on("document").check(doc, "view", user);
+                        boolean actual = client.on("document").resource(doc).check("view").by(user).hasPermission();
                         Boolean exp = expected.get(key);
                         reads.incrementAndGet();
                         // A mismatch during contention is expected (writes race
@@ -112,7 +112,7 @@ public class R5ConcurrencyConsistencyTest {
             var parts = e.getKey().split("\\|", 2);
             String doc = parts[0], user = parts[1];
             try {
-                boolean actual = client.on("document").check(doc, "view", user);
+                boolean actual = client.on("document").resource(doc).check("view").by(user).hasPermission();
                 if (actual != e.getValue()) {
                     finalMismatches++;
                     events.add("final-mismatch " + e.getKey() + " expected=" + e.getValue() + " actual=" + actual);

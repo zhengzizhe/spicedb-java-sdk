@@ -105,7 +105,7 @@ class CaveatIT {
             // Best-effort revoke our test relationships.
             for (String rel : new String[]{"admin_viewer", "timed_viewer", "plain_viewer"}) {
                 for (String user : new String[]{"alice", "bob"}) {
-                    try { client.on("cv_doc").revoke("c1", rel, user); } catch (Exception ignored) { }
+                    try { client.on("cv_doc").resource("c1").revoke(rel).from(user); } catch (Exception ignored) { }
                 }
             }
             try { client.close(); } catch (Exception ignored) { }
@@ -201,7 +201,7 @@ class CaveatIT {
     @Test
     void plainRelation_noCaveat_isAllowed() {
         // Sanity: same definition with a non-caveat relation works as expected.
-        client.on("cv_doc").grant("c1", "plain_viewer", "bob");
+        client.on("cv_doc").resource("c1").grant("plain_viewer").to("bob");
 
         CheckResult r = client.on("cv_doc").resource("c1").check("view_any")
                 .withConsistency(Consistency.full())
