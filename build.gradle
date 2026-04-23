@@ -96,7 +96,7 @@ mavenPublishing {
 
     pom {
         name = "AuthX SDK"
-        description = "An independent Java SDK for SpiceDB — production-grade client with caching, Watch-based invalidation, Resilience4j circuit-breaker/retry, and OpenTelemetry observability. Not affiliated with Authzed, Inc."
+        description = "An independent Java SDK for SpiceDB — production-grade direct-gRPC client with Resilience4j circuit-breaker/retry, request coalescing, and OpenTelemetry observability. Not affiliated with Authzed, Inc."
         url = "https://github.com/zhengzizhe/spicedb-java-sdk"
         inceptionYear = "2026"
 

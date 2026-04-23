@@ -4,7 +4,6 @@
 
 ## Docs
 
-- [AI Agent Guide](AGENTS.md): API cheat sheet, configuration, common mistakes
 - [SDK CLAUDE.md](CLAUDE.md): Coding standards, architecture, constraints
 
 ## Instructions for AI Agents

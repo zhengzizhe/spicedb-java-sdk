@@ -12,6 +12,12 @@ A high-performance Java client that connects directly to SpiceDB. No platform de
 > (inheritance-chain invalidation correctness limitation). Upgrading
 > code must strip all `.cache(...)`, `CacheHandle`, `onRelationshipChange`,
 > and related Watch / `DuplicateDetector` / `QueueFullPolicy` usages.
+>
+> **Breaking Change — 2026-04-22**: `TypedHandle.grant(R)` / `.revoke(R)`
+> now return `WriteFlow`. Chains must end with `.commit()` or the write
+> is silently dropped. See
+> [ADR 2026-04-22](docs/adr/2026-04-22-grant-revoke-flow-api.md) and
+> [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
@@ -30,7 +36,7 @@ A high-performance Java client that connects directly to SpiceDB. No platform de
 ```groovy
 // build.gradle
 dependencies {
-    implementation("io.github.authxkit:authx-spicedb-sdk:1.0.0")
+    implementation("io.github.authxkit:authx-spicedb-sdk:2.0.1")
 }
 ```
 
@@ -39,7 +45,7 @@ dependencies {
 <dependency>
     <groupId>io.github.authxkit</groupId>
     <artifactId>authx-spicedb-sdk</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.1</version>
 </dependency>
 ```
 
@@ -88,53 +94,41 @@ client.revoke("document", "doc-1", "editor", "bob");
 client.revokeAll("document", "doc-1", "bob");
 ```
 
-### Write completion listeners (grant / revoke)
+### Writes (grant / revoke / atomic mixed)
 
-Typed-chain grant / revoke terminals return a completion handle that lets you
-attach one or more completion listeners at the end of the chain. **The write
-itself remains synchronous**; only the listener's execution mode is configurable:
+From 2.0, `TypedHandle.grant(R)` / `.revoke(R)` return a `WriteFlow`:
+accumulate `.to(...)` / `.from(...)` calls and commit them atomically in
+one `WriteRelationships` RPC via `.commit()`.
 
 ```java
-// Sync listener — callback runs on the caller's thread before the call returns
-client.on(Document.TYPE).select("doc-1")
-    .grant(Document.Rel.EDITOR)
-    .toUser("bob")
-    .listener(r -> log.info("granted, zedToken={}", r.zedToken()));
+// Single relation, multiple subjects
+client.on(Document).select("doc-1")
+    .grant(Document.Rel.VIEWER)
+    .to(User, "alice")
+    .to(User, "bob")
+    .to(Group, "eng", Group.Rel.MEMBER)
+    .commit();
 
-// Async listener — dispatched to the supplied executor and returns immediately
-client.on(Document.TYPE).select("doc-1")
-    .grant(Document.Rel.EDITOR)
-    .toUser("bob")
-    .listenerAsync(r -> audit.write(r), auditExecutor);
+// Mixed grant + revoke — one atomic commit, no intermediate visible state
+client.on(Document).select("doc-1")
+    .revoke(Document.Rel.EDITOR).from(User, "alice")
+    .grant(Document.Rel.VIEWER).to(User, "alice")
+    .commit();
 
-// Multiple listeners can be chained
-client.on(Document.TYPE).select("doc-1")
-    .grant(Document.Rel.EDITOR)
-    .toUser("bob")
-    .listener(r -> localLog(r))
-    .listenerAsync(r -> remoteAudit(r), auditExecutor);
-
-// Statement form still works — existing callers don't need to change
-client.on(Document.TYPE).select("doc-1")
-    .grant(Document.Rel.EDITOR)
-    .toUser("bob");
+// Async commit
+CompletableFuture<WriteCompletion> f = client.on(Document).select("doc-1")
+    .grant(Document.Rel.VIEWER).to(User, "alice")
+    .commitAsync();
 ```
 
-**Semantics**:
-- A write failure (any `AuthxException` subclass) is thrown from the terminal
-  method before any listener can be registered, so listeners only observe
-  successful writes.
-- An exception thrown inside an async listener callback is caught and logged
-  at WARNING (logger name `com.authx.sdk.action.GrantCompletion` /
-  `RevokeCompletion`). It does NOT reach the caller, does NOT affect the
-  write outcome, and does NOT cancel other already-dispatched async listeners.
-- Listeners fire in chain registration order for the sync variant; for the
-  async variant submission order matches chain order but actual execution
-  order is governed by the supplied executor.
-- When a typed chain spans multiple internal RPCs (e.g. `select("d1","d2")
-  .grant(R1,R2).toUser("a","b")` triggers 4 RPCs), `result()` returns a
-  single aggregated `GrantResult` whose `zedToken` is the last internal
-  write's token and whose `count` is the sum across all internal writes.
+`commit()` returns a `WriteCompletion`; attach `.listener(...)` /
+`.listenerAsync(..., executor)` for post-write side effects such as audit
+logging. The write itself has already happened by the time the listener
+runs.
+
+**`.commit()` is mandatory** — forgetting it neither throws nor writes;
+this is guarded by code review (see
+[ADR 2026-04-22](docs/adr/2026-04-22-grant-revoke-flow-api.md)).
 
 ### Close the Client
 
