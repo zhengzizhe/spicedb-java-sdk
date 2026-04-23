@@ -178,6 +178,34 @@ public final class Schema {
 
     public static final SpaceDescriptor Space = new SpaceDescriptor();
 
+    public static final class TenantDocumentDescriptor
+            extends ResourceType<com.authx.testapp.schema.TenantDocument.Rel, com.authx.testapp.schema.TenantDocument.Perm> {
+        protected TenantDocumentDescriptor() {
+            super("tenant_document", com.authx.testapp.schema.TenantDocument.Rel.class, com.authx.testapp.schema.TenantDocument.Perm.class);
+        }
+        public final TenantDocumentRelProxy  Rel  = new TenantDocumentRelProxy();
+        public final TenantDocumentPermProxy Perm = new TenantDocumentPermProxy();
+    }
+
+    public static final class TenantDocumentRelProxy {
+        public final com.authx.testapp.schema.TenantDocument.Rel ORG = com.authx.testapp.schema.TenantDocument.Rel.ORG;
+        public final com.authx.testapp.schema.TenantDocument.Rel OWNER = com.authx.testapp.schema.TenantDocument.Rel.OWNER;
+        public final com.authx.testapp.schema.TenantDocument.Rel EDITOR = com.authx.testapp.schema.TenantDocument.Rel.EDITOR;
+        public final com.authx.testapp.schema.TenantDocument.Rel VIEWER = com.authx.testapp.schema.TenantDocument.Rel.VIEWER;
+        public final com.authx.testapp.schema.TenantDocument.Rel BANNED = com.authx.testapp.schema.TenantDocument.Rel.BANNED;
+    }
+
+    public static final class TenantDocumentPermProxy implements PermissionProxy<com.authx.testapp.schema.TenantDocument.Perm> {
+        public final com.authx.testapp.schema.TenantDocument.Perm VIEW = com.authx.testapp.schema.TenantDocument.Perm.VIEW;
+        public final com.authx.testapp.schema.TenantDocument.Perm EDIT = com.authx.testapp.schema.TenantDocument.Perm.EDIT;
+        public final com.authx.testapp.schema.TenantDocument.Perm MANAGE = com.authx.testapp.schema.TenantDocument.Perm.MANAGE;
+        @Override public Class<com.authx.testapp.schema.TenantDocument.Perm> enumClass() {
+            return com.authx.testapp.schema.TenantDocument.Perm.class;
+        }
+    }
+
+    public static final TenantDocumentDescriptor TenantDocument = new TenantDocumentDescriptor();
+
     public static final class UserDescriptor
             extends ResourceType<com.authx.testapp.schema.User.Rel, com.authx.testapp.schema.User.Perm> {
         protected UserDescriptor() {

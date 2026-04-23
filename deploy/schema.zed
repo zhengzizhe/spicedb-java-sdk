@@ -130,3 +130,29 @@ definition document {
     /** 分享 = 编辑者可分享 */
     permission share = edit
 }
+
+// ============================================================
+//  多租户隔离文档（tenant_document）— 严格跨 org 防护
+// ============================================================
+
+/**
+ * 演示"租户隔离"建模：无论授权多宽松，用户必须是资源所属 org 的
+ * member 才能拿到权限。离开 org → 自动失权，不用手动清理 tuple。
+ *
+ * 和 document 的区别：document 只在继承链终点（space）判 org；这里
+ * 在 permission 表达式顶层 intersection (& org->access)，所有路径都挡。
+ */
+definition tenant_document {
+    relation org: organization          // 归属 org（必须绑定）
+    relation owner: user
+    relation editor: user | group#member
+    relation viewer: user | group#member | user:*
+    relation banned: user               // 特例黑名单
+
+    /** 查看 = 被授权的任一 + 必须是 org 成员 - banned */
+    permission view = (viewer + editor + owner + org->admin) & org->access - banned
+    /** 编辑 = 编辑者/owner/org admin + 必须在 org 内 - banned */
+    permission edit = (editor + owner + org->admin) & org->access - banned
+    /** 管理 = owner + org admin + 必须在 org 内 */
+    permission manage = (owner + org->admin) & org->access
+}
