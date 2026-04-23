@@ -57,8 +57,6 @@ src/main/java/com/authx/sdk/
 ├── metrics/                   # SDK metrics
 └── telemetry/                 # Telemetry reporter
 test-app/                      # Demo Spring Boot app
-cluster-test/                  # Production cluster stress test harness
-                               # (3 SpringBoot instances + Toxiproxy + HTML report)
 sdk-redisson/                  # Optional Redisson-backed DistributedTokenStore
                                # (multi-JVM SESSION consistency)
 ```
@@ -66,13 +64,10 @@ sdk-redisson/                  # Optional Redisson-backed DistributedTokenStore
 ## Build commands
 
 ```bash
-./gradlew compileJava                                    # Compile SDK
-./gradlew test -x :test-app:test -x :cluster-test:test   # SDK unit tests only
-./gradlew test                                            # All tests
-./gradlew :cluster-test:bootJar                           # Build cluster-test runnable jar
+./gradlew compileJava                 # Compile SDK
+./gradlew test -x :test-app:test      # SDK unit tests only
+./gradlew test                         # All tests (SDK + test-app)
 ```
-
-For cluster stress testing see `cluster-test/README.md`.
 
 ## Workflow
 
