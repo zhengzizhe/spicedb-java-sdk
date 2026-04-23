@@ -11,51 +11,75 @@
 
 ### Do
 
-- Use `AuthCsesClient.builder().connection(c -> c.target("...").presharedKey("...")).build()`
-- Use `AuthCsesClient.inMemory()` for unit tests
-- Use simple API: `client.on("document").check("doc-1", "view", "alice")` → boolean
-- Use chain API for complex cases: `client.on("document").resource("doc-1").grant("editor").expiresIn(...).to("alice")`
+- Use `AuthxClient.builder().connection(c -> c.target("...").presharedKey("...")).build()`
+- Use `AuthxClient.inMemory()` for unit tests
+- Prefer the **typed** chain: `client.on(Document).select(id).check(Document.Perm.VIEW).by(User, userId)`
+- Use the **untyped** chain for dynamic / string-driven cases: `client.on("document").resource(id).check("view").by("user:alice").hasPermission()`
+- Use **WriteFlow** for any grant / revoke / mixed write: accumulate via `.to(...)` / `.from(...)`, finish with `.commit()`
 - Close the client with `@Bean(destroyMethod="close")` or `.features(f -> f.shutdownHook(true))`
-- Use codegen constants: `Document.VIEW`, `Document.EDITOR`
+- Use codegen constants: `Document.Rel.VIEWER`, `Document.Perm.VIEW`
 
 ### Do Not
 
 - Do not pass platform URLs — SDK connects directly to SpiceDB
-- Do not use `check()` with a relation name — relations for `grant/revoke`, permissions for `check/subjects/resources`
-- Do not create multiple `AuthCsesClient` instances — one singleton per application
-- Do not inject separate permission beans — just inject `AuthCsesClient`, use `client.on(type)`
+- Do not use `check()` with a relation name — relations for `grant/revoke`, permissions for `check/who/findBy`
+- Do not create multiple `AuthxClient` instances — one singleton per application
+- Do not forget `.commit()` on a WriteFlow — nothing is written without it
+- Do not mix subject types in one `.to(...)` call without schema support — bare ids need typed ResourceType (`.to(User, "alice")`) or canonical form (`"user:alice"`)
 
 ### API Pattern
 
+Typed chain (preferred, with `import static Schema.*`):
 ```
-Simple (ResourceFactory):
-  check:      doc.check("doc-1", "view", "alice") → boolean
-  grant:      doc.grant("doc-1", "editor", "alice", "bob")
-  revoke:     doc.revoke("doc-1", "editor", "alice")
-  revokeAll:  doc.revokeAll("doc-1", "alice")
-  checkAll:   doc.checkAll("doc-1", "alice", "view", "edit") → Map<String,Boolean>
-  subjects:   doc.subjectSet("doc-1", "view") → Set<String>
-  resources:  doc.resources("view", "alice") → List<String>
-  relations:  doc.allRelations("doc-1") → Map<String,List<String>>
+// Check (single / all perms)
+client.on(Document).select(id).check(Document.Perm.VIEW).by(User, userId);
+client.on(Document).select(id).checkAll(Document.Perm).by(User, userId);
 
-Subject refs (department/group/wildcard):
-  grantToSubjects:     doc.grantToSubjects("doc-1", "viewer", "department:eng#member")
-  revokeFromSubjects:  doc.revokeFromSubjects("doc-1", "link_viewer", "user:*")
+// Write (grant / revoke / mixed — one atomic commit)
+client.on(Document).select(id)
+      .grant(Document.Rel.EDITOR).to(User, a).to(Group, g, Group.Rel.MEMBER)
+      .revoke(Document.Rel.VIEWER).from(User, b)
+      .commit();
 
-Chain (ResourceHandle — complex cases):
-  grant:    doc.resource("doc-1").grant("editor").expiresIn(7days).to("alice")
-  check:    doc.resource("doc-1").check("view").withConsistency(full).by("alice")
-  batch:    doc.resource("doc-1").batch().grant("owner").to("new").revoke("owner").from("old").execute()
-  who:      doc.resource("doc-1").who().withPermission("view").limit(100).fetch()
+// Reverse lookups
+client.on(Document).select(id).who(User, Document.Perm.VIEW).fetchIds();
+client.on(Document).findBy(User, userId).can(Document.Perm.VIEW);
+
+// Expand (debug)
+client.resource("document", id).expand("view");
+```
+
+Untyped chain (dynamic cases):
+```
+var doc = client.on("document");
+doc.resource(id).check("view").by("user:alice").hasPermission();
+doc.resource(id).grant("editor").to("user:bob");                 // GrantAction terminal
+doc.resource(id).batch().grant("owner").to("new").revoke("owner").from("old").execute();
+doc.resource(id).who().withPermission("view").limit(100).fetch();
+doc.lookup().withPermission("view").by("user:alice").fetch();
+```
+
+Cross-resource (atomic across types):
+```
+client.batch()
+      .on(Document, "d1").grant(Document.Rel.VIEWER).to(User, "a")
+      .on(Folder,   "f1").revoke(Folder.Rel.OWNER).from(User, "b")
+      .execute();
+
+client.batchCheck()
+      .add(Document, "d1", Document.Perm.VIEW,  SubjectRef.of("user","a"))
+      .add(Folder,   "f1", Folder.Perm.VIEW,    SubjectRef.of("user","a"))
+      .fetch();                                                    // → CheckMatrix
 ```
 
 ### Error Handling
 
 ```
-AuthCsesAuthException       → invalid credentials (don't retry)
-AuthCsesConnectionException → network issue (auto-retried)
-AuthCsesTimeoutException    → timeout (auto-retried)
+AuthxAuthException          → invalid credentials (don't retry)
+AuthxConnectionException    → network issue (auto-retried)
+AuthxTimeoutException       → timeout (auto-retried)
 CircuitBreakerOpenException → SpiceDB down (fast-fail)
 InvalidResourceException    → typo in resource type (fix code)
 InvalidPermissionException  → relation/permission confusion (fix code)
+InvalidRelationException    → schema-aware subject validation failure (fix code)
 ```

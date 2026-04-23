@@ -87,7 +87,7 @@ public class ResourceFactory {
     /**
      * Package-private accessor for the schema cache (may be {@code null}).
      * Used by flow / action classes that need schema-aware subject validation
-     * (e.g. {@link GrantFlow} passes every accumulated subject through
+     * (e.g. {@link WriteFlow} passes every accumulated subject through
      * {@link com.authx.sdk.cache.SchemaCache#validateSubject} before commit).
      */
     @Nullable SchemaCache schemaCache() { return schemaCache; }

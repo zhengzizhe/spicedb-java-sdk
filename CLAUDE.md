@@ -41,7 +41,8 @@ src/main/java/com/authx/sdk/
 ├── internal/                  # Internal plumbing: SdkConfig, SdkInfrastructure,
 │                              #   SdkObservability. Not public API — do not depend on.
 ├── action/                    # Untyped fluent chain actions: Grant/Revoke/Check/
-│                              #   Batch + GrantCompletion/RevokeCompletion
+│                              #   Batch (terminal methods return results directly;
+│                              #   WriteFlow handles typed grant/revoke at top level)
 ├── transport/                 # Transport chain: gRPC → resilient → coalescing → instrumented
 ├── model/                     # Value objects, requests, results, enums
 ├── exception/                 # Exception hierarchy (maps gRPC status codes)

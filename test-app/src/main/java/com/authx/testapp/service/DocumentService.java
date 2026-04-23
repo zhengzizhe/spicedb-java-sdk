@@ -96,7 +96,7 @@ public class DocumentService {
                 .commit().count();
     }
 
-    // ── Multi-subject atomic share (GrantFlow) ────────────────────────
+    // ── Multi-subject atomic share (WriteFlow) ────────────────────────
 
     /**
      * Share a document with a heterogeneous set of subjects (users,
