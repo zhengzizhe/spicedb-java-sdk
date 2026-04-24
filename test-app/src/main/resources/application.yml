@@ -1,47 +1,12 @@
 server:
-  port: ${SERVER_PORT:8091}
-  tomcat:
-    threads:
-      max: 400
-      min-spare: 50
+  port: 8080
 
 spring:
   application:
-    name: authx-permission-service
-  threads:
-    virtual:
-      enabled: true
+    name: authx-testapp
 
-# Actuator — Prometheus metrics
 management:
   endpoints:
     web:
       exposure:
-        include: health,prometheus,info
-  endpoint:
-    health:
-      show-details: always
-  prometheus:
-    metrics:
-      export:
-        enabled: true
-
-# OpenTelemetry
-otel:
-  sdk:
-    disabled: ${OTEL_SDK_DISABLED:false}
-  exporter:
-    otlp:
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
-  service:
-    name: ${OTEL_SERVICE_NAME:authx-permission-service}
-  traces:
-    sampler: ${OTEL_TRACES_SAMPLER:always_on}
-
-# SpiceDB cluster
-# NOTE: explicit 127.0.0.1 (not "localhost") avoids IPv4/IPv6 dual-stack
-# conflicts when other Docker containers on the host bind 0.0.0.0:50051.
-spicedb:
-  targets: "${SPICEDB_TARGETS:127.0.0.1:50051,127.0.0.1:50052,127.0.0.1:50053}"
-  preshared-key: "${SPICEDB_PRESHARED_KEY:testkey}"
-  virtual-threads: true
+        include: health, info, metrics, prometheus
