@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Quality check should verify the populated backend guidelines match the backend index expectations and remain English, concrete, and status-accurate."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Quality check should confirm shared thinking guide expectations are respected when reviewing the documented conventions."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Review should ensure documented guidelines are based on searched existing patterns rather than invented conventions."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Review should check whether any documented backend contracts cover layer-boundary behavior where relevant."}

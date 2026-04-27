@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for the bootstrap guidelines task; identifies the guideline files to populate and language/status expectations."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Shared thinking guide index; tells the implementation agent when to consult code reuse and cross-layer guides while extracting real conventions."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Backend guidelines may document API/service/storage boundaries; this guide frames cross-layer contract checks."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Bootstrap work requires scanning existing convention files and code patterns before documenting; this guide enforces search-first reuse thinking."}
