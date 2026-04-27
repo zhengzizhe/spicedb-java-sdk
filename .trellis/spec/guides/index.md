@@ -23,6 +23,7 @@ These guides help you **ask the right questions before coding**.
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
+| [Approach Evaluation Thinking Guide](./approach-evaluation-thinking-guide.md) | Evaluate each proposed design with independent judgment | Before proposing multiple approaches or adapting an external pattern |
 
 ---
 
@@ -46,6 +47,15 @@ These guides help you **ask the right questions before coding**.
 - [ ] **You're creating a new utility/helper function** ← Search first!
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
+
+### When to Evaluate Design Approaches
+
+- [ ] You're proposing more than one implementation approach
+- [ ] The user references a known architecture or framework as a model
+- [ ] You're considering an abstraction with only one current implementation
+- [ ] You're borrowing a pattern from another problem domain
+
+→ Read [Approach Evaluation Thinking Guide](./approach-evaluation-thinking-guide.md)
 
 ---
 
