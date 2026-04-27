@@ -11,14 +11,13 @@ import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
-
-import org.jspecify.annotations.Nullable;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Fluent action for revoking specific relations from subjects.
@@ -101,7 +100,7 @@ public class RevokeAction {
                         resourceType + "." + rel + " only accepts wildcards (" + shapes(sts)
                                 + "); use fromWildcard(ResourceType) instead");
             }
-            java.util.Optional<com.authx.sdk.model.SubjectType> single = SubjectType.inferSingleType(sts);
+            Optional<SubjectType> single = SubjectType.inferSingleType(sts);
             if (single.isEmpty()) {
                 throw new IllegalArgumentException(
                         "ambiguous subject type for " + resourceType + "." + rel

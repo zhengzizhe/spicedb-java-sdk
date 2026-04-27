@@ -34,14 +34,14 @@ class ExceptionHierarchyTest {
     // ---- Message and cause propagation ----
 
     @Test void authxException_messageOnly() {
-        com.authx.sdk.exception.AuthxException ex = new AuthxException("test msg");
+        AuthxException ex = new AuthxException("test msg");
         assertThat(ex.getMessage()).isEqualTo("test msg");
         assertThat(ex.getCause()).isNull();
     }
 
     @Test void authxException_messageAndCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.AuthxException ex = new AuthxException("wrapped", cause);
+        RuntimeException cause = new RuntimeException("root");
+        AuthxException ex = new AuthxException("wrapped", cause);
         assertThat(ex.getMessage()).isEqualTo("wrapped");
         assertThat(ex.getCause()).isSameAs(cause);
     }
@@ -88,73 +88,73 @@ class ExceptionHierarchyTest {
     // ---- Each exception can be constructed with message + cause ----
 
     @Test void authAuthException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.AuthxAuthException ex = new AuthxAuthException("auth fail", cause);
+        RuntimeException cause = new RuntimeException("root");
+        AuthxAuthException ex = new AuthxAuthException("auth fail", cause);
         assertThat(ex.getMessage()).isEqualTo("auth fail");
         assertThat(ex.getCause()).isSameAs(cause);
     }
 
     @Test void connectionException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.AuthxConnectionException ex = new AuthxConnectionException("conn fail", cause);
+        RuntimeException cause = new RuntimeException("root");
+        AuthxConnectionException ex = new AuthxConnectionException("conn fail", cause);
         assertThat(ex.getMessage()).isEqualTo("conn fail");
         assertThat(ex.getCause()).isSameAs(cause);
         assertThat(ex.isRetryable()).isTrue();
     }
 
     @Test void timeoutException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.AuthxTimeoutException ex = new AuthxTimeoutException("timeout", cause);
+        RuntimeException cause = new RuntimeException("root");
+        AuthxTimeoutException ex = new AuthxTimeoutException("timeout", cause);
         assertThat(ex.getMessage()).isEqualTo("timeout");
         assertThat(ex.getCause()).isSameAs(cause);
         assertThat(ex.isRetryable()).isTrue();
     }
 
     @Test void invalidArgumentException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.AuthxInvalidArgumentException ex = new AuthxInvalidArgumentException("bad arg", cause);
+        RuntimeException cause = new RuntimeException("root");
+        AuthxInvalidArgumentException ex = new AuthxInvalidArgumentException("bad arg", cause);
         assertThat(ex.getCause()).isSameAs(cause);
     }
 
     @Test void preconditionException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.AuthxPreconditionException ex = new AuthxPreconditionException("precondition", cause);
+        RuntimeException cause = new RuntimeException("root");
+        AuthxPreconditionException ex = new AuthxPreconditionException("precondition", cause);
         assertThat(ex.getCause()).isSameAs(cause);
     }
 
     @Test void resourceExhaustedException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.AuthxResourceExhaustedException ex = new AuthxResourceExhaustedException("exhausted", cause);
+        RuntimeException cause = new RuntimeException("root");
+        AuthxResourceExhaustedException ex = new AuthxResourceExhaustedException("exhausted", cause);
         assertThat(ex.getCause()).isSameAs(cause);
     }
 
     @Test void unimplementedException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.AuthxUnimplementedException ex = new AuthxUnimplementedException("unimpl", cause);
+        RuntimeException cause = new RuntimeException("root");
+        AuthxUnimplementedException ex = new AuthxUnimplementedException("unimpl", cause);
         assertThat(ex.getCause()).isSameAs(cause);
     }
 
     @Test void circuitBreakerOpenException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.CircuitBreakerOpenException ex = new CircuitBreakerOpenException("open", cause);
+        RuntimeException cause = new RuntimeException("root");
+        CircuitBreakerOpenException ex = new CircuitBreakerOpenException("open", cause);
         assertThat(ex.getCause()).isSameAs(cause);
     }
 
     @Test void invalidPermissionException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.InvalidPermissionException ex = new InvalidPermissionException("perm", cause);
+        RuntimeException cause = new RuntimeException("root");
+        InvalidPermissionException ex = new InvalidPermissionException("perm", cause);
         assertThat(ex.getCause()).isSameAs(cause);
     }
 
     @Test void invalidRelationException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.InvalidRelationException ex = new InvalidRelationException("rel", cause);
+        RuntimeException cause = new RuntimeException("root");
+        InvalidRelationException ex = new InvalidRelationException("rel", cause);
         assertThat(ex.getCause()).isSameAs(cause);
     }
 
     @Test void invalidResourceException_withCause() {
-        java.lang.RuntimeException cause = new RuntimeException("root");
-        com.authx.sdk.exception.InvalidResourceException ex = new InvalidResourceException("res", cause);
+        RuntimeException cause = new RuntimeException("root");
+        InvalidResourceException ex = new InvalidResourceException("res", cause);
         assertThat(ex.getCause()).isSameAs(cause);
     }
 }

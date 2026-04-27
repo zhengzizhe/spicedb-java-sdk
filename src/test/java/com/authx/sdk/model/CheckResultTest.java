@@ -1,8 +1,8 @@
 package com.authx.sdk.model;
 
-import org.junit.jupiter.api.Test;
-
+import com.authx.sdk.model.enums.Permissionship;
 import java.util.*;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -10,28 +10,28 @@ class CheckResultTest {
 
     @Test
     void allowed_hasPermission() {
-        com.authx.sdk.model.CheckResult r = CheckResult.allowed("token1");
+        CheckResult r = CheckResult.allowed("token1");
         assertTrue(r.hasPermission());
         assertFalse(r.isConditional());
     }
 
     @Test
     void denied_noPermission() {
-        com.authx.sdk.model.CheckResult r = CheckResult.denied("token1");
+        CheckResult r = CheckResult.denied("token1");
         assertFalse(r.hasPermission());
         assertFalse(r.isConditional());
     }
 
     @Test
     void conditional() {
-        com.authx.sdk.model.CheckResult r = new CheckResult(com.authx.sdk.model.enums.Permissionship.CONDITIONAL_PERMISSION, "t", Optional.empty());
+        CheckResult r = new CheckResult(Permissionship.CONDITIONAL_PERMISSION, "t", Optional.empty());
         assertFalse(r.hasPermission());
         assertTrue(r.isConditional());
     }
 
     @Test
     void bulkCheckResult_aggregations() {
-        com.authx.sdk.model.BulkCheckResult results = new BulkCheckResult(Map.of(
+        BulkCheckResult results = new BulkCheckResult(Map.of(
                 "alice", CheckResult.allowed("t"),
                 "bob", CheckResult.denied("t"),
                 "carol", CheckResult.allowed("t")));
@@ -46,7 +46,7 @@ class CheckResultTest {
 
     @Test
     void permissionSet_can() {
-        com.authx.sdk.model.PermissionSet ps = new PermissionSet(Map.of(
+        PermissionSet ps = new PermissionSet(Map.of(
                 "view", CheckResult.allowed("t"),
                 "edit", CheckResult.denied("t")));
 
@@ -59,14 +59,14 @@ class CheckResultTest {
 
     @Test
     void permissionMatrix_whoCanAll() {
-        com.authx.sdk.model.PermissionSet alice = new PermissionSet(Map.of(
+        PermissionSet alice = new PermissionSet(Map.of(
                 "view", CheckResult.allowed("t"),
                 "edit", CheckResult.allowed("t")));
-        com.authx.sdk.model.PermissionSet bob = new PermissionSet(Map.of(
+        PermissionSet bob = new PermissionSet(Map.of(
                 "view", CheckResult.allowed("t"),
                 "edit", CheckResult.denied("t")));
 
-        com.authx.sdk.model.PermissionMatrix matrix = new PermissionMatrix(Map.of("alice", alice, "bob", bob));
+        PermissionMatrix matrix = new PermissionMatrix(Map.of("alice", alice, "bob", bob));
 
         assertEquals(List.of("alice"), matrix.whoCanAll("view", "edit"));
         assertEquals(2, matrix.whoCanAny("view", "edit").size());

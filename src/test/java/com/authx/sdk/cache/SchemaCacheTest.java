@@ -13,7 +13,7 @@ class SchemaCacheTest {
 
     @Test
     void emptyByDefault() {
-        com.authx.sdk.cache.SchemaCache c = new SchemaCache();
+        SchemaCache c = new SchemaCache();
         assertThat(c.hasSchema()).isFalse();
         assertThat(c.getResourceTypes()).isEmpty();
         assertThat(c.getRelations("document")).isEmpty();
@@ -25,7 +25,7 @@ class SchemaCacheTest {
 
     @Test
     void updateFromMap_populatesDefinitions() {
-        com.authx.sdk.cache.SchemaCache c = new SchemaCache();
+        SchemaCache c = new SchemaCache();
         Map<String, SchemaCache.DefinitionCache> defs = Map.of(
                 "document", new SchemaCache.DefinitionCache(
                         Set.of("folder", "viewer"),
@@ -51,7 +51,7 @@ class SchemaCacheTest {
 
     @Test
     void updateCaveats_populates() {
-        com.authx.sdk.cache.SchemaCache c = new SchemaCache();
+        SchemaCache c = new SchemaCache();
         c.updateCaveats(Map.of(
                 "ip_allowlist", new SchemaCache.CaveatDef(
                         "ip_allowlist",
@@ -59,7 +59,7 @@ class SchemaCacheTest {
                         "client_ip in cidrs",
                         "")));
         assertThat(c.getCaveatNames()).containsExactly("ip_allowlist");
-        com.authx.sdk.cache.SchemaCache.CaveatDef def = c.getCaveat("ip_allowlist");
+        SchemaCache.CaveatDef def = c.getCaveat("ip_allowlist");
         assertThat(def).isNotNull();
         assertThat(def.parameters()).containsEntry("cidrs", "list<string>");
         assertThat(def.expression()).isEqualTo("client_ip in cidrs");

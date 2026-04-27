@@ -6,12 +6,11 @@ import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.InMemoryTransport;
 import com.authx.sdk.transport.SdkTransport;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -19,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class GrantActionValidationTest {
 
     private SchemaCache schemaFor(String type, String relation, List<SubjectType> sts) {
-        com.authx.sdk.cache.SchemaCache c = new SchemaCache();
+        SchemaCache c = new SchemaCache();
         c.updateFromMap(Map.of(type, new SchemaCache.DefinitionCache(
                 Set.of(relation), Set.of(), Map.of(relation, sts))));
         return c;
@@ -37,9 +36,9 @@ class GrantActionValidationTest {
 
     @Test
     void rejectsWrongSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        java.util.concurrent.atomic.AtomicInteger calls = new AtomicInteger();
-        com.authx.sdk.action.GrantAction action = new GrantAction("document", "d-1", recordingTransport(calls),
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        AtomicInteger calls = new AtomicInteger();
+        GrantAction action = new GrantAction("document", "d-1", recordingTransport(calls),
                 new String[]{"folder"}, cache);
         assertThatThrownBy(() -> action.to("user:alice"))
                 .isInstanceOf(InvalidRelationException.class)
@@ -49,9 +48,9 @@ class GrantActionValidationTest {
 
     @Test
     void acceptsAllowedSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        java.util.concurrent.atomic.AtomicInteger calls = new AtomicInteger();
-        com.authx.sdk.action.GrantAction action = new GrantAction("document", "d-1", recordingTransport(calls),
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        AtomicInteger calls = new AtomicInteger();
+        GrantAction action = new GrantAction("document", "d-1", recordingTransport(calls),
                 new String[]{"folder"}, cache);
         action.to("folder:f-1");
         assertThat(calls).hasValue(1);
@@ -59,8 +58,8 @@ class GrantActionValidationTest {
 
     @Test
     void nullSchemaCacheIsFailOpen() {
-        java.util.concurrent.atomic.AtomicInteger calls = new AtomicInteger();
-        com.authx.sdk.action.GrantAction action = new GrantAction("document", "d-1", recordingTransport(calls),
+        AtomicInteger calls = new AtomicInteger();
+        GrantAction action = new GrantAction("document", "d-1", recordingTransport(calls),
                 new String[]{"folder"}, null);
         action.to("user:alice"); // no throw
         assertThat(calls).hasValue(1);
@@ -68,8 +67,8 @@ class GrantActionValidationTest {
 
     @Test
     void emptySchemaCacheIsFailOpen() {
-        java.util.concurrent.atomic.AtomicInteger calls = new AtomicInteger();
-        com.authx.sdk.action.GrantAction action = new GrantAction("document", "d-1", recordingTransport(calls),
+        AtomicInteger calls = new AtomicInteger();
+        GrantAction action = new GrantAction("document", "d-1", recordingTransport(calls),
                 new String[]{"folder"}, new SchemaCache());
         action.to("user:alice"); // no throw
         assertThat(calls).hasValue(1);

@@ -1,11 +1,10 @@
 package com.authx.sdk.transport;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -14,7 +13,7 @@ class CloseableGrpcIteratorTest {
 
     @Test
     void delegatesHasNextAndNext() {
-        try (com.authx.sdk.transport.CloseableGrpcIterator<java.lang.String> it = CloseableGrpcIterator.from(() -> List.of("a", "b", "c").iterator())) {
+        try (CloseableGrpcIterator<String> it = CloseableGrpcIterator.from(() -> List.of("a", "b", "c").iterator())) {
             assertThat(it.hasNext()).isTrue();
             assertThat(it.next()).isEqualTo("a");
             assertThat(it.next()).isEqualTo("b");
@@ -25,7 +24,7 @@ class CloseableGrpcIteratorTest {
 
     @Test
     void closeIsIdempotent() {
-        com.authx.sdk.transport.CloseableGrpcIterator<java.lang.Integer> it = CloseableGrpcIterator.from(() -> List.of(1, 2, 3).iterator());
+        CloseableGrpcIterator<Integer> it = CloseableGrpcIterator.from(() -> List.of(1, 2, 3).iterator());
         it.close();
         it.close();   // Context.cancel() tolerates repeated calls
     }
@@ -34,8 +33,8 @@ class CloseableGrpcIteratorTest {
     void earlyBreakClosesContext() {
         // Prove that try-with-resources runs close() even when the loop
         // exits early — this is the core property that fixes the leak.
-        java.util.concurrent.atomic.AtomicBoolean closed = new AtomicBoolean(false);
-        try (com.authx.sdk.transport.CloseableGrpcIteratorTest.TrackingCloseable<java.lang.Integer> it = new TrackingCloseable<>(List.of(1, 2, 3, 4, 5).iterator(), closed)) {
+        AtomicBoolean closed = new AtomicBoolean(false);
+        try (CloseableGrpcIteratorTest.TrackingCloseable<Integer> it = new TrackingCloseable<>(List.of(1, 2, 3, 4, 5).iterator(), closed)) {
             int collected = 0;
             while (it.hasNext() && collected < 2) {
                 it.next();
@@ -48,9 +47,9 @@ class CloseableGrpcIteratorTest {
 
     @Test
     void exceptionInLoopStillTriggersClose() {
-        java.util.concurrent.atomic.AtomicBoolean closed = new AtomicBoolean(false);
+        AtomicBoolean closed = new AtomicBoolean(false);
         assertThatThrownBy(() -> {
-            try (com.authx.sdk.transport.CloseableGrpcIteratorTest.TrackingCloseable<java.lang.Integer> it = new TrackingCloseable<>(List.of(1, 2, 3).iterator(), closed)) {
+            try (CloseableGrpcIteratorTest.TrackingCloseable<Integer> it = new TrackingCloseable<>(List.of(1, 2, 3).iterator(), closed)) {
                 it.next();
                 throw new RuntimeException("business logic failed");
             }
@@ -60,7 +59,7 @@ class CloseableGrpcIteratorTest {
 
     @Test
     void nextOnExhaustedThrows() {
-        try (com.authx.sdk.transport.CloseableGrpcIterator<java.lang.String> it = CloseableGrpcIterator.from(() -> List.<String>of().iterator())) {
+        try (CloseableGrpcIterator<String> it = CloseableGrpcIterator.from(() -> List.<String>of().iterator())) {
             assertThat(it.hasNext()).isFalse();
             assertThatThrownBy(it::next).isInstanceOf(NoSuchElementException.class);
         }

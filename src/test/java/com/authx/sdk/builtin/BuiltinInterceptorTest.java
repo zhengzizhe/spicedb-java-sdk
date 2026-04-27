@@ -7,10 +7,10 @@ import com.authx.sdk.spi.AttributeKey;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.spi.SdkInterceptor.CheckChain;
 import com.authx.sdk.spi.SdkInterceptor.WriteChain;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -22,8 +22,8 @@ class BuiltinInterceptorTest {
         private final ValidationInterceptor interceptor = new ValidationInterceptor();
 
         private CheckChain checkChain(String resType, String resId, String perm) {
-            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, resType, resId, perm, "user", "alice");
-            com.authx.sdk.model.CheckRequest request = CheckRequest.of(
+            SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, resType, resId, perm, "user", "alice");
+            CheckRequest request = CheckRequest.of(
                 ResourceRef.of(resType != null ? resType : "document", resId != null ? resId : "1"),
                 Permission.of(perm != null ? perm : "view"),
                 SubjectRef.of("user", "alice"),
@@ -40,7 +40,7 @@ class BuiltinInterceptorTest {
         }
 
         @Test void validInputPassesThrough() {
-            com.authx.sdk.model.CheckResult result = interceptor.interceptCheck(checkChain("document", "doc-1", "view"));
+            CheckResult result = interceptor.interceptCheck(checkChain("document", "doc-1", "view"));
             assertThat(result.hasPermission()).isTrue();
         }
 
@@ -70,22 +70,22 @@ class BuiltinInterceptorTest {
 
         @Test void emptyFieldsAreSkipped() {
             // Empty strings should not trigger validation
-            com.authx.sdk.model.CheckResult result = interceptor.interceptCheck(checkChain("", "", ""));
+            CheckResult result = interceptor.interceptCheck(checkChain("", "", ""));
             assertThat(result).isNotNull();
         }
 
         @Test void nullFieldsAreSkipped() {
-            com.authx.sdk.model.CheckResult result = interceptor.interceptCheck(checkChain(null, null, null));
+            CheckResult result = interceptor.interceptCheck(checkChain(null, null, null));
             assertThat(result).isNotNull();
         }
 
         @Test void validResourceIdWithSlashAndPipe() {
-            com.authx.sdk.model.CheckResult result = interceptor.interceptCheck(checkChain("document", "org/team|doc-1", "view"));
+            CheckResult result = interceptor.interceptCheck(checkChain("document", "org/team|doc-1", "view"));
             assertThat(result.hasPermission()).isTrue();
         }
 
         @Test void resourceType_withUnderscore() {
-            com.authx.sdk.model.CheckResult result = interceptor.interceptCheck(checkChain("resource_type", "id-1", "view_all"));
+            CheckResult result = interceptor.interceptCheck(checkChain("resource_type", "id-1", "view_all"));
             assertThat(result.hasPermission()).isTrue();
         }
     }
@@ -96,8 +96,8 @@ class BuiltinInterceptorTest {
         private final DebugInterceptor interceptor = new DebugInterceptor();
 
         @Test void interceptCheckLogsAndReturns() {
-            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
-            com.authx.sdk.model.CheckRequest request = CheckRequest.of(ResourceRef.of("doc", "1"), Permission.of("view"),
+            SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
+            CheckRequest request = CheckRequest.of(ResourceRef.of("doc", "1"), Permission.of("view"),
                 SubjectRef.of("user", "alice"), Consistency.minimizeLatency());
 
             CheckChain chain = new CheckChain() {
@@ -110,13 +110,13 @@ class BuiltinInterceptorTest {
                 @Override public <T> void attr(AttributeKey<T> key, T value) {}
             };
 
-            com.authx.sdk.model.CheckResult result = interceptor.interceptCheck(chain);
+            CheckResult result = interceptor.interceptCheck(chain);
             assertThat(result.hasPermission()).isTrue();
         }
 
         @Test void interceptCheckPropagatesException() {
-            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
-            com.authx.sdk.model.CheckRequest request = CheckRequest.of(ResourceRef.of("doc", "1"), Permission.of("view"),
+            SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "1", "view", "user", "alice");
+            CheckRequest request = CheckRequest.of(ResourceRef.of("doc", "1"), Permission.of("view"),
                 SubjectRef.of("user", "alice"), Consistency.minimizeLatency());
 
             CheckChain chain = new CheckChain() {
@@ -135,8 +135,8 @@ class BuiltinInterceptorTest {
         }
 
         @Test void interceptWriteLogsAndReturns() {
-            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.WRITE, "doc", "1", "editor", "user", "alice");
-            com.authx.sdk.model.WriteRequest request = new WriteRequest(java.util.List.of());
+            SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.WRITE, "doc", "1", "editor", "user", "alice");
+            WriteRequest request = new WriteRequest(List.of());
 
             WriteChain chain = new WriteChain() {
                 @Override public WriteRequest request() { return request; }
@@ -147,13 +147,13 @@ class BuiltinInterceptorTest {
                 @Override public <T> T attr(AttributeKey<T> key) { return key.defaultValue(); }
             };
 
-            com.authx.sdk.model.GrantResult result = interceptor.interceptWrite(chain);
+            GrantResult result = interceptor.interceptWrite(chain);
             assertThat(result.count()).isEqualTo(1);
         }
 
         @Test void interceptWritePropagatesException() {
-            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.WRITE, "doc", "1", "editor", "user", "alice");
-            com.authx.sdk.model.WriteRequest request = new WriteRequest(java.util.List.of());
+            SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.WRITE, "doc", "1", "editor", "user", "alice");
+            WriteRequest request = new WriteRequest(List.of());
 
             WriteChain chain = new WriteChain() {
                 @Override public WriteRequest request() { return request; }

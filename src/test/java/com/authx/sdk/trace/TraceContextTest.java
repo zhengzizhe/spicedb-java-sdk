@@ -29,7 +29,7 @@ class TraceContextTest {
     @Test
     void startSpanReturnsUsableHandle() {
         // Even without OTel SDK, the no-op tracer returns valid handles
-        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", Map.of("key", "value"))) {
+        try (TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", Map.of("key", "value"))) {
             span.setSuccess();
             span.setAttribute("extra", "data");
             span.setAttribute("count", 42L);
@@ -39,29 +39,29 @@ class TraceContextTest {
 
     @Test
     void startSpanWithNullAttributesDoesNotThrow() {
-        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", null)) {
+        try (TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", null)) {
             span.setSuccess();
         }
     }
 
     @Test
     void startSpanWithEmptyAttributesDoesNotThrow() {
-        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", Map.of())) {
+        try (TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", Map.of())) {
             span.setSuccess();
         }
     }
 
     @Test
     void spanHandleSetErrorDoesNotThrow() {
-        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("test.error", Map.of())) {
+        try (TraceContext.SpanHandle span = TraceContext.startSpan("test.error", Map.of())) {
             span.setError(new RuntimeException("test error"));
         }
     }
 
     @Test
     void nestedSpansDoNotThrow() {
-        try (com.authx.sdk.trace.TraceContext.SpanHandle outer = TraceContext.startSpan("outer", Map.of())) {
-            try (com.authx.sdk.trace.TraceContext.SpanHandle inner = TraceContext.startSpan("inner", Map.of())) {
+        try (TraceContext.SpanHandle outer = TraceContext.startSpan("outer", Map.of())) {
+            try (TraceContext.SpanHandle inner = TraceContext.startSpan("inner", Map.of())) {
                 inner.setSuccess();
             }
             outer.setSuccess();

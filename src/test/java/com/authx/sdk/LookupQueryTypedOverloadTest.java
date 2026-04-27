@@ -4,9 +4,8 @@ import com.authx.sdk.action.WhoBuilder;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.transport.InMemoryTransport;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,8 +38,8 @@ class LookupQueryTypedOverloadTest {
 
     @Test
     void lookupByTypedBuildsCanonicalRef() {
-        com.authx.sdk.AuthxClient client = AuthxClient.inMemory();
-        com.authx.sdk.ResourceType<com.authx.sdk.LookupQueryTypedOverloadTest.R,com.authx.sdk.LookupQueryTypedOverloadTest.P> userType = ResourceType.of("user", R.class, P.class);
+        AuthxClient client = AuthxClient.inMemory();
+        ResourceType<LookupQueryTypedOverloadTest.R, LookupQueryTypedOverloadTest.P> userType = ResourceType.of("user", R.class, P.class);
         List<String> ids = client.lookup("document")
                 .withPermission("view")
                 .by(userType, "alice")
@@ -50,13 +49,13 @@ class LookupQueryTypedOverloadTest {
 
     @Test
     void handleWhoTypedBuildsLookup() {
-        com.authx.sdk.AuthxClient client = AuthxClient.inMemory();
-        com.authx.sdk.ResourceType<com.authx.sdk.LookupQueryTypedOverloadTest.R,com.authx.sdk.LookupQueryTypedOverloadTest.P> userType = ResourceType.of("user", R.class, P.class);
+        AuthxClient client = AuthxClient.inMemory();
+        ResourceType<LookupQueryTypedOverloadTest.R, LookupQueryTypedOverloadTest.P> userType = ResourceType.of("user", R.class, P.class);
         // who(ResourceType) unwraps to the string form — verify the returned
         // builder is non-null and can produce a subject query.
         WhoBuilder w = client.on("document").resource("d-1").who(userType);
         assertThat(w).isNotNull();
-        java.util.List<java.lang.String> subjects = w.withPermission("view").fetch();
+        List<String> subjects = w.withPermission("view").fetch();
         assertThat(subjects).isEmpty();
     }
 }

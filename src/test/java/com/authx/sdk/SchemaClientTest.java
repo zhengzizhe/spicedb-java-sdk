@@ -2,11 +2,10 @@ package com.authx.sdk;
 
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.SubjectType;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -14,12 +13,12 @@ class SchemaClientTest {
 
     @Test
     void delegatesToCache() {
-        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
+        SchemaCache cache = new SchemaCache();
         cache.updateFromMap(Map.of("document", new SchemaCache.DefinitionCache(
                 Set.of("folder", "viewer"),
                 Set.of("view"),
                 Map.of("folder", List.of(SubjectType.of("folder"))))));
-        com.authx.sdk.SchemaClient sc = new SchemaClient(cache);
+        SchemaClient sc = new SchemaClient(cache);
         assertThat(sc.isLoaded()).isTrue();
         assertThat(sc.resourceTypes()).containsExactly("document");
         assertThat(sc.relationsOf("document")).containsExactlyInAnyOrder("folder", "viewer");
@@ -31,7 +30,7 @@ class SchemaClientTest {
 
     @Test
     void nullCacheBehavesEmpty() {
-        com.authx.sdk.SchemaClient sc = new SchemaClient(null);
+        SchemaClient sc = new SchemaClient(null);
         assertThat(sc.isLoaded()).isFalse();
         assertThat(sc.resourceTypes()).isEmpty();
         assertThat(sc.getCaveatNames()).isEmpty();
@@ -45,8 +44,8 @@ class SchemaClientTest {
 
     @Test
     void authxClientSchemaAccessorNonNullOnInMemory() {
-        try (com.authx.sdk.AuthxClient client = AuthxClient.inMemory()) {
-            com.authx.sdk.SchemaClient schema = client.schema();
+        try (AuthxClient client = AuthxClient.inMemory()) {
+            SchemaClient schema = client.schema();
             assertThat(schema).isNotNull();
             assertThat(schema.isLoaded()).isFalse();
         }

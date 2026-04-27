@@ -8,7 +8,6 @@ import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.model.Tuple;
 import com.authx.sdk.transport.SdkTransport;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -59,12 +58,12 @@ public class SubjectQuery {
     public List<String> fetch() {
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         if (isPermission) {
-            com.authx.sdk.model.LookupSubjectsRequest request = new LookupSubjectsRequest(resource,
+            LookupSubjectsRequest request = new LookupSubjectsRequest(resource,
                     Permission.of(permissionOrRelation), subjectType, limit, consistency);
             return transport.lookupSubjects(request).stream()
                     .map(SubjectRef::id).toList();
         } else {
-            java.util.List<java.lang.String> results = transport.readRelationships(
+            List<String> results = transport.readRelationships(
                             resource, Relation.of(permissionOrRelation), consistency).stream()
                     .map(Tuple::subjectId)
                     .toList();
@@ -79,7 +78,7 @@ public class SubjectQuery {
 
     /** Execute the query and return the first subject id, if any. */
     public Optional<String> fetchFirst() {
-        java.util.List<java.lang.String> list = fetch();
+        List<String> list = fetch();
         return list.isEmpty() ? Optional.empty() : Optional.of(list.getFirst());
     }
 
@@ -93,11 +92,11 @@ public class SubjectQuery {
         // Fetch with limit=1 to avoid pulling all subjects just to check existence
         ResourceRef resource = ResourceRef.of(resourceType, resourceId);
         if (isPermission) {
-            com.authx.sdk.model.LookupSubjectsRequest request = new LookupSubjectsRequest(resource,
+            LookupSubjectsRequest request = new LookupSubjectsRequest(resource,
                     Permission.of(permissionOrRelation), subjectType, 1, consistency);
             return !transport.lookupSubjects(request).isEmpty();
         } else {
-            java.util.List<com.authx.sdk.model.Tuple> results = transport.readRelationships(
+            List<Tuple> results = transport.readRelationships(
                     resource, Relation.of(permissionOrRelation), consistency);
             return !results.isEmpty();
         }

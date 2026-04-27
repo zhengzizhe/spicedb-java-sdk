@@ -1,5 +1,6 @@
 package com.authx.sdk.health;
 
+import com.authx.sdk.spi.HealthProbe;
 import com.authzed.api.v1.ReadSchemaRequest;
 import com.authzed.api.v1.ReadSchemaResponse;
 import com.authzed.api.v1.SchemaServiceGrpc;
@@ -9,11 +10,10 @@ import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.time.Duration;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,8 +57,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
-        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
+        SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
+        HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isTrue();
         assertThat(result.name()).isEqualTo("spicedb-schema");
@@ -76,8 +76,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
-        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
+        SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
+        HealthProbe.ProbeResult result = probe.check();
 
         // Key assertion: NOT_FOUND is mapped to HEALTHY
         assertThat(result.healthy()).isTrue();
@@ -95,8 +95,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "bad-key");
-        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
+        SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "bad-key");
+        HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isFalse();
         assertThat(result.details()).contains("UNAUTHENTICATED");
@@ -113,8 +113,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
-        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
+        SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
+        HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isFalse();
         assertThat(result.details()).contains("UNAVAILABLE");
@@ -129,8 +129,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key", Duration.ofMillis(50));
-        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
+        SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key", Duration.ofMillis(50));
+        HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isFalse();
         assertThat(result.details()).contains("DEADLINE_EXCEEDED");

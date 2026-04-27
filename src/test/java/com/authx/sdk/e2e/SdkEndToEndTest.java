@@ -1,14 +1,17 @@
 package com.authx.sdk.e2e;
 
 import com.authx.sdk.AuthxClient;
+import com.authx.sdk.ResourceHandle;
+import com.authx.sdk.model.BatchResult;
 import com.authx.sdk.model.CheckResult;
+import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.Tuple;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
-
-import java.util.List;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -61,7 +64,7 @@ class SdkEndToEndTest {
     @Test
     @Order(2)
     void grant_and_check() {
-        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-1");
+        ResourceHandle doc = client.resource("document", "e2e-doc-1");
 
         // Grant editor to alice
         GrantResult grantResult = doc.grant("editor").to("alice");
@@ -70,14 +73,14 @@ class SdkEndToEndTest {
 
         // Check with full consistency (ensure we read after write)
         CheckResult checkResult = doc.check("editor")
-                .withConsistency(com.authx.sdk.model.Consistency.full())
+                .withConsistency(Consistency.full())
                 .by("alice");
         assertTrue(checkResult.hasPermission(),
                 "alice should have editor on e2e-doc-1, got: " + checkResult.permissionship());
 
         // Check: bob should NOT have editor
         CheckResult bobCheck = doc.check("editor")
-                .withConsistency(com.authx.sdk.model.Consistency.full())
+                .withConsistency(Consistency.full())
                 .by("bob");
         assertFalse(bobCheck.hasPermission(), "bob should NOT have editor on e2e-doc-1");
     }
@@ -85,10 +88,10 @@ class SdkEndToEndTest {
     @Test
     @Order(3)
     void who_withRelation() {
-        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-1");
+        ResourceHandle doc = client.resource("document", "e2e-doc-1");
 
         Set<String> editors = doc.who("user").withRelation("editor")
-                .withConsistency(com.authx.sdk.model.Consistency.full())
+                .withConsistency(Consistency.full())
                 .fetchSet();
         assertTrue(editors.contains("alice"), "alice should be in editors list");
     }
@@ -96,10 +99,10 @@ class SdkEndToEndTest {
     @Test
     @Order(4)
     void relations_read() {
-        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-1");
+        ResourceHandle doc = client.resource("document", "e2e-doc-1");
 
-        java.util.List<com.authx.sdk.model.Tuple> tuples = doc.relations("editor")
-                .withConsistency(com.authx.sdk.model.Consistency.full())
+        List<Tuple> tuples = doc.relations("editor")
+                .withConsistency(Consistency.full())
                 .fetch();
         assertFalse(tuples.isEmpty(), "should have at least one editor relationship");
         assertEquals("alice", tuples.getFirst().subjectId());
@@ -109,7 +112,7 @@ class SdkEndToEndTest {
     @Order(5)
     void lookup_resources() {
         List<String> docs = client.lookup("document").withPermission("editor").by("alice")
-                .withConsistency(com.authx.sdk.model.Consistency.full())
+                .withConsistency(Consistency.full())
                 .fetch();
         assertTrue(docs.contains("e2e-doc-1"), "alice should find e2e-doc-1 via lookup");
     }
@@ -117,11 +120,11 @@ class SdkEndToEndTest {
     @Test
     @Order(6)
     void revoke_and_verify() {
-        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-1");
+        ResourceHandle doc = client.resource("document", "e2e-doc-1");
         doc.revoke("editor").from("alice");
 
         CheckResult checkResult = doc.check("editor")
-                .withConsistency(com.authx.sdk.model.Consistency.full())
+                .withConsistency(Consistency.full())
                 .by("alice");
         assertFalse(checkResult.hasPermission(), "alice should no longer have editor after revoke");
     }
@@ -129,9 +132,9 @@ class SdkEndToEndTest {
     @Test
     @Order(7)
     void batch_operations() {
-        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-batch");
+        ResourceHandle doc = client.resource("document", "e2e-doc-batch");
 
-        com.authx.sdk.model.BatchResult result = doc.batch()
+        BatchResult result = doc.batch()
                 .grant("owner").to("carol")
                 .grant("editor").to("dave")
                 .execute();
@@ -139,10 +142,10 @@ class SdkEndToEndTest {
         assertNotNull(result.zedToken());
 
         assertTrue(doc.check("owner")
-                .withConsistency(com.authx.sdk.model.Consistency.full())
+                .withConsistency(Consistency.full())
                 .by("carol").hasPermission());
         assertTrue(doc.check("editor")
-                .withConsistency(com.authx.sdk.model.Consistency.full())
+                .withConsistency(Consistency.full())
                 .by("dave").hasPermission());
 
         // Cleanup

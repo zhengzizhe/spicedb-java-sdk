@@ -1,14 +1,14 @@
 package com.authx.sdk.cache;
 
+import com.authx.sdk.exception.InvalidRelationException;
 import com.authx.sdk.model.SubjectType;
-
-import org.jspecify.annotations.Nullable;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Metadata-only schema cache. Holds:
@@ -75,24 +75,24 @@ public class SchemaCache {
     public boolean hasResourceType(String type) { return defs.get().containsKey(type); }
 
     public Set<String> getRelations(String type) {
-        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(type);
+        SchemaCache.DefinitionCache d = defs.get().get(type);
         return d != null ? d.relations() : Set.of();
     }
 
     public Set<String> getPermissions(String type) {
-        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(type);
+        SchemaCache.DefinitionCache d = defs.get().get(type);
         return d != null ? d.permissions() : Set.of();
     }
 
     public List<SubjectType> getSubjectTypes(String type, String relation) {
-        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(type);
+        SchemaCache.DefinitionCache d = defs.get().get(type);
         if (d == null) return List.of();
-        java.util.List<com.authx.sdk.model.SubjectType> sts = d.relationSubjectTypes().get(relation);
+        List<SubjectType> sts = d.relationSubjectTypes().get(relation);
         return sts != null ? sts : List.of();
     }
 
     public Map<String, List<SubjectType>> getAllSubjectTypes(String type) {
-        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(type);
+        SchemaCache.DefinitionCache d = defs.get().get(type);
         return d != null ? d.relationSubjectTypes() : Map.of();
     }
 
@@ -118,14 +118,14 @@ public class SchemaCache {
      * without reading the schema by hand.
      */
     public void validateSubject(String resourceType, String relation, String subjectRef) {
-        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(resourceType);
+        SchemaCache.DefinitionCache d = defs.get().get(resourceType);
         if (d == null) return;                                  // fail-open
-        java.util.List<com.authx.sdk.model.SubjectType> allowed = d.relationSubjectTypes().get(relation);
+        List<SubjectType> allowed = d.relationSubjectTypes().get(relation);
         if (allowed == null || allowed.isEmpty()) return;       // fail-open
 
         int colon = subjectRef.indexOf(':');
         if (colon < 0) {
-            throw new com.authx.sdk.exception.InvalidRelationException(
+            throw new InvalidRelationException(
                     "Invalid subject reference \"" + subjectRef
                             + "\": expected \"type:id\" or \"type:id#relation\" form");
         }
@@ -153,8 +153,8 @@ public class SchemaCache {
         String shapes = allowed.stream()
                 .map(SubjectType::toRef)
                 .distinct()
-                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
-        throw new com.authx.sdk.exception.InvalidRelationException(
+                .collect(Collectors.joining(", ", "[", "]"));
+        throw new InvalidRelationException(
                 resourceType + "." + relation + " does not accept subject \""
                         + subjectRef + "\". Allowed subject types: " + shapes
                         + ". Check your schema, or use a different relation.");

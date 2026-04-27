@@ -12,35 +12,34 @@ import com.authx.sdk.model.*;
 import com.authx.sdk.model.enums.Permissionship;
 import com.authx.sdk.trace.LogCtx;
 import com.authzed.api.v1.AlgebraicSubjectSet;
-import com.authzed.api.v1.DeleteRelationshipsRequest;
-import com.authzed.api.v1.ExpandPermissionTreeRequest;
-import com.authzed.api.v1.PermissionRelationshipTree;
-import com.authzed.api.v1.SubjectFilter;
 import com.authzed.api.v1.CheckBulkPermissionsRequest;
 import com.authzed.api.v1.CheckBulkPermissionsRequestItem;
 import com.authzed.api.v1.CheckPermissionRequest;
+import com.authzed.api.v1.DeleteRelationshipsRequest;
+import com.authzed.api.v1.ExpandPermissionTreeRequest;
 import com.authzed.api.v1.ObjectReference;
+import com.authzed.api.v1.PermissionRelationshipTree;
 import com.authzed.api.v1.PermissionsServiceGrpc;
 import com.authzed.api.v1.ReadRelationshipsRequest;
 import com.authzed.api.v1.Relationship;
 import com.authzed.api.v1.RelationshipFilter;
+import com.authzed.api.v1.SubjectFilter;
 import com.authzed.api.v1.SubjectReference;
 import com.authzed.api.v1.WriteRelationshipsRequest;
 import com.authzed.api.v1.ZedToken;
+import com.google.protobuf.ListValue;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.MetadataUtils;
-
-import com.google.protobuf.ListValue;
-import com.google.protobuf.Struct;
-import com.google.protobuf.Value;
-
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * Data-plane transport: connects directly to SpiceDB via gRPC.
@@ -146,7 +145,7 @@ public class GrpcTransport implements SdkTransport {
         }
         List<CheckResult> allResults = new ArrayList<>(items.size());
         for (int i = 0; i < items.size(); i += MAX_BATCH_SIZE) {
-            java.util.List<com.authx.sdk.transport.SdkTransport.BulkCheckItem> batch = items.subList(i, Math.min(i + MAX_BATCH_SIZE, items.size()));
+            List<SdkTransport.BulkCheckItem> batch = items.subList(i, Math.min(i + MAX_BATCH_SIZE, items.size()));
             allResults.addAll(checkBulkBatch(batch, consistency));
         }
         return allResults;
@@ -156,7 +155,7 @@ public class GrpcTransport implements SdkTransport {
                                               Consistency consistency) {
         com.authzed.api.v1.CheckBulkPermissionsRequest.Builder builder = CheckBulkPermissionsRequest.newBuilder()
                 .setConsistency(toGrpc(consistency));
-        for (com.authx.sdk.transport.SdkTransport.BulkCheckItem item : items) {
+        for (SdkTransport.BulkCheckItem item : items) {
             builder.addItems(CheckBulkPermissionsRequestItem.newBuilder()
                     .setResource(objRef(item.resource()))
                     .setPermission(item.permission().name())
@@ -186,7 +185,7 @@ public class GrpcTransport implements SdkTransport {
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
         com.authzed.api.v1.WriteRelationshipsRequest.Builder builder = WriteRelationshipsRequest.newBuilder();
-        for (com.authx.sdk.transport.SdkTransport.RelationshipUpdate u : updates) {
+        for (SdkTransport.RelationshipUpdate u : updates) {
             builder.addUpdates(com.authzed.api.v1.RelationshipUpdate.newBuilder()
                     .setOperation(toGrpcOp(u.operation()))
                     .setRelationship(toGrpcRel(u)));
@@ -199,7 +198,7 @@ public class GrpcTransport implements SdkTransport {
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
         com.authzed.api.v1.WriteRelationshipsRequest.Builder builder = WriteRelationshipsRequest.newBuilder();
-        for (com.authx.sdk.transport.SdkTransport.RelationshipUpdate u : updates) {
+        for (SdkTransport.RelationshipUpdate u : updates) {
             builder.addUpdates(com.authzed.api.v1.RelationshipUpdate.newBuilder()
                     .setOperation(com.authzed.api.v1.RelationshipUpdate.Operation.OPERATION_DELETE)
                     .setRelationship(toGrpcRel(u)));
@@ -222,7 +221,7 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(consistency));
         com.authzed.api.v1.ReadRelationshipsRequest request = requestBuilder.build();
 
-        try (com.authx.sdk.transport.CloseableGrpcIterator<com.authzed.api.v1.ReadRelationshipsResponse> iterator = CloseableGrpcIterator.from(
+        try (CloseableGrpcIterator<com.authzed.api.v1.ReadRelationshipsResponse> iterator = CloseableGrpcIterator.from(
                 () -> stub().readRelationships(request), newCallContext())) {
             List<Tuple> tuples = new ArrayList<>();
             while (iterator.hasNext()) {
@@ -258,7 +257,7 @@ public class GrpcTransport implements SdkTransport {
                 .setConsistency(toGrpc(request.consistency()));
 
         int limit = request.limit();
-        try (com.authx.sdk.transport.CloseableGrpcIterator<com.authzed.api.v1.LookupSubjectsResponse> iterator = CloseableGrpcIterator.from(
+        try (CloseableGrpcIterator<com.authzed.api.v1.LookupSubjectsResponse> iterator = CloseableGrpcIterator.from(
                 () -> stub().lookupSubjects(builder.build()), newCallContext())) {
             List<SubjectRef> subjects = new ArrayList<>();
             while (iterator.hasNext() && (limit <= 0 || subjects.size() < limit)) {
@@ -281,7 +280,7 @@ public class GrpcTransport implements SdkTransport {
         if (request.limit() > 0) builder.setOptionalLimit(request.limit());
 
         int rlimit = request.limit();
-        try (com.authx.sdk.transport.CloseableGrpcIterator<com.authzed.api.v1.LookupResourcesResponse> iterator = CloseableGrpcIterator.from(
+        try (CloseableGrpcIterator<com.authzed.api.v1.LookupResourcesResponse> iterator = CloseableGrpcIterator.from(
                 () -> stub().lookupResources(builder.build()), newCallContext())) {
             List<ResourceRef> resources = new ArrayList<>();
             while (iterator.hasNext() && (rlimit <= 0 || resources.size() < rlimit)) {
@@ -425,7 +424,7 @@ public class GrpcTransport implements SdkTransport {
 
     private static Struct toStruct(Map<String, Object> map) {
         com.google.protobuf.Struct.Builder builder = Struct.newBuilder();
-        for (java.util.Map.Entry<java.lang.String,java.lang.Object> entry : map.entrySet()) {
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
             String key = entry.getKey();
             if (key == null || key.isEmpty()) {
                 throw new IllegalArgumentException(
@@ -483,7 +482,7 @@ public class GrpcTransport implements SdkTransport {
         return GrpcExceptionMapper.map(e);
     }
 
-    private <T> T withErrorHandling(java.util.function.Supplier<T> call) {
+    private <T> T withErrorHandling(Supplier<T> call) {
         io.grpc.Context.CancellableContext ctx = newCallContext();
         io.grpc.Context prev = ctx.attach();
         try {

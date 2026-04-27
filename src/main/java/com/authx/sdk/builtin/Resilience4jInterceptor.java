@@ -12,7 +12,6 @@ import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
-
 import java.time.Duration;
 import java.time.Instant;
 
@@ -33,7 +32,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
 
     @Override
     public CheckResult interceptCheck(CheckChain chain) {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
+        SdkInterceptor.OperationContext ctx = chain.operationContext();
         acquirePermissions(ctx);
         try {
             return chain.proceed(chain.request());
@@ -44,7 +43,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
 
     @Override
     public GrantResult interceptWrite(WriteChain chain) {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
+        SdkInterceptor.OperationContext ctx = chain.operationContext();
         acquirePermissions(ctx);
         try {
             return chain.proceed(chain.request());
@@ -55,7 +54,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
 
     @Override
     public <T> T interceptOperation(OperationChain<T> chain) {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.context();
+        SdkInterceptor.OperationContext ctx = chain.context();
         acquirePermissions(ctx);
         try {
             return chain.proceed();

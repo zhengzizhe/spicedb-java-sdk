@@ -15,7 +15,7 @@ class SdkMetricsOverflowTest {
 
     @Test
     void sample_above_ceiling_increments_overflow_counter() {
-        com.authx.sdk.metrics.SdkMetrics m = new SdkMetrics();
+        SdkMetrics m = new SdkMetrics();
 
         m.recordRequest(1_000, false);   // 1 ms — in range
         m.recordRequest(1_000, false);
@@ -24,7 +24,7 @@ class SdkMetricsOverflowTest {
 
         assertEquals(1, m.latencyOverflowCount(),
                 "exactly one sample exceeded the clamp");
-        com.authx.sdk.metrics.SdkMetrics.Snapshot snap = m.snapshot();
+        SdkMetrics.Snapshot snap = m.snapshot();
         assertEquals(1, snap.latencyOverflowCount());
         // p99 is NOT dominated by the 10-minute sample because we only have
         // 4 samples total; p99 of {1ms, 1ms, 1ms, clamp} is the clamp. But
@@ -35,12 +35,12 @@ class SdkMetricsOverflowTest {
 
     @Test
     void toString_shows_overflow_when_nonzero_hides_when_zero() {
-        com.authx.sdk.metrics.SdkMetrics m1 = new SdkMetrics();
+        SdkMetrics m1 = new SdkMetrics();
         m1.recordRequest(1_000, false);
         assertFalse(m1.snapshot().toString().contains("overflow="),
                 "healthy window should not mention overflow");
 
-        com.authx.sdk.metrics.SdkMetrics m2 = new SdkMetrics();
+        SdkMetrics m2 = new SdkMetrics();
         m2.recordRequest(MAX_TRACKABLE_MICROS + 1, false);
         assertTrue(m2.snapshot().toString().contains("overflow=1"),
                 "overflowed window should print overflow=N");
@@ -48,7 +48,7 @@ class SdkMetricsOverflowTest {
 
     @Test
     void in_range_sample_does_not_increment_overflow() {
-        com.authx.sdk.metrics.SdkMetrics m = new SdkMetrics();
+        SdkMetrics m = new SdkMetrics();
         m.recordRequest(MAX_TRACKABLE_MICROS, false);  // exactly at ceiling
         assertEquals(0, m.latencyOverflowCount(),
                 "ceiling value itself is in-range; only > ceiling counts");

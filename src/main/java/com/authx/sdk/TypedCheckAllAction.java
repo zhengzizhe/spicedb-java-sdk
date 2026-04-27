@@ -3,10 +3,10 @@ package com.authx.sdk;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
-
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -52,7 +52,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
         if (keyValues.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
         }
-        java.util.LinkedHashMap<java.lang.String,java.lang.Object> map = new java.util.LinkedHashMap<String, Object>();
+        LinkedHashMap<String, Object> map = new LinkedHashMap<String, Object>();
         for (int i = 0; i < keyValues.length; i += 2) {
             if (!(keyValues[i] instanceof String key)) {
                 throw new IllegalArgumentException("Key at index " + i + " must be a String");
@@ -84,8 +84,8 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
                     "checkAll(...).by(SubjectRef) requires exactly one resource id");
         }
         E[] values = permClass.getEnumConstants();
-        java.util.EnumMap<E,java.lang.Boolean> result = new EnumMap<E, Boolean>(permClass);
-        java.util.ArrayList<com.authx.sdk.transport.SdkTransport.BulkCheckItem> items = new ArrayList<SdkTransport.BulkCheckItem>(values.length);
+        EnumMap<E, Boolean> result = new EnumMap<E, Boolean>(permClass);
+        ArrayList<SdkTransport.BulkCheckItem> items = new ArrayList<SdkTransport.BulkCheckItem>(values.length);
         String resourceType = factory.resourceType();
         for (E v : values) {
             items.add(new SdkTransport.BulkCheckItem(
@@ -110,9 +110,9 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
      * mirrors {@link TypedCheckAction#by(com.authx.sdk.ResourceType, String)}
      * so business code doesn't need to hand-compose {@code "user:alice"}.
      */
-    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
-            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
-    EnumMap<E, Boolean> by(com.authx.sdk.ResourceType<R2, P2> subjectType, String id) {
+    public <R2 extends Enum<R2> & Relation.Named,
+            P2 extends Enum<P2> & Permission.Named>
+    EnumMap<E, Boolean> by(ResourceType<R2, P2> subjectType, String id) {
         return by(subjectType.name() + ":" + id);
     }
 
@@ -133,7 +133,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     public Map<String, EnumMap<E, Boolean>> byAll(SubjectRef subject) {
         E[] values = permClass.getEnumConstants();
         String resourceType = factory.resourceType();
-        java.util.ArrayList<com.authx.sdk.transport.SdkTransport.BulkCheckItem> items = new ArrayList<SdkTransport.BulkCheckItem>(ids.length * values.length);
+        ArrayList<SdkTransport.BulkCheckItem> items = new ArrayList<SdkTransport.BulkCheckItem>(ids.length * values.length);
         for (String id : ids) {
             for (E v : values) {
                 items.add(new SdkTransport.BulkCheckItem(
@@ -143,10 +143,10 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
             }
         }
         List<CheckResult> results = factory.transport().checkBulkMulti(items, consistency);
-        java.util.LinkedHashMap<java.lang.String,java.util.EnumMap<E,java.lang.Boolean>> out = new LinkedHashMap<String, EnumMap<E, Boolean>>();
+        LinkedHashMap<String, EnumMap<E, Boolean>> out = new LinkedHashMap<String, EnumMap<E, Boolean>>();
         int idx = 0;
         for (String id : ids) {
-            java.util.EnumMap<E,java.lang.Boolean> permMap = new EnumMap<E, Boolean>(permClass);
+            EnumMap<E, Boolean> permMap = new EnumMap<E, Boolean>(permClass);
             for (E v : values) {
                 permMap.put(v, idx < results.size() && results.get(idx).hasPermission());
                 idx++;
@@ -165,9 +165,9 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
      * Typed subject form: {@code checkAll().byAll(User, "alice")} —
      * single subject, many resource ids × all permissions in one RPC.
      */
-    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
-            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
-    Map<String, EnumMap<E, Boolean>> byAll(com.authx.sdk.ResourceType<R2, P2> subjectType, String id) {
+    public <R2 extends Enum<R2> & Relation.Named,
+            P2 extends Enum<P2> & Permission.Named>
+    Map<String, EnumMap<E, Boolean>> byAll(ResourceType<R2, P2> subjectType, String id) {
         return byAll(subjectType.name() + ":" + id);
     }
 }

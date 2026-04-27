@@ -11,39 +11,39 @@ class AttributeKeyTest {
     static final AttributeKey<Boolean> DEBUG = AttributeKey.withDefault("debug", Boolean.class, false);
 
     @Test void typeSafe_setAndGet() {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
+        SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
         ctx.attr(TRACE_ID, "abc-123");
         String traceId = ctx.attr(TRACE_ID); // no cast
         assertThat(traceId).isEqualTo("abc-123");
     }
 
     @Test void defaultValue_whenNotSet() {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
+        SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
         Long timeout = ctx.attr(TIMEOUT_MS);
         assertThat(timeout).isEqualTo(5000L);
     }
 
     @Test void nullDefault_whenNotSet() {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
+        SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
         String traceId = ctx.attr(TRACE_ID);
         assertThat(traceId).isNull();
     }
 
     @Test void overwrite() {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
+        SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
         ctx.attr(TRACE_ID, "first");
         ctx.attr(TRACE_ID, "second");
         assertThat(ctx.attr(TRACE_ID)).isEqualTo("second");
     }
 
     @Test void identityEquality() {
-        com.authx.sdk.spi.AttributeKey<java.lang.String> key1 = AttributeKey.of("test", String.class);
-        com.authx.sdk.spi.AttributeKey<java.lang.String> key2 = AttributeKey.of("test", String.class);
+        AttributeKey<String> key1 = AttributeKey.of("test", String.class);
+        AttributeKey<String> key2 = AttributeKey.of("test", String.class);
         assertThat(key1).isNotEqualTo(key2); // identity, not name-based
     }
 
     @Test void defaultBoolean() {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
+        SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(SdkAction.CHECK, "doc", "d1", "view", "user", "alice");
         assertThat(ctx.attr(DEBUG)).isFalse();
     }
 }

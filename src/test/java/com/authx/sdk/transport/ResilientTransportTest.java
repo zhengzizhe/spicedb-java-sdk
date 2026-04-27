@@ -9,12 +9,14 @@ import com.authx.sdk.policy.CircuitBreakerPolicy;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.policy.ResourcePolicy;
 import com.authx.sdk.policy.RetryPolicy;
-import org.junit.jupiter.api.Test;
-
+import java.lang.reflect.Field;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,23 +27,23 @@ class ResilientTransportTest {
 
     @Test
     void happyPath_delegatesToTransport() {
-        com.authx.sdk.transport.InMemoryTransport delegate = new InMemoryTransport();
-        delegate.writeRelationships(java.util.List.of(
+        InMemoryTransport delegate = new InMemoryTransport();
+        delegate.writeRelationships(List.of(
                 new SdkTransport.RelationshipUpdate(
                         SdkTransport.RelationshipUpdate.Operation.TOUCH,
                         ResourceRef.of("document", "doc-1"),
                         Relation.of("viewer"),
                         SubjectRef.of("user", "alice", null))));
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(delegate, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
+        ResilientTransport transport = new ResilientTransport(delegate, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
 
-        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of("document", "doc-1", "viewer", "user", "alice", Consistency.minimizeLatency()));
+        CheckResult result = transport.check(CheckRequest.of("document", "doc-1", "viewer", "user", "alice", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
     }
 
     @Test
     void retryOnTransientFailure() {
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
-        com.authx.sdk.policy.PolicyRegistry policy = PolicyRegistry.builder()
+        AtomicInteger callCount = new AtomicInteger(0);
+        PolicyRegistry policy = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .retry(RetryPolicy.builder().maxAttempts(3).baseDelay(Duration.ofMillis(10)).build())
                         .circuitBreaker(CircuitBreakerPolicy.disabled())
@@ -50,16 +52,16 @@ class ResilientTransportTest {
 
         // Delegate that fails twice then succeeds
         SdkTransport delegate = failingDelegate(callCount, 2, OK);
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
+        ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
-        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of("document", "doc-1", "view", "user", "alice", Consistency.minimizeLatency()));
+        CheckResult result = transport.check(CheckRequest.of("document", "doc-1", "view", "user", "alice", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
         assertThat(callCount.get()).isEqualTo(3); // 2 failures + 1 success
     }
 
     @Test
     void circuitBreakerOpens_afterThreshold() {
-        com.authx.sdk.policy.PolicyRegistry policy = PolicyRegistry.builder()
+        PolicyRegistry policy = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .retry(RetryPolicy.builder().maxAttempts(1).build())
                         .circuitBreaker(CircuitBreakerPolicy.builder()
@@ -71,9 +73,9 @@ class ResilientTransportTest {
                         .build())
                 .build();
 
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
+        AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
+        ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // Exhaust the sliding window
         for (int i = 0; i < 4; i++) {
@@ -89,7 +91,7 @@ class ResilientTransportTest {
 
     @Test
     void failOpen_returnsHasPermission() {
-        com.authx.sdk.policy.PolicyRegistry policy = PolicyRegistry.builder()
+        PolicyRegistry policy = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .retry(RetryPolicy.builder().maxAttempts(1).build())
                         .circuitBreaker(CircuitBreakerPolicy.builder()
@@ -102,9 +104,9 @@ class ResilientTransportTest {
                         .build())
                 .build();
 
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
+        AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
+        ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // Open the circuit
         for (int i = 0; i < 4; i++) {
@@ -113,7 +115,7 @@ class ResilientTransportTest {
         }
 
         // fail-open for "view"
-        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency()));
+        CheckResult result = transport.check(CheckRequest.of("doc", "1", "view", "user", "a", Consistency.minimizeLatency()));
         assertThat(result.permissionship()).isEqualTo(Permissionship.HAS_PERMISSION);
 
         // "edit" is NOT in fail-open set
@@ -124,7 +126,7 @@ class ResilientTransportTest {
 
     @Test
     void perResourceTypeIsolation() {
-        com.authx.sdk.policy.PolicyRegistry policy = PolicyRegistry.builder()
+        PolicyRegistry policy = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .retry(RetryPolicy.builder().maxAttempts(1).build())
                         .circuitBreaker(CircuitBreakerPolicy.builder()
@@ -136,9 +138,9 @@ class ResilientTransportTest {
                         .build())
                 .build();
 
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
+        AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
+        ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // Fail "document" breaker
         for (int i = 0; i < 4; i++) {
@@ -159,16 +161,16 @@ class ResilientTransportTest {
 
     @Test
     void disabledCircuitBreaker_passesThrough() {
-        com.authx.sdk.policy.PolicyRegistry policy = PolicyRegistry.builder()
+        PolicyRegistry policy = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .retry(RetryPolicy.builder().maxAttempts(1).build())
                         .circuitBreaker(CircuitBreakerPolicy.disabled())
                         .build())
                 .build();
 
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
+        AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
+        ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // Even after many failures, no CircuitBreakerOpenException
         for (int i = 0; i < 100; i++) {
@@ -184,7 +186,7 @@ class ResilientTransportTest {
         // With CB wrapping Retry, each logical call counts as 1 CB record regardless of retries.
         // slidingWindowSize=6, failureRate=50%, minimumNumberOfCalls=6
         // → need 6 logical calls, all failing, to open the circuit (100% > 50% threshold)
-        com.authx.sdk.policy.PolicyRegistry policy = PolicyRegistry.builder()
+        PolicyRegistry policy = PolicyRegistry.builder()
                 .defaultPolicy(ResourcePolicy.builder()
                         .retry(RetryPolicy.builder().maxAttempts(3).baseDelay(Duration.ofMillis(1)).build())
                         .circuitBreaker(CircuitBreakerPolicy.builder()
@@ -196,9 +198,9 @@ class ResilientTransportTest {
                         .build())
                 .build();
 
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
+        AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport delegate = alwaysFailingDelegate(callCount);
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
+        ResilientTransport transport = new ResilientTransport(delegate, policy, new DefaultTypedEventBus());
 
         // 6 logical calls to fill the sliding window — each exhausts retries internally
         for (int i = 0; i < 6; i++) {
@@ -214,7 +216,7 @@ class ResilientTransportTest {
 
     @Test
     void close_cleansUpInstances() {
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(new InMemoryTransport(), PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
+        ResilientTransport transport = new ResilientTransport(new InMemoryTransport(), PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
         transport.check(CheckRequest.of("document", "1", "viewer", "user", "a", Consistency.minimizeLatency()));
         transport.close(); // should not throw
     }
@@ -228,8 +230,8 @@ class ResilientTransportTest {
         //
         // Caffeine-backed map enforces MAX_INSTANCES with W-TinyLFU,
         // and recently-accessed keys win admission against one-shot keys.
-        com.authx.sdk.transport.InMemoryTransport noopDelegate = new InMemoryTransport();
-        com.authx.sdk.transport.ResilientTransport transport = new ResilientTransport(
+        InMemoryTransport noopDelegate = new InMemoryTransport();
+        ResilientTransport transport = new ResilientTransport(
                 noopDelegate, PolicyRegistry.withDefaults(), new DefaultTypedEventBus());
 
         // Push 5000 distinct resource types — well above the 1000 cap.
@@ -247,11 +249,11 @@ class ResilientTransportTest {
         // Allow Caffeine's async maintenance to settle.
         Thread.sleep(200);
 
-        java.lang.reflect.Field field = ResilientTransport.class.getDeclaredField("breakers");
+        Field field = ResilientTransport.class.getDeclaredField("breakers");
         field.setAccessible(true);
         @SuppressWarnings("unchecked")
-        java.util.concurrent.ConcurrentMap<String, ?> map =
-                (java.util.concurrent.ConcurrentMap<String, ?>) field.get(transport);
+        ConcurrentMap<String, ?> map =
+                (ConcurrentMap<String, ?>) field.get(transport);
 
         // Property 1: bounded size (was unbounded with the old code if
         // the eviction loop hit a race).

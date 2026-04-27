@@ -8,7 +8,6 @@ import com.authx.sdk.model.PermissionSet;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -49,7 +48,7 @@ public class CheckAllAction {
      * N permissions -> 1 gRPC call (not N sequential calls).
      */
     public PermissionSet by(SubjectRef subject) {
-        java.util.List<com.authx.sdk.transport.SdkTransport.BulkCheckItem> items = Arrays.stream(permissions)
+        List<SdkTransport.BulkCheckItem> items = Arrays.stream(permissions)
                 .map(perm -> new SdkTransport.BulkCheckItem(
                         ResourceRef.of(resourceType, resourceId),
                         Permission.of(perm),

@@ -3,7 +3,6 @@ package com.authx.sdk.transport;
 import com.authx.sdk.model.*;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.policy.ReadConsistency;
-
 import java.util.List;
 
 /**
@@ -36,25 +35,25 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     @Override
     public CheckResult check(CheckRequest request) {
-        com.authx.sdk.model.CheckRequest adjusted = request.withConsistency(
+        CheckRequest adjusted = request.withConsistency(
                 resolveConsistency(request.resource().type(), request.consistency()));
-        com.authx.sdk.model.CheckResult result = delegate.check(adjusted);
+        CheckResult result = delegate.check(adjusted);
         tokenTracker.recordRead(result.zedToken());
         return result;
     }
 
     @Override
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
-        com.authx.sdk.model.CheckRequest adjusted = request.withConsistency(
+        CheckRequest adjusted = request.withConsistency(
                 resolveConsistency(request.resource().type(), request.consistency()));
-        com.authx.sdk.model.BulkCheckResult result = delegate.checkBulk(adjusted, subjects);
+        BulkCheckResult result = delegate.checkBulk(adjusted, subjects);
         // F12-2: record the response zedToken so subsequent reads in the same
         // session see at-least-this-revision consistency. The whole bulk result
         // comes from a single SpiceDB dispatch, so every inner CheckResult
         // carries the same zedToken — we just grab the first non-null one.
         // Matches the symmetric behavior of single-subject check() above.
         if (result != null) {
-            for (com.authx.sdk.model.CheckResult entry : result.asMap().values()) {
+            for (CheckResult entry : result.asMap().values()) {
                 String token = entry.zedToken();
                 if (token != null) {
                     tokenTracker.recordRead(token);
@@ -67,7 +66,7 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        com.authx.sdk.model.GrantResult result = delegate.writeRelationships(updates);
+        GrantResult result = delegate.writeRelationships(updates);
         String resType = updates.isEmpty() ? null : updates.getFirst().resource().type();
         tokenTracker.recordWrite(resType, result.zedToken());
         return result;
@@ -75,7 +74,7 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        com.authx.sdk.model.RevokeResult result = delegate.deleteRelationships(updates);
+        RevokeResult result = delegate.deleteRelationships(updates);
         String resType = updates.isEmpty() ? null : updates.getFirst().resource().type();
         tokenTracker.recordWrite(resType, result.zedToken());
         return result;
@@ -89,14 +88,14 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     @Override
     public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
-        com.authx.sdk.model.LookupSubjectsRequest adjusted = request.withConsistency(
+        LookupSubjectsRequest adjusted = request.withConsistency(
                 resolveConsistency(request.resource().type(), request.consistency()));
         return delegate.lookupSubjects(adjusted);
     }
 
     @Override
     public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
-        com.authx.sdk.model.LookupResourcesRequest adjusted = request.withConsistency(
+        LookupResourcesRequest adjusted = request.withConsistency(
                 resolveConsistency(request.resourceType(), request.consistency()));
         return delegate.lookupResources(adjusted);
     }
@@ -104,7 +103,7 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     @Override
     public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
-        com.authx.sdk.model.RevokeResult result = delegate.deleteByFilter(resource, subject, optionalRelation);
+        RevokeResult result = delegate.deleteByFilter(resource, subject, optionalRelation);
         tokenTracker.recordWrite(resource.type(), result.zedToken());
         return result;
     }

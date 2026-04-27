@@ -3,13 +3,11 @@ package com.authx.sdk.transport;
 import com.authx.sdk.exception.AuthxTimeoutException;
 import com.authx.sdk.metrics.SdkMetrics;
 import com.authx.sdk.model.*;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -35,8 +33,8 @@ class CoalescingTransportTest {
 
     @Test
     void singleRequestPassesThroughToDelegate() {
-        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(inner, metrics);
-        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
+        CoalescingTransport transport = new CoalescingTransport(inner, metrics);
+        CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertThat(result.hasPermission()).isTrue();
@@ -45,8 +43,8 @@ class CoalescingTransportTest {
 
     @Test
     void concurrentIdenticalRequestsAreCoalesced() throws Exception {
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
-        java.util.concurrent.CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger callCount = new AtomicInteger(0);
+        CountDownLatch latch = new CountDownLatch(1);
 
         // A slow delegate that counts invocations
         SdkTransport slowDelegate = new InMemoryTransport() {
@@ -70,14 +68,14 @@ class CoalescingTransportTest {
             }
         };
 
-        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(slowDelegate, metrics);
-        com.authx.sdk.model.CheckRequest request = CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
+        CoalescingTransport transport = new CoalescingTransport(slowDelegate, metrics);
+        CheckRequest request = CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
 
         // Launch multiple concurrent checks with the same request
         int threadCount = 5;
-        java.util.concurrent.CyclicBarrier startBarrier = new CyclicBarrier(threadCount);
-        java.util.concurrent.CompletableFuture[] futures = new CompletableFuture[threadCount];
-        java.util.concurrent.ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CyclicBarrier startBarrier = new CyclicBarrier(threadCount);
+        CompletableFuture[] futures = new CompletableFuture[threadCount];
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
         for (int i = 0; i < threadCount; i++) {
             futures[i] = CompletableFuture.supplyAsync(() -> {
@@ -95,8 +93,8 @@ class CoalescingTransportTest {
         latch.countDown();
 
         // All should complete successfully
-        for (java.util.concurrent.CompletableFuture f : futures) {
-            com.authx.sdk.model.CheckResult result = (CheckResult) f.get(5, TimeUnit.SECONDS);
+        for (CompletableFuture f : futures) {
+            CheckResult result = (CheckResult) f.get(5, TimeUnit.SECONDS);
             assertThat(result.hasPermission()).isTrue();
         }
 
@@ -110,7 +108,7 @@ class CoalescingTransportTest {
 
     @Test
     void differentRequestsAreNotCoalesced() {
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
+        AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport countingDelegate = new InMemoryTransport() {
             {
                 writeRelationships(List.of(
@@ -133,7 +131,7 @@ class CoalescingTransportTest {
             }
         };
 
-        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(countingDelegate, metrics);
+        CoalescingTransport transport = new CoalescingTransport(countingDelegate, metrics);
 
         transport.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         transport.check(CheckRequest.of("document", "d1", "viewer", "user", "bob", Consistency.minimizeLatency()));
@@ -144,7 +142,7 @@ class CoalescingTransportTest {
 
     @Test
     void differentConsistencyLevelsAreNotCoalesced() {
-        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
+        AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport countingDelegate = new InMemoryTransport() {
             {
                 writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
@@ -161,7 +159,7 @@ class CoalescingTransportTest {
             }
         };
 
-        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(countingDelegate, metrics);
+        CoalescingTransport transport = new CoalescingTransport(countingDelegate, metrics);
 
         transport.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         transport.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.full()));
@@ -171,7 +169,7 @@ class CoalescingTransportTest {
 
     @Test
     void delegateExceptionPropagatedToAllWaiters() throws Exception {
-        java.util.concurrent.CountDownLatch latch = new CountDownLatch(1);
+        CountDownLatch latch = new CountDownLatch(1);
 
         SdkTransport failingDelegate = new InMemoryTransport() {
             @Override
@@ -185,12 +183,12 @@ class CoalescingTransportTest {
             }
         };
 
-        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(failingDelegate, metrics);
-        com.authx.sdk.model.CheckRequest request = CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
+        CoalescingTransport transport = new CoalescingTransport(failingDelegate, metrics);
+        CheckRequest request = CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
 
-        java.util.concurrent.CyclicBarrier startBarrier = new CyclicBarrier(3);
-        java.util.concurrent.ExecutorService executor = Executors.newFixedThreadPool(3);
-        java.util.concurrent.CompletableFuture[] futures = new CompletableFuture[3];
+        CyclicBarrier startBarrier = new CyclicBarrier(3);
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+        CompletableFuture[] futures = new CompletableFuture[3];
 
         for (int i = 0; i < 3; i++) {
             futures[i] = CompletableFuture.supplyAsync(() -> {
@@ -207,7 +205,7 @@ class CoalescingTransportTest {
         latch.countDown();
 
         // All futures should fail with the same root cause
-        for (java.util.concurrent.CompletableFuture f : futures) {
+        for (CompletableFuture f : futures) {
             assertThatThrownBy(() -> f.get(5, TimeUnit.SECONDS))
                     .hasCauseInstanceOf(RuntimeException.class)
                     .hasRootCauseMessage("SpiceDB down");
@@ -218,9 +216,9 @@ class CoalescingTransportTest {
 
     @Test
     void nonCheckOperationsPassThrough() {
-        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(inner, metrics);
+        CoalescingTransport transport = new CoalescingTransport(inner, metrics);
 
-        com.authx.sdk.model.GrantResult writeResult = transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
+        GrantResult writeResult = transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
                 ResourceRef.of("document", "d2"),
                 Relation.of("viewer"),
@@ -231,8 +229,8 @@ class CoalescingTransportTest {
 
     @Test
     void constructorWithoutMetricsWorks() {
-        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(inner);
-        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
+        CoalescingTransport transport = new CoalescingTransport(inner);
+        CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertThat(result.hasPermission()).isTrue();
@@ -240,7 +238,7 @@ class CoalescingTransportTest {
 
     @Test
     void closeCleansDelegateAndInflightMap() {
-        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(inner, metrics);
+        CoalescingTransport transport = new CoalescingTransport(inner, metrics);
         transport.close();
         // After close, inner transport should be cleared
         assertThat(inner.size()).isZero();

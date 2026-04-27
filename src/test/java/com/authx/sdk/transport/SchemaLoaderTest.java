@@ -17,10 +17,9 @@ import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -73,7 +72,7 @@ class SchemaLoaderTest {
             }
         });
 
-        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
+        SchemaCache cache = new SchemaCache();
         boolean ok = new SchemaLoader().load(channel, new Metadata(), cache);
         assertThat(ok).isTrue();
         assertThat(cache.hasSchema()).isTrue();
@@ -96,8 +95,8 @@ class SchemaLoaderTest {
             }
         });
 
-        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
-        com.authx.sdk.transport.SchemaLoader loader = new SchemaLoader();
+        SchemaCache cache = new SchemaCache();
+        SchemaLoader loader = new SchemaLoader();
         assertThat(loader.load(channel, new Metadata(), cache)).isFalse();
         // Second attempt short-circuits (reflectSupported = false).
         assertThat(loader.load(channel, new Metadata(), cache)).isFalse();

@@ -5,9 +5,10 @@ import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.RevokeResult;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
-
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * Fluent action for revoking <b>all</b> matching relationships from a subject
@@ -44,12 +45,12 @@ public class RevokeAllAction {
 
         for (SubjectRef subject : subjects) {
             if (relations == null || relations.length == 0) {
-                com.authx.sdk.model.RevokeResult result = transport.deleteByFilter(resource, subject, null);
+                RevokeResult result = transport.deleteByFilter(resource, subject, null);
                 totalDeleted += result.count();
                 if (result.zedToken() != null) lastToken = result.zedToken();
             } else {
                 for (String rel : relations) {
-                    com.authx.sdk.model.RevokeResult result = transport.deleteByFilter(resource, subject, Relation.of(rel));
+                    RevokeResult result = transport.deleteByFilter(resource, subject, Relation.of(rel));
                     totalDeleted += result.count();
                     if (result.zedToken() != null) lastToken = result.zedToken();
                 }
@@ -75,7 +76,7 @@ public class RevokeAllAction {
      * at the call site.
      */
     public RevokeResult from(Iterable<String> subjectRefs) {
-        java.util.List<SubjectRef> subjects = new java.util.ArrayList<>();
+        List<SubjectRef> subjects = new ArrayList<>();
         for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
         return from(subjects);
     }

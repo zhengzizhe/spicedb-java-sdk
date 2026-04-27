@@ -2,14 +2,13 @@ package com.authx.sdk;
 
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.SubjectType;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,19 +26,19 @@ class AuthxCodegenRegenerationIT {
 
     @Test
     void regeneratesDocumentWithSubjectTypes(@TempDir Path tmp) throws Exception {
-        java.util.List<com.authx.sdk.model.SubjectType> user = List.of(SubjectType.of("user"));
-        java.util.List<com.authx.sdk.model.SubjectType> userOrGroupOrDept = List.of(
+        List<SubjectType> user = List.of(SubjectType.of("user"));
+        List<SubjectType> userOrGroupOrDept = List.of(
                 SubjectType.of("user"),
                 SubjectType.of("group", "member"),
                 SubjectType.of("department", "all_members"));
-        java.util.List<com.authx.sdk.model.SubjectType> userOrGroupOrDeptOrWildcard = List.of(
+        List<SubjectType> userOrGroupOrDeptOrWildcard = List.of(
                 SubjectType.of("user"),
                 SubjectType.of("group", "member"),
                 SubjectType.of("department", "all_members"),
                 SubjectType.wildcard("user"));
-        java.util.List<com.authx.sdk.model.SubjectType> wildcardOnly = List.of(SubjectType.wildcard("user"));
+        List<SubjectType> wildcardOnly = List.of(SubjectType.wildcard("user"));
 
-        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
+        SchemaCache cache = new SchemaCache();
         cache.updateFromMap(Map.of(
                 "document", new SchemaCache.DefinitionCache(
                         Set.of("folder", "space", "owner", "editor", "commenter", "viewer",
@@ -55,7 +54,7 @@ class AuthxCodegenRegenerationIT {
                                 "link_viewer", wildcardOnly,
                                 "link_editor", wildcardOnly))));
 
-        com.authx.sdk.SchemaClient schema = new SchemaClient(cache);
+        SchemaClient schema = new SchemaClient(cache);
         AuthxCodegen.generate(schema, tmp.toString(), "com.example");
 
         String doc = Files.readString(tmp.resolve("com/example/Document.java"));

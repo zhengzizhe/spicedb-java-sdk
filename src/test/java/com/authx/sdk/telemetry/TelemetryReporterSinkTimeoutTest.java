@@ -1,14 +1,13 @@
 package com.authx.sdk.telemetry;
 
 import com.authx.sdk.spi.TelemetrySink;
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -32,8 +31,8 @@ class TelemetryReporterSinkTimeoutTest {
 
     @Test
     void hung_sink_does_not_block_close() throws Exception {
-        com.authx.sdk.telemetry.TelemetryReporterSinkTimeoutTest.HangingSink sink = new HangingSink();
-        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(
+        TelemetryReporterSinkTimeoutTest.HangingSink sink = new HangingSink();
+        TelemetryReporter reporter = new TelemetryReporter(
                 sink,
                 /*bufferCapacity*/ 100,
                 /*batchSize*/ 1,
@@ -77,9 +76,9 @@ class TelemetryReporterSinkTimeoutTest {
 
     @Test
     void fast_sink_records_no_timeouts() throws Exception {
-        java.util.concurrent.atomic.AtomicInteger seen = new AtomicInteger();
+        AtomicInteger seen = new AtomicInteger();
         TelemetrySink fast = batch -> seen.addAndGet(batch.size());
-        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(
+        TelemetryReporter reporter = new TelemetryReporter(
                 fast, 100, 1, 50, false, Duration.ofSeconds(2));
 
         for (int i = 0; i < 3; i++) {

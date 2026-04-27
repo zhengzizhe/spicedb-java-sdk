@@ -1,13 +1,14 @@
 package com.authx.sdk;
 
 import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.InMemoryTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
-import org.junit.jupiter.api.Test;
-
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class CrossResourceBatchTypedSubRelTest {
 
-    enum Rel implements com.authx.sdk.model.Relation.Named {
+    enum Rel implements Relation.Named {
         MEMBER("member");
         private final String v;
         Rel(String v) { this.v = v; }
@@ -36,7 +37,7 @@ class CrossResourceBatchTypedSubRelTest {
         @Override public List<SubjectType> subjectTypes() { return List.of(); }
     }
 
-    enum Perm implements com.authx.sdk.model.Permission.Named {
+    enum Perm implements Permission.Named {
         VIEW("view");
         private final String v;
         Perm(String v) { this.v = v; }
@@ -57,12 +58,12 @@ class CrossResourceBatchTypedSubRelTest {
     void enumSubRelationAndStringSubRelationProduceSameUpdates() {
         ResourceType<Rel, Perm> group = ResourceType.of("group", Rel.class, Perm.class);
 
-        com.authx.sdk.CrossResourceBatchTypedSubRelTest.CapturingTransport tr1 = new CapturingTransport();
+        CrossResourceBatchTypedSubRelTest.CapturingTransport tr1 = new CapturingTransport();
         new CrossResourceBatchBuilder(tr1)
                 .on("document", "d-1").grant("viewer").to(group, "eng", Rel.MEMBER)
                 .commit();
 
-        com.authx.sdk.CrossResourceBatchTypedSubRelTest.CapturingTransport tr2 = new CapturingTransport();
+        CrossResourceBatchTypedSubRelTest.CapturingTransport tr2 = new CapturingTransport();
         new CrossResourceBatchBuilder(tr2)
                 .on("document", "d-1").grant("viewer").to(group, "eng", "member")
                 .commit();

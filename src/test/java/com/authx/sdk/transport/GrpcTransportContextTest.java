@@ -63,7 +63,7 @@ class GrpcTransportContextTest {
                 .directExecutor().build();
 
         // Policy deadline = 30s (well beyond the 50ms cancellation budget).
-        com.authx.sdk.transport.GrpcTransport transport = new GrpcTransport(channel, "test", 30_000);
+        GrpcTransport transport = new GrpcTransport(channel, "test", 30_000);
 
         // Upstream cancellable context — simulates an HTTP handler thread
         // whose context gets cancelled mid-request.
@@ -139,7 +139,7 @@ class GrpcTransportContextTest {
                 .directExecutor().build();
 
         // Policy deadline = 30s (loose).
-        com.authx.sdk.transport.GrpcTransport transport = new GrpcTransport(channel, "test", 30_000);
+        GrpcTransport transport = new GrpcTransport(channel, "test", 30_000);
 
         // Upstream deadline = 200ms (tight).
         Context ctxWithDeadline = Context.current()

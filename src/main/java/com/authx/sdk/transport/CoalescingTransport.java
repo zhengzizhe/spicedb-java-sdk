@@ -1,11 +1,13 @@
 package com.authx.sdk.transport;
 
+import com.authx.sdk.exception.AuthxTimeoutException;
 import com.authx.sdk.metrics.SdkMetrics;
 import com.authx.sdk.model.*;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Request coalescing: concurrent identical check() calls share one gRPC round-trip.
@@ -38,7 +40,7 @@ public class CoalescingTransport extends ForwardingTransport {
 
     @Override
     public CheckResult check(CheckRequest request) {
-        com.authx.sdk.transport.CoalescingTransport.CoalescingKey key = new CoalescingKey(request.resource(), request.permission(), request.subject(), request.consistency());
+        CoalescingTransport.CoalescingKey key = new CoalescingKey(request.resource(), request.permission(), request.subject(), request.consistency());
 
         // Try to be the "owner" of this request
         CompletableFuture<CheckResult> myFuture = new CompletableFuture<>();
@@ -57,12 +59,12 @@ public class CoalescingTransport extends ForwardingTransport {
                 return existing.get(30, TimeUnit.SECONDS);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                throw new com.authx.sdk.exception.AuthxTimeoutException(
+                throw new AuthxTimeoutException(
                         "Coalesced check request interrupted while waiting for the in-flight owner");
-            } catch (java.util.concurrent.TimeoutException te) {
-                throw new com.authx.sdk.exception.AuthxTimeoutException(
+            } catch (TimeoutException te) {
+                throw new AuthxTimeoutException(
                         "Coalesced check request timed out after 30s");
-            } catch (java.util.concurrent.ExecutionException ee) {
+            } catch (ExecutionException ee) {
                 // Owner's exception is wrapped in ExecutionException. Unwrap it so
                 // callers see the original RuntimeException (or SdkException) they'd
                 // see if they'd made the call themselves.
@@ -90,7 +92,7 @@ public class CoalescingTransport extends ForwardingTransport {
         //   propagation. Evicting first means the new arrival gets null from
         //   putIfAbsent and starts its own call, which is correct semantics.
         try {
-            com.authx.sdk.model.CheckResult result = delegate.check(request);
+            CheckResult result = delegate.check(request);
             myFuture.complete(result);
             return result;
         } catch (Exception e) {

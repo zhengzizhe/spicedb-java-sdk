@@ -5,7 +5,6 @@ import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.Tuple;
 import com.authx.sdk.transport.SdkTransport;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -69,7 +68,7 @@ public class RelationQuery {
 
     /** Execute the query and return the first matching tuple, if any. */
     public Optional<Tuple> fetchFirst() {
-        java.util.List<com.authx.sdk.model.Tuple> list = fetch();
+        List<Tuple> list = fetch();
         return list.isEmpty() ? Optional.empty() : Optional.of(list.getFirst());
     }
 

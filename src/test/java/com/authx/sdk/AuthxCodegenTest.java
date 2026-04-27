@@ -2,13 +2,12 @@ package com.authx.sdk;
 
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.SubjectType;
-import org.junit.jupiter.api.Test;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -121,7 +120,7 @@ class AuthxCodegenTest {
 
     @Test
     void endToEndFromFakeSchema(@org.junit.jupiter.api.io.TempDir Path tmp) throws Exception {
-        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
+        SchemaCache cache = new SchemaCache();
         cache.updateFromMap(Map.of(
                 "document", new SchemaCache.DefinitionCache(
                         Set.of("folder", "viewer"),
@@ -137,7 +136,7 @@ class AuthxCodegenTest {
                         Map.of("cidrs", "list<string>"),
                         "client_ip in cidrs",
                         "")));
-        com.authx.sdk.SchemaClient schema = new SchemaClient(cache);
+        SchemaClient schema = new SchemaClient(cache);
 
         AuthxCodegen.generate(schema, tmp.toString(), "com.example.perm");
 
@@ -173,13 +172,13 @@ class AuthxCodegenTest {
                 "package com.example.perm; public final class ResourceTypes {}");
         assertThat(Files.exists(staleFile)).isTrue();
 
-        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
+        SchemaCache cache = new SchemaCache();
         cache.updateFromMap(Map.of(
                 "document", new SchemaCache.DefinitionCache(
                         Set.of("viewer"),
                         Set.of("view"),
                         Map.of("viewer", List.of(SubjectType.of("user"))))));
-        com.authx.sdk.SchemaClient schema = new SchemaClient(cache);
+        SchemaClient schema = new SchemaClient(cache);
 
         AuthxCodegen.generate(schema, tmp.toString(), "com.example.perm");
 

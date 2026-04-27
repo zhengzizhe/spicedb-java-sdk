@@ -3,12 +3,13 @@ package com.authx.sdk.lifecycle;
 import com.authx.sdk.event.SdkTypedEvent;
 import com.authx.sdk.event.TypedEventBus;
 import com.authx.sdk.trace.LogCtx;
-
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Manages SDK lifecycle: startup phases, state transitions, readiness probe, startup timing.
@@ -35,7 +36,7 @@ public class LifecycleManager {
 
     private final AtomicReference<SdkState> state = new AtomicReference<>(SdkState.CREATED);
     private final TypedEventBus eventBus;
-    private final Map<SdkPhase, Long> phaseDurations = java.util.Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Map<SdkPhase, Long> phaseDurations = Collections.synchronizedMap(new LinkedHashMap<>());
     private volatile long startupStartTime;
     private volatile long totalStartupMs;
 
@@ -74,7 +75,7 @@ public class LifecycleManager {
     /**
      * Execute a startup phase that returns a value.
      */
-    public <T> T phase(SdkPhase phase, java.util.function.Supplier<T> action) {
+    public <T> T phase(SdkPhase phase, Supplier<T> action) {
         long start = System.nanoTime();
         try {
             T result = action.get();
@@ -161,8 +162,8 @@ public class LifecycleManager {
      * Startup timing report: "connect=45ms channel=12ms schema=8ms total=78ms"
      */
     public String startupReport() {
-        java.lang.StringBuilder sb = new StringBuilder();
-        for (java.util.Map.Entry<com.authx.sdk.lifecycle.SdkPhase,java.lang.Long> entry : phaseDurations.entrySet()) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<SdkPhase, Long> entry : phaseDurations.entrySet()) {
             if (!sb.isEmpty()) sb.append(" ");
             sb.append(entry.getKey().name().toLowerCase()).append("=").append(entry.getValue()).append("ms");
         }

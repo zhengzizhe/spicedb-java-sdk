@@ -1,6 +1,7 @@
 package com.authx.sdk.internal;
 
 import com.authx.sdk.lifecycle.LifecycleManager;
+import com.authx.sdk.trace.LogCtx;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -103,7 +104,7 @@ public final class SdkInfrastructure implements AutoCloseable {
         } catch (Throwable t) {
             System.getLogger(SdkInfrastructure.class.getName()).log(
                     System.Logger.Level.WARNING,
-                    com.authx.sdk.trace.LogCtx.fmt(
+                    LogCtx.fmt(
                             "SdkInfrastructure close step failed: {0} — continuing shutdown. Error: {1}",
                             step, t.toString()));
         }

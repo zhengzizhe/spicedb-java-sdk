@@ -2,9 +2,8 @@ package com.authx.sdk.transport;
 
 import com.authx.sdk.model.*;
 import com.authx.sdk.model.enums.Permissionship;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,7 +11,7 @@ class CheckBulkMultiTest {
 
     @Test
     void checkBulkMulti_duplicatePermissions_returnsAllResults() {
-        com.authx.sdk.transport.InMemoryTransport transport = new InMemoryTransport();
+        InMemoryTransport transport = new InMemoryTransport();
         transport.writeRelationships(List.of(
                 new SdkTransport.RelationshipUpdate(
                         SdkTransport.RelationshipUpdate.Operation.TOUCH,
@@ -26,7 +25,7 @@ class CheckBulkMultiTest {
                         SubjectRef.of("user", "bob", null))
         ));
 
-        java.util.List<com.authx.sdk.transport.SdkTransport.BulkCheckItem> items = List.of(
+        List<SdkTransport.BulkCheckItem> items = List.of(
                 new SdkTransport.BulkCheckItem(
                         ResourceRef.of("document", "doc-1"),
                         Permission.of("viewer"),

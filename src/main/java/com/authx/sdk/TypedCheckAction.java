@@ -5,12 +5,13 @@ import com.authx.sdk.model.CheckRequest;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
-
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -74,7 +75,7 @@ public class TypedCheckAction {
         if (keyValues.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
         }
-        java.util.LinkedHashMap<java.lang.String,java.lang.Object> map = new java.util.LinkedHashMap<String, Object>();
+        LinkedHashMap<String, Object> map = new LinkedHashMap<String, Object>();
         for (int i = 0; i < keyValues.length; i += 2) {
             if (!(keyValues[i] instanceof String key)) {
                 throw new IllegalArgumentException("Key at index " + i + " must be a String");
@@ -119,9 +120,9 @@ public class TypedCheckAction {
      * Constructs the canonical {@code "user:alice"} and routes through
      * {@link #by(String)} for the single-cell check.
      */
-    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
-            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
-    boolean by(com.authx.sdk.ResourceType<R2, P2> subjectType, String id) {
+    public <R2 extends Enum<R2> & Relation.Named,
+            P2 extends Enum<P2> & Permission.Named>
+    boolean by(ResourceType<R2, P2> subjectType, String id) {
         return by(subjectType.name() + ":" + id);
     }
 
@@ -153,9 +154,9 @@ public class TypedCheckAction {
      * Constructs the canonical subject ref and routes through
      * {@link #detailedBy(String)} to return the full {@link CheckResult}.
      */
-    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
-            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
-    CheckResult detailedBy(com.authx.sdk.ResourceType<R2, P2> subjectType, String id) {
+    public <R2 extends Enum<R2> & Relation.Named,
+            P2 extends Enum<P2> & Permission.Named>
+    CheckResult detailedBy(ResourceType<R2, P2> subjectType, String id) {
         return detailedBy(subjectType.name() + ":" + id);
     }
 
@@ -194,7 +195,7 @@ public class TypedCheckAction {
 
     /** {@link Iterable} overload of {@link #byAll(String...)}. */
     public CheckMatrix byAll(Iterable<String> subjectRefs) {
-        java.util.List<String> list = new java.util.ArrayList<>();
+        List<String> list = new ArrayList<>();
         for (String ref : subjectRefs) list.add(ref);
         return byAll(list.toArray(String[]::new));
     }
@@ -203,10 +204,10 @@ public class TypedCheckAction {
      * Typed batch form: same subject type, many ids. Each id is wrapped
      * as {@code "type:id"} before the matrix is built.
      */
-    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
-            P2 extends Enum<P2> & com.authx.sdk.model.Permission.Named>
-    CheckMatrix byAll(com.authx.sdk.ResourceType<R2, P2> subjectType, Iterable<String> ids) {
-        java.util.List<String> refs = new java.util.ArrayList<>();
+    public <R2 extends Enum<R2> & Relation.Named,
+            P2 extends Enum<P2> & Permission.Named>
+    CheckMatrix byAll(ResourceType<R2, P2> subjectType, Iterable<String> ids) {
+        List<String> refs = new ArrayList<>();
         for (String id : ids) refs.add(subjectType.name() + ":" + id);
         return byAll(refs.toArray(String[]::new));
     }
@@ -246,7 +247,7 @@ public class TypedCheckAction {
             }
         }
         List<CheckResult> results = factory.transport().checkBulkMulti(items, consistency);
-        com.authx.sdk.model.CheckMatrix.Builder b = CheckMatrix.builder();
+        CheckMatrix.Builder b = CheckMatrix.builder();
         for (int i = 0; i < results.size(); i++) {
             b.add(cellIds[i], cellPerms[i], cellSubjects[i], results.get(i).hasPermission());
         }
@@ -254,7 +255,7 @@ public class TypedCheckAction {
     }
 
     private CheckResult runSingle(String id, String permission, SubjectRef subject) {
-        com.authx.sdk.model.CheckRequest request = new CheckRequest(
+        CheckRequest request = new CheckRequest(
                 ResourceRef.of(factory.resourceType(), id),
                 Permission.of(permission),
                 subject,

@@ -9,17 +9,21 @@ import com.authx.sdk.internal.SdkInfrastructure;
 import com.authx.sdk.internal.SdkObservability;
 import com.authx.sdk.lifecycle.LifecycleManager;
 import com.authx.sdk.metrics.SdkMetrics;
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.spi.HealthProbe;
+import com.authx.sdk.trace.LogCtx;
 import com.authx.sdk.transport.InMemoryTransport;
 import com.authx.sdk.transport.SdkTransport;
 
-import org.jspecify.annotations.Nullable;
-
+import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 
 /**
  * AuthX SDK — Java client for SpiceDB permission management.
@@ -104,12 +108,12 @@ public class AuthxClient implements AutoCloseable {
      * to {@code SubjectRef.parse} and throws if the id has no {@code ':'}.
      */
     public static AuthxClient inMemory(@Nullable SchemaCache schemaCache) {
-        com.authx.sdk.event.DefaultTypedEventBus bus = new DefaultTypedEventBus();
-        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
+        DefaultTypedEventBus bus = new DefaultTypedEventBus();
+        LifecycleManager lm = new LifecycleManager(bus);
         lm.begin(); lm.complete();
-        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
-        com.authx.sdk.internal.SdkObservability observability = new SdkObservability(new SdkMetrics(), bus, null);
-        com.authx.sdk.internal.SdkConfig config = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
+        SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
+        SdkObservability observability = new SdkObservability(new SdkMetrics(), bus, null);
+        SdkConfig config = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
         return new AuthxClient(new InMemoryTransport(), infra, observability, config,
                 HealthProbe.up(), new SchemaClient(schemaCache), schemaCache);
     }
@@ -155,8 +159,8 @@ public class AuthxClient implements AutoCloseable {
      * now starts here. The generated class itself is pure type metadata:
      * enums plus the {@link ResourceType} constant.
      */
-    public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,
-            P extends Enum<P> & com.authx.sdk.model.Permission.Named>
+    public <R extends Enum<R> & Relation.Named,
+            P extends Enum<P> & Permission.Named>
     TypedResourceEntry<R, P> on(ResourceType<R, P> resourceType) {
         return new TypedResourceEntry<>(on(resourceType.name()), resourceType);
     }
@@ -176,13 +180,13 @@ public class AuthxClient implements AutoCloseable {
      * </pre>
      */
     public <T extends ResourceFactory> T create(Class<T> clazz) {
-        com.authx.sdk.PermissionResource annotation = clazz.getAnnotation(PermissionResource.class);
+        PermissionResource annotation = clazz.getAnnotation(PermissionResource.class);
         if (annotation == null) {
             throw new IllegalArgumentException(clazz.getSimpleName() + " must be annotated with @PermissionResource");
         }
         String resourceType = annotation.value();
         try {
-            java.lang.reflect.Constructor<T> constructor = clazz.getDeclaredConstructor();
+            Constructor<T> constructor = clazz.getDeclaredConstructor();
             constructor.setAccessible(true);
             T instance = constructor.newInstance();
             instance.init(resourceType, transport, infra.asyncExecutor());
@@ -226,7 +230,7 @@ public class AuthxClient implements AutoCloseable {
 
     /** Package-private: used by TypedResourceFactory to access the transport chain. */
     SdkTransport transport() { return transport; }
-    java.util.concurrent.Executor asyncExecutor() { return infra.asyncExecutor(); }
+    Executor asyncExecutor() { return infra.asyncExecutor(); }
 
     /** Return the SDK metrics collector. */
     public SdkMetrics metrics() { return observability.metrics(); }
@@ -309,7 +313,7 @@ public class AuthxClient implements AutoCloseable {
         } catch (Throwable t) {
             System.getLogger(AuthxClient.class.getName()).log(
                     System.Logger.Level.WARNING,
-                    com.authx.sdk.trace.LogCtx.fmt(
+                    LogCtx.fmt(
                             "AuthxClient close step failed: {0} — continuing shutdown. Error: {1}",
                             step, t.toString()));
         }

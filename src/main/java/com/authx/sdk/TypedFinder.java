@@ -2,7 +2,6 @@ package com.authx.sdk;
 
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.SubjectRef;
-
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -71,7 +70,7 @@ public class TypedFinder<P extends Permission.Named> {
     @SafeVarargs
     public final Map<P, List<String>> can(P... permissions) {
         if (permissions == null || permissions.length == 0) return Map.of();
-        java.util.LinkedHashMap<P,java.util.List<java.lang.String>> out = new LinkedHashMap<P, List<String>>(permissions.length);
+        LinkedHashMap<P, List<String>> out = new LinkedHashMap<P, List<String>>(permissions.length);
         for (P p : permissions) {
             out.put(p, can(p));
         }
@@ -81,7 +80,7 @@ public class TypedFinder<P extends Permission.Named> {
     /** Collection overload for {@link #can(Permission.Named...)}. */
     public Map<P, List<String>> can(Collection<P> permissions) {
         if (permissions == null || permissions.isEmpty()) return Map.of();
-        java.util.LinkedHashMap<P,java.util.List<java.lang.String>> out = new LinkedHashMap<P, List<String>>(permissions.size());
+        LinkedHashMap<P, List<String>> out = new LinkedHashMap<P, List<String>>(permissions.size());
         for (P p : permissions) {
             out.put(p, can(p));
         }
@@ -96,7 +95,7 @@ public class TypedFinder<P extends Permission.Named> {
     @SafeVarargs
     public final List<String> canAny(P... permissions) {
         if (permissions == null || permissions.length == 0) return List.of();
-        java.util.LinkedHashSet<java.lang.String> seen = new LinkedHashSet<String>();
+        LinkedHashSet<String> seen = new LinkedHashSet<String>();
         for (P p : permissions) seen.addAll(can(p));
         return List.copyOf(seen);
     }

@@ -1,7 +1,8 @@
 package com.authx.sdk.transport;
 
 import com.authx.sdk.model.*;
-
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -35,8 +36,8 @@ public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkL
      */
     @Override
     default List<CheckResult> checkBulkMulti(List<BulkCheckItem> items, Consistency consistency) {
-        List<CheckResult> results = new java.util.ArrayList<>(items.size());
-        for (com.authx.sdk.transport.SdkTransport.BulkCheckItem item : items) {
+        List<CheckResult> results = new ArrayList<>(items.size());
+        for (SdkTransport.BulkCheckItem item : items) {
             results.add(check(CheckRequest.of(item.resource(), item.permission(), item.subject(), consistency)));
         }
         return results;
@@ -95,7 +96,7 @@ public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkL
             Relation relation,
             SubjectRef subject,
             CaveatRef caveat,
-            java.time.Instant expiresAt
+            Instant expiresAt
     ) {
         public enum Operation { TOUCH, DELETE }
 

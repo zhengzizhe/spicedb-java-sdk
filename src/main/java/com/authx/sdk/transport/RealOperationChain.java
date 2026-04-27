@@ -1,12 +1,12 @@
 package com.authx.sdk.transport;
 
+import com.authx.sdk.exception.AuthxException;
 import com.authx.sdk.spi.AttributeKey;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.spi.SdkInterceptor.OperationChain;
 import com.authx.sdk.spi.SdkInterceptor.OperationContext;
 import com.authx.sdk.trace.LogCtx;
 import com.authx.sdk.trace.LogFields;
-
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -40,14 +40,14 @@ public final class RealOperationChain<T> implements OperationChain<T> {
         if (index >= interceptors.size()) {
             return terminalOperation.get();
         }
-        com.authx.sdk.transport.RealOperationChain<T> next = new RealOperationChain<>(interceptors, index + 1, terminalOperation, ctx);
+        RealOperationChain<T> next = new RealOperationChain<>(interceptors, index + 1, terminalOperation, ctx);
         // SR:C8 — isolate interceptor exceptions on generic read operations
         // (lookup/expand/read), same contract as RealCheckChain: skip the
         // broken interceptor, log at WARNING, continue the chain.
-        com.authx.sdk.spi.SdkInterceptor interceptor = interceptors.get(index);
+        SdkInterceptor interceptor = interceptors.get(index);
         try {
             return interceptor.interceptOperation(next);
-        } catch (com.authx.sdk.exception.AuthxException authx) {
+        } catch (AuthxException authx) {
             throw authx;
         } catch (RuntimeException bug) {
             String subjectRef = (ctx.subjectType() == null || ctx.subjectType().isEmpty()) ? null

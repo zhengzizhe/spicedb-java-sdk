@@ -1,5 +1,6 @@
 package com.authx.sdk.transport;
 
+import com.authx.sdk.exception.AuthxException;
 import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.WriteRequest;
 import com.authx.sdk.spi.AttributeKey;
@@ -8,7 +9,6 @@ import com.authx.sdk.spi.SdkInterceptor.OperationContext;
 import com.authx.sdk.spi.SdkInterceptor.WriteChain;
 import com.authx.sdk.trace.LogCtx;
 import com.authx.sdk.trace.LogFields;
-
 import java.util.List;
 
 /**
@@ -54,7 +54,7 @@ public final class RealWriteChain implements WriteChain {
             return transport.writeRelationships(request.updates());
         }
         // Create next chain with incremented index and (possibly modified) request
-        com.authx.sdk.transport.RealWriteChain next = new RealWriteChain(interceptors, index + 1, request, transport, ctx);
+        RealWriteChain next = new RealWriteChain(interceptors, index + 1, request, transport, ctx);
         // SR:C8 — WRITE path is asymmetric to read paths: an interceptor that
         // throws must NOT be silently skipped. Write interceptors are often
         // doing policy enforcement (audit hooks, mandatory caveat injection,
@@ -65,17 +65,17 @@ public final class RealWriteChain implements WriteChain {
         // Fail-closed policy: any non-Authx exception from a write interceptor
         // aborts the chain and surfaces as an AuthxException so callers see a
         // typed, retryable-classified error.
-        com.authx.sdk.spi.SdkInterceptor interceptor = interceptors.get(index);
+        SdkInterceptor interceptor = interceptors.get(index);
         try {
             return interceptor.interceptWrite(next);
-        } catch (com.authx.sdk.exception.AuthxException authx) {
+        } catch (AuthxException authx) {
             throw authx;
         } catch (RuntimeException bug) {
             // First update carries enough resource context for the suffix —
             // batch writes can span types, but the first entry still tells the
             // on-call engineer where to start looking. Empty update list is
             // uncommon but handled.
-            com.authx.sdk.transport.SdkTransport.RelationshipUpdate first = request.updates().isEmpty() ? null : request.updates().get(0);
+            SdkTransport.RelationshipUpdate first = request.updates().isEmpty() ? null : request.updates().get(0);
             LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                     "Write interceptor {0} threw {1}; aborting write (fail-closed)."
                             + LogFields.suffixRel(
@@ -84,7 +84,7 @@ public final class RealWriteChain implements WriteChain {
                                     first == null || first.relation() == null ? null : first.relation().name(),
                                     first == null || first.subject() == null ? null : first.subject().toRefString()),
                     interceptor.getClass().getName(), bug.toString()));
-            throw new com.authx.sdk.exception.AuthxException(
+            throw new AuthxException(
                     "Write interceptor " + interceptor.getClass().getName()
                             + " rejected the request: " + bug.getMessage(),
                     bug);

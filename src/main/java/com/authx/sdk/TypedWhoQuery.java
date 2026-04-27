@@ -2,7 +2,6 @@ package com.authx.sdk;
 
 import com.authx.sdk.action.WhoBuilder;
 import com.authx.sdk.model.SubjectRef;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -64,7 +63,7 @@ public class TypedWhoQuery {
      */
     public List<SubjectRef> asSubjectRefs() {
         List<String> ids = fetchIds();
-        java.util.ArrayList<com.authx.sdk.model.SubjectRef> out = new ArrayList<SubjectRef>(ids.size());
+        ArrayList<SubjectRef> out = new ArrayList<SubjectRef>(ids.size());
         for (String id : ids) {
             out.add(SubjectRef.of(subjectType, id));
         }

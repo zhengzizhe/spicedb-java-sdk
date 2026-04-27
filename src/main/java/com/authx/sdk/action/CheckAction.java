@@ -10,10 +10,10 @@ import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -73,7 +73,7 @@ public class CheckAction {
         if (kv.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
         }
-        java.util.LinkedHashMap<java.lang.String,java.lang.Object> map = new java.util.LinkedHashMap<String, Object>();
+        LinkedHashMap<String, Object> map = new LinkedHashMap<String, Object>();
         for (int i = 0; i < kv.length; i += 2) {
             if (!(kv[i] instanceof String key)) {
                 throw new IllegalArgumentException("Key at index " + i + " must be a String");
@@ -85,7 +85,7 @@ public class CheckAction {
 
     /** Execute the permission check against a single {@link SubjectRef subject}. */
     public CheckResult by(SubjectRef subject) {
-        com.authx.sdk.model.CheckRequest request = new CheckRequest(
+        CheckRequest request = new CheckRequest(
                 ResourceRef.of(resourceType, resourceId),
                 Permission.of(permissions[0]),
                 subject,
@@ -127,7 +127,7 @@ public class CheckAction {
     /** Collection overload of {@link #byAll(SubjectRef...)}. */
     public BulkCheckResult byAll(Collection<SubjectRef> subjects) {
         SubjectRef head = subjects.iterator().next();
-        com.authx.sdk.model.CheckRequest request = CheckRequest.of(
+        CheckRequest request = CheckRequest.of(
                 ResourceRef.of(resourceType, resourceId),
                 Permission.of(permissions[0]),
                 head,
@@ -144,7 +144,7 @@ public class CheckAction {
 
     /** {@link Iterable} overload of {@link #byAll(String...)}. */
     public BulkCheckResult byAll(Iterable<String> subjectRefs) {
-        List<SubjectRef> parsed = new java.util.ArrayList<>();
+        List<SubjectRef> parsed = new ArrayList<>();
         for (String ref : subjectRefs) parsed.add(SubjectRef.parse(ref));
         return byAll(parsed);
     }

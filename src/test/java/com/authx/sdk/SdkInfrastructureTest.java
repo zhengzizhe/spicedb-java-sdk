@@ -1,17 +1,20 @@
 package com.authx.sdk;
 
+import com.authx.sdk.event.DefaultTypedEventBus;
 import com.authx.sdk.internal.SdkInfrastructure;
 import com.authx.sdk.lifecycle.LifecycleManager;
 import io.grpc.ManagedChannel;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,8 +28,8 @@ class SdkInfrastructureTest {
         // Now each step is wrapped in safeClose so a failure in one cleanup
         // never prevents the next from running.
 
-        java.util.concurrent.atomic.AtomicBoolean channelClosed = new AtomicBoolean(false);
-        java.lang.String serverName = InProcessServerBuilder.generateName();
+        AtomicBoolean channelClosed = new AtomicBoolean(false);
+        String serverName = InProcessServerBuilder.generateName();
         io.grpc.Server server = InProcessServerBuilder.forName(serverName)
                 .directExecutor()
                 .build()
@@ -38,8 +41,8 @@ class SdkInfrastructureTest {
         // A scheduler that throws on shutdown.
         ScheduledExecutorService throwingScheduler = new ThrowingScheduler();
 
-        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(
-                channel, throwingScheduler, Runnable::run, new LifecycleManager(new com.authx.sdk.event.DefaultTypedEventBus()));
+        SdkInfrastructure infra = new SdkInfrastructure(
+                channel, throwingScheduler, Runnable::run, new LifecycleManager(new DefaultTypedEventBus()));
 
         // Must not throw — failure in scheduler step is logged and skipped.
         infra.close();
@@ -57,15 +60,15 @@ class SdkInfrastructureTest {
         // Same property in the other direction: channel.shutdown throwing
         // must not prevent removeShutdownHook from running.
 
-        java.util.concurrent.atomic.AtomicBoolean hookRemoved = new AtomicBoolean(false);
-        java.lang.Thread hook = new Thread(() -> {});
+        AtomicBoolean hookRemoved = new AtomicBoolean(false);
+        Thread hook = new Thread(() -> {});
 
         // Channel that throws on shutdown.
         ManagedChannel throwingChannel = new ThrowingChannel();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(
-                throwingChannel, scheduler, Runnable::run, new LifecycleManager(new com.authx.sdk.event.DefaultTypedEventBus()));
+        SdkInfrastructure infra = new SdkInfrastructure(
+                throwingChannel, scheduler, Runnable::run, new LifecycleManager(new DefaultTypedEventBus()));
 
         // Register a shutdown hook so we can verify the third safeClose step
         // runs. (We can't actually register one without polluting the JVM,
@@ -87,7 +90,7 @@ class SdkInfrastructureTest {
         // teardown calls it explicitly while AuthxClient is being GC'd).
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(null, scheduler, Runnable::run, new LifecycleManager(new com.authx.sdk.event.DefaultTypedEventBus()));
+        SdkInfrastructure infra = new SdkInfrastructure(null, scheduler, Runnable::run, new LifecycleManager(new DefaultTypedEventBus()));
 
         infra.close();
         infra.close();   // must not throw
@@ -98,18 +101,18 @@ class SdkInfrastructureTest {
     // ── Test doubles ──
 
     /** Throws RuntimeException on shutdown(); otherwise behaves like a no-op scheduler. */
-    private static final class ThrowingScheduler extends java.util.concurrent.AbstractExecutorService
+    private static final class ThrowingScheduler extends AbstractExecutorService
             implements ScheduledExecutorService {
         @Override public void shutdown() { throw new RuntimeException("simulated SecurityException"); }
-        @Override public java.util.List<Runnable> shutdownNow() { return List.of(); }
+        @Override public List<Runnable> shutdownNow() { return List.of(); }
         @Override public boolean isShutdown() { return false; }
         @Override public boolean isTerminated() { return false; }
         @Override public boolean awaitTermination(long timeout, TimeUnit unit) { return true; }
         @Override public void execute(Runnable command) { command.run(); }
-        @Override public java.util.concurrent.ScheduledFuture<?> schedule(Runnable c, long d, TimeUnit u) { return null; }
-        @Override public <V> java.util.concurrent.ScheduledFuture<V> schedule(java.util.concurrent.Callable<V> c, long d, TimeUnit u) { return null; }
-        @Override public java.util.concurrent.ScheduledFuture<?> scheduleAtFixedRate(Runnable c, long i, long p, TimeUnit u) { return null; }
-        @Override public java.util.concurrent.ScheduledFuture<?> scheduleWithFixedDelay(Runnable c, long i, long d, TimeUnit u) { return null; }
+        @Override public ScheduledFuture<?> schedule(Runnable c, long d, TimeUnit u) { return null; }
+        @Override public <V> ScheduledFuture<V> schedule(Callable<V> c, long d, TimeUnit u) { return null; }
+        @Override public ScheduledFuture<?> scheduleAtFixedRate(Runnable c, long i, long p, TimeUnit u) { return null; }
+        @Override public ScheduledFuture<?> scheduleWithFixedDelay(Runnable c, long i, long d, TimeUnit u) { return null; }
     }
 
     /** ManagedChannel whose shutdown() throws. */

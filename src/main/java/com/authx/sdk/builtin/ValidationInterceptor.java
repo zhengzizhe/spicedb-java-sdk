@@ -3,7 +3,6 @@ package com.authx.sdk.builtin;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.spi.SdkInterceptor;
-
 import java.util.regex.Pattern;
 
 /**
@@ -18,14 +17,14 @@ public class ValidationInterceptor implements SdkInterceptor {
 
     @Override
     public CheckResult interceptCheck(CheckChain chain) {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
+        SdkInterceptor.OperationContext ctx = chain.operationContext();
         validate(ctx.resourceType(), ctx.resourceId(), ctx.permission());
         return chain.proceed(chain.request());
     }
 
     @Override
     public GrantResult interceptWrite(WriteChain chain) {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
+        SdkInterceptor.OperationContext ctx = chain.operationContext();
         validate(ctx.resourceType(), ctx.resourceId(), ctx.permission());
         return chain.proceed(chain.request());
     }

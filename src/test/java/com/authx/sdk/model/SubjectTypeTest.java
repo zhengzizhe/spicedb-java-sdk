@@ -12,7 +12,7 @@ class SubjectTypeTest {
 
     @Test
     void parse_typeOnly() {
-        com.authx.sdk.model.SubjectType st = SubjectType.parse("user");
+        SubjectType st = SubjectType.parse("user");
         assertThat(st.type()).isEqualTo("user");
         assertThat(st.relation()).isNull();
         assertThat(st.wildcard()).isFalse();
@@ -21,7 +21,7 @@ class SubjectTypeTest {
 
     @Test
     void parse_subjectRelation() {
-        com.authx.sdk.model.SubjectType st = SubjectType.parse("group#member");
+        SubjectType st = SubjectType.parse("group#member");
         assertThat(st.type()).isEqualTo("group");
         assertThat(st.relation()).isEqualTo("member");
         assertThat(st.wildcard()).isFalse();
@@ -30,7 +30,7 @@ class SubjectTypeTest {
 
     @Test
     void parse_wildcard() {
-        com.authx.sdk.model.SubjectType st = SubjectType.parse("user:*");
+        SubjectType st = SubjectType.parse("user:*");
         assertThat(st.type()).isEqualTo("user");
         assertThat(st.relation()).isNull();
         assertThat(st.wildcard()).isTrue();
@@ -49,7 +49,7 @@ class SubjectTypeTest {
 
     @Test
     void wildcardFactory() {
-        com.authx.sdk.model.SubjectType st = SubjectType.wildcard("user");
+        SubjectType st = SubjectType.wildcard("user");
         assertThat(st.wildcard()).isTrue();
         assertThat(st.toRef()).isEqualTo("user:*");
     }

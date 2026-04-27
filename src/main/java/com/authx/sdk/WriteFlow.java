@@ -9,11 +9,8 @@ import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
-
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.CheckReturnValue;
-import org.jspecify.annotations.Nullable;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.UnaryOperator;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Unified fluent flow for writing and deleting relationships on a single
@@ -445,7 +444,7 @@ public final class WriteFlow {
         return this;
     }
 
-    private void rewriteBatch(java.util.function.UnaryOperator<RelationshipUpdate> rewrite) {
+    private void rewriteBatch(UnaryOperator<RelationshipUpdate> rewrite) {
         for (int i = lastBatchStart; i < pending.size(); i++) {
             pending.set(i, rewrite.apply(pending.get(i)));
         }

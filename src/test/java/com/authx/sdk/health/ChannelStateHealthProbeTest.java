@@ -1,11 +1,12 @@
 package com.authx.sdk.health;
 
+import com.authx.sdk.spi.HealthProbe;
 import io.grpc.ManagedChannel;
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.ServerServiceDefinition;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.Server;
-import io.grpc.ServerServiceDefinition;
-import io.grpc.ServerBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,8 +35,8 @@ class ChannelStateHealthProbeTest {
         String name = InProcessServerBuilder.generateName();
         channel = InProcessChannelBuilder.forName(name).directExecutor().build();
 
-        com.authx.sdk.health.ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel);
-        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
+        ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel);
+        HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isTrue();
         assertThat(result.details()).contains("IDLE");
@@ -47,8 +48,8 @@ class ChannelStateHealthProbeTest {
         channel = InProcessChannelBuilder.forName(name).directExecutor().build();
         channel.shutdown();
 
-        com.authx.sdk.health.ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel);
-        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
+        ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel);
+        HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isFalse();
         assertThat(result.details()).contains("SHUTDOWN");
@@ -59,8 +60,8 @@ class ChannelStateHealthProbeTest {
         String name = InProcessServerBuilder.generateName();
         channel = InProcessChannelBuilder.forName(name).directExecutor().build();
 
-        com.authx.sdk.health.ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel, "my-custom-probe");
-        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
+        ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel, "my-custom-probe");
+        HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.name()).isEqualTo("my-custom-probe");
         assertThat(probe.name()).isEqualTo("my-custom-probe");

@@ -3,10 +3,10 @@ package com.authx.sdk;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.LookupResourcesRequest;
 import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -66,7 +66,7 @@ public class LookupQuery {
      * Typed subject form: {@code lookup("document").withPermission("view").by(User, "alice")}.
      * Constructs the canonical subject ref and routes through {@link #by(String)}.
      */
-    public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,
+    public <R extends Enum<R> & Relation.Named,
             P extends Enum<P> & Permission.Named>
     LookupQuery by(ResourceType<R, P> subjectType, String id) {
         return by(subjectType.name() + ":" + id);
@@ -88,7 +88,7 @@ public class LookupQuery {
     public List<String> fetch() {
         if (permission == null) throw new IllegalStateException("withPermission() must be called before fetch()");
         if (subject == null) throw new IllegalStateException("by() must be called before fetch()");
-        com.authx.sdk.model.LookupResourcesRequest request = new LookupResourcesRequest(resourceType, Permission.of(permission),
+        LookupResourcesRequest request = new LookupResourcesRequest(resourceType, Permission.of(permission),
                 subject, limit, consistency);
         return transport.lookupResources(request).stream()
                 .map(ResourceRef::id).toList();
@@ -101,7 +101,7 @@ public class LookupQuery {
 
     /** Execute the lookup and return the first matching resource id, if any. */
     public Optional<String> fetchFirst() {
-        java.util.List<java.lang.String> list = fetch();
+        List<String> list = fetch();
         return list.isEmpty() ? Optional.empty() : Optional.of(list.getFirst());
     }
 

@@ -2,12 +2,13 @@ package com.authx.sdk.telemetry;
 
 import com.authx.sdk.spi.TelemetrySink;
 import com.authx.sdk.trace.LogCtx;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Async telemetry reporter: buffers SDK events in memory,
@@ -34,10 +35,10 @@ public class TelemetryReporter implements AutoCloseable {
      */
     private final ExecutorService sinkExecutor;
     private final Duration sinkTimeout;
-    private final java.util.concurrent.atomic.AtomicBoolean flushScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
-    private final java.util.concurrent.atomic.LongAdder droppedEvents = new java.util.concurrent.atomic.LongAdder();
-    private final java.util.concurrent.atomic.LongAdder bufferFullDrops = new java.util.concurrent.atomic.LongAdder();
-    private final java.util.concurrent.atomic.LongAdder sinkTimeouts = new java.util.concurrent.atomic.LongAdder();
+    private final AtomicBoolean flushScheduled = new AtomicBoolean(false);
+    private final LongAdder droppedEvents = new LongAdder();
+    private final LongAdder bufferFullDrops = new LongAdder();
+    private final LongAdder sinkTimeouts = new LongAdder();
     private volatile int consecutiveFlushFailures = 0;
 
     public TelemetryReporter(TelemetrySink sink, int bufferCapacity, int batchSize,
@@ -76,7 +77,7 @@ public class TelemetryReporter implements AutoCloseable {
     public void record(String action, String resourceType, String resourceId,
                        String subjectType, String subjectId, String permission,
                        String result, long latencyMs, String traceId) {
-        java.util.Map<java.lang.String,java.lang.Object> event = Map.<String, Object>of(
+        Map<String, Object> event = Map.<String, Object>of(
                 "action", action,
                 "resourceType", resourceType != null ? resourceType : "",
                 "resourceId", resourceId != null ? resourceId : "",

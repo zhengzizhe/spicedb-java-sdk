@@ -20,7 +20,7 @@ public class DebugInterceptor implements SdkInterceptor {
 
     @Override
     public CheckResult interceptCheck(CheckChain chain) {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
+        SdkInterceptor.OperationContext ctx = chain.operationContext();
         LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                 "-> {0} {1}:{2} permission={3} subject={4}:{5}",
                 ctx.action(), ctx.resourceType(), ctx.resourceId(),
@@ -44,7 +44,7 @@ public class DebugInterceptor implements SdkInterceptor {
 
     @Override
     public GrantResult interceptWrite(WriteChain chain) {
-        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
+        SdkInterceptor.OperationContext ctx = chain.operationContext();
         LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                 "-> {0} {1}:{2}",
                 ctx.action(), ctx.resourceType(), ctx.resourceId()));

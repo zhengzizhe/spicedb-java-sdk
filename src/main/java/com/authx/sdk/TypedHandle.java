@@ -2,9 +2,7 @@ package com.authx.sdk;
 
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
-
 import com.google.errorprone.annotations.CheckReturnValue;
-
 import java.util.Collection;
 
 /**
@@ -167,7 +165,7 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
      * </pre>
      */
     public <E extends Enum<E> & Permission.Named> TypedCheckAllAction<E> checkAll(
-            com.authx.sdk.PermissionProxy<E> proxy) {
+            PermissionProxy<E> proxy) {
         return checkAll(proxy.enumClass());
     }
 
@@ -215,7 +213,7 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
      * {@code client.on(Document).select(id).who(User, Document.Perm.EDIT)}.
      * The subject type name is read from the {@code ResourceType} descriptor.
      */
-    public <R2 extends Enum<R2> & com.authx.sdk.model.Relation.Named,
+    public <R2 extends Enum<R2> & Relation.Named,
             P2 extends Enum<P2> & Permission.Named>
     TypedWhoQuery who(ResourceType<R2, P2> subjectType, P permission) {
         return who(subjectType.name(), permission);

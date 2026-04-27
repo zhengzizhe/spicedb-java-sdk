@@ -1,9 +1,9 @@
 package com.authx.sdk.model;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -11,7 +11,7 @@ class CheckMatrixTest {
 
     @Test
     void pointLookup_returnsStoredValue() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder()
+        CheckMatrix m = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .add("doc-1", "view", "bob", false)
                 .build();
@@ -22,7 +22,7 @@ class CheckMatrixTest {
 
     @Test
     void allowedForAbsentCell_returnsFalseNeverNull() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder()
+        CheckMatrix m = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .build();
 
@@ -36,14 +36,14 @@ class CheckMatrixTest {
 
     @Test
     void allAllowed_andAnyAllowed_wholeMatrix() {
-        com.authx.sdk.model.CheckMatrix allOn = CheckMatrix.builder()
+        CheckMatrix allOn = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .add("doc-1", "view", "bob", true)
                 .build();
         assertThat(allOn.allAllowed()).isTrue();
         assertThat(allOn.anyDenied()).isFalse();
 
-        com.authx.sdk.model.CheckMatrix mixed = CheckMatrix.builder()
+        CheckMatrix mixed = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .add("doc-1", "view", "bob", false)
                 .build();
@@ -54,7 +54,7 @@ class CheckMatrixTest {
 
     @Test
     void perResourcePerPermissionSlice() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder()
+        CheckMatrix m = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .add("doc-1", "view", "bob", true)
                 .add("doc-1", "edit", "alice", true)
@@ -68,7 +68,7 @@ class CheckMatrixTest {
 
     @Test
     void subjectAxisQueries() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder()
+        CheckMatrix m = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .add("doc-2", "view", "alice", true)
                 .add("doc-1", "view", "bob", false)
@@ -83,21 +83,21 @@ class CheckMatrixTest {
 
     @Test
     void forResourceAndSubject_returnsPermissionMap() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder()
+        CheckMatrix m = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .add("doc-1", "edit", "alice", false)
                 .add("doc-1", "comment", "alice", true)
                 .add("doc-2", "view", "alice", false)   // different resource — should be ignored
                 .build();
 
-        java.util.Map<java.lang.String,java.lang.Boolean> slice = m.forResourceAndSubject("doc-1", "alice");
+        Map<String, Boolean> slice = m.forResourceAndSubject("doc-1", "alice");
         assertThat(slice).containsExactlyInAnyOrderEntriesOf(
-                java.util.Map.of("view", true, "edit", false, "comment", true));
+                Map.of("view", true, "edit", false, "comment", true));
     }
 
     @Test
     void axisAccessors_preserveInsertionOrder() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder()
+        CheckMatrix m = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .add("doc-2", "view", "alice", true)
                 .add("doc-3", "view", "alice", true)
@@ -110,7 +110,7 @@ class CheckMatrixTest {
 
     @Test
     void forEach_visitsEveryCell() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder()
+        CheckMatrix m = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", true)
                 .add("doc-1", "edit", "alice", false)
                 .build();
@@ -126,7 +126,7 @@ class CheckMatrixTest {
 
     @Test
     void emptyMatrix_hasSizeZeroAndReturnsFalseForAllQueries() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder().build();
+        CheckMatrix m = CheckMatrix.builder().build();
         assertThat(m.size()).isZero();
         assertThat(m.allowed("x", "y", "z")).isFalse();
         assertThat(m.allAllowed()).isTrue();       // vacuously true
@@ -136,7 +136,7 @@ class CheckMatrixTest {
 
     @Test
     void lastWriteWins_onDuplicateCell() {
-        com.authx.sdk.model.CheckMatrix m = CheckMatrix.builder()
+        CheckMatrix m = CheckMatrix.builder()
                 .add("doc-1", "view", "alice", false)
                 .add("doc-1", "view", "alice", true)   // overwrites
                 .build();

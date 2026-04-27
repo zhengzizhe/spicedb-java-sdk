@@ -12,9 +12,6 @@ import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
-
-import org.jspecify.annotations.Nullable;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,7 +19,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Fluent action for granting one or more relations on a resource to subjects.
@@ -168,7 +167,7 @@ public class GrantAction {
                         resourceType + "." + rel + " only accepts wildcards (" + shapes(sts)
                                 + "); use toWildcard(ResourceType) instead");
             }
-            java.util.Optional<com.authx.sdk.model.SubjectType> single = SubjectType.inferSingleType(sts);
+            Optional<SubjectType> single = SubjectType.inferSingleType(sts);
             if (single.isEmpty()) {
                 throw new IllegalArgumentException(
                         "ambiguous subject type for " + resourceType + "." + rel

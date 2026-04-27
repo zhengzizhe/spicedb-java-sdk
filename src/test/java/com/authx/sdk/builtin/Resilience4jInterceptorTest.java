@@ -10,10 +10,9 @@ import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.transport.InMemoryTransport;
 import com.authx.sdk.transport.InterceptorTransport;
 import com.authx.sdk.transport.SdkTransport;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,19 +21,19 @@ class Resilience4jInterceptorTest {
 
     @Test
     void rateLimiter_rejectsOverLimit() {
-        com.authx.sdk.builtin.Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
+        Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
                 .rateLimiter(1)
                 .eventBus(new DefaultTypedEventBus())
                 .build();
 
-        com.authx.sdk.transport.InMemoryTransport inner = new InMemoryTransport();
+        InMemoryTransport inner = new InMemoryTransport();
         inner.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
                 ResourceRef.of("doc", "1"), Relation.of("view"),
                 SubjectRef.of("user", "alice", null))));
 
-        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(interceptor));
-        com.authx.sdk.model.CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        InterceptorTransport transport = new InterceptorTransport(inner, List.of(interceptor));
+        CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         // First call succeeds
         transport.check(request);
@@ -47,7 +46,7 @@ class Resilience4jInterceptorTest {
 
     @Test
     void bulkhead_rejectsOverLimit() {
-        com.authx.sdk.builtin.Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
+        Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
                 .bulkhead(1)
                 .eventBus(new DefaultTypedEventBus())
                 .build();
@@ -61,8 +60,8 @@ class Resilience4jInterceptorTest {
             }
         };
 
-        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(blockingTransport, List.of(interceptor));
-        com.authx.sdk.model.CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        InterceptorTransport transport = new InterceptorTransport(blockingTransport, List.of(interceptor));
+        CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         // First call acquires bulkhead and succeeds (also releases in finally)
         transport.check(request);
@@ -73,18 +72,18 @@ class Resilience4jInterceptorTest {
 
     @Test
     void bothDisabled_isNoop() {
-        com.authx.sdk.builtin.Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
+        Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
                 .eventBus(new DefaultTypedEventBus())
                 .build();
 
-        com.authx.sdk.transport.InMemoryTransport inner = new InMemoryTransport();
+        InMemoryTransport inner = new InMemoryTransport();
         inner.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
                 ResourceRef.of("doc", "1"), Relation.of("view"),
                 SubjectRef.of("user", "alice", null))));
 
-        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(interceptor));
-        com.authx.sdk.model.CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        InterceptorTransport transport = new InterceptorTransport(inner, List.of(interceptor));
+        CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         for (int i = 0; i < 1000; i++) {
             transport.check(request);

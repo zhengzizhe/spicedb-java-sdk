@@ -2,13 +2,12 @@ package com.authx.sdk.action;
 
 import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.BatchResult;
+import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
-
-import org.jspecify.annotations.Nullable;
-
 import java.util.ArrayList;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Fluent builder for batching multiple grant/revoke operations into a single RPC.
@@ -57,7 +56,7 @@ public class BatchBuilder {
     public BatchResult execute() {
         if (updates.isEmpty()) return new BatchResult(null);
         // Send all updates (TOUCH + DELETE) in a single writeRelationships call
-        com.authx.sdk.model.GrantResult r = transport.writeRelationships(updates);
+        GrantResult r = transport.writeRelationships(updates);
         return new BatchResult(r.zedToken());
     }
 }

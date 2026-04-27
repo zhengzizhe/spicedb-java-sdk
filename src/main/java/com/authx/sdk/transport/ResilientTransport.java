@@ -9,10 +9,12 @@ import com.authx.sdk.exception.AuthxPreconditionException;
 import com.authx.sdk.exception.AuthxResourceExhaustedException;
 import com.authx.sdk.exception.AuthxUnimplementedException;
 import com.authx.sdk.exception.CircuitBreakerOpenException;
+import com.authx.sdk.metrics.SdkMetrics;
 import com.authx.sdk.model.*;
 import com.authx.sdk.model.enums.Permissionship;
 import com.authx.sdk.policy.CircuitBreakerPolicy;
 import com.authx.sdk.policy.PolicyRegistry;
+import com.authx.sdk.policy.ResourcePolicy;
 import com.authx.sdk.policy.RetryPolicy;
 import com.authx.sdk.trace.LogCtx;
 import com.authx.sdk.trace.LogFields;
@@ -21,7 +23,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -70,10 +71,10 @@ public class ResilientTransport extends ForwardingTransport {
     private final LongAdder requestCount = new LongAdder();
     private final AtomicLong lastResetTime = new AtomicLong(System.nanoTime());
 
-    private final com.authx.sdk.metrics.SdkMetrics sdkMetrics;
+    private final SdkMetrics sdkMetrics;
 
     public ResilientTransport(SdkTransport delegate, PolicyRegistry policyRegistry,
-                              TypedEventBus eventBus, com.authx.sdk.metrics.SdkMetrics sdkMetrics) {
+                              TypedEventBus eventBus, SdkMetrics sdkMetrics) {
         this.delegate = delegate;
         this.policyRegistry = policyRegistry;
         this.eventBus = eventBus != null ? eventBus : new DefaultTypedEventBus();
@@ -112,7 +113,7 @@ public class ResilientTransport extends ForwardingTransport {
     @Override
     public CheckResult check(CheckRequest request) {
         String resourceType = request.resource().type();
-        com.authx.sdk.policy.ResourcePolicy policy = policyRegistry.resolve(resourceType);
+        ResourcePolicy policy = policyRegistry.resolve(resourceType);
         Set<String> failOpenPerms = policy.circuitBreaker() != null
                 ? policy.circuitBreaker().failOpenPermissions() : Set.of();
 
@@ -237,7 +238,7 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private CircuitBreaker createBreaker(String resourceType) {
-        com.authx.sdk.policy.CircuitBreakerPolicy policy = policyRegistry.resolve(resourceType).circuitBreaker();
+        CircuitBreakerPolicy policy = policyRegistry.resolve(resourceType).circuitBreaker();
         if (policy == null) policy = CircuitBreakerPolicy.defaults();
 
         CircuitBreakerConfig config = CircuitBreakerConfig.custom()
@@ -305,7 +306,7 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private Retry createRetry(String resourceType) {
-        com.authx.sdk.policy.RetryPolicy policy = policyRegistry.resolve(resourceType).retry();
+        RetryPolicy policy = policyRegistry.resolve(resourceType).retry();
         if (policy == null || policy.maxAttempts() <= 0) {
             return Retry.of("authx-" + resourceType + "-noop",
                     RetryConfig.custom().maxAttempts(1).build());

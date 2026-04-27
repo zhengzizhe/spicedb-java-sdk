@@ -1,5 +1,6 @@
 package com.authx.sdk.transport;
 
+import com.authx.sdk.exception.AuthxConnectionException;
 import com.authx.sdk.model.CheckRequest;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
@@ -7,13 +8,12 @@ import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.model.enums.Permissionship;
-import org.junit.jupiter.api.Test;
-
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -49,7 +49,7 @@ class CoalescingTransportFailureEvictionTest {
                 try { releaseFailure.await(5, TimeUnit.SECONDS); } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                 }
-                throw new com.authx.sdk.exception.AuthxConnectionException(
+                throw new AuthxConnectionException(
                         "simulated leader failure", null);
             }
             return new CheckResult(Permissionship.HAS_PERMISSION, "tok-" + call, Optional.empty());
@@ -58,12 +58,12 @@ class CoalescingTransportFailureEvictionTest {
 
     @Test
     void newcomer_after_leader_failure_starts_fresh_call() throws Exception {
-        com.authx.sdk.transport.CoalescingTransportFailureEvictionTest.GatedFailingTransport delegate = new GatedFailingTransport();
-        com.authx.sdk.transport.CoalescingTransport coalescer = new CoalescingTransport(delegate);
+        CoalescingTransportFailureEvictionTest.GatedFailingTransport delegate = new GatedFailingTransport();
+        CoalescingTransport coalescer = new CoalescingTransport(delegate);
 
         // Thread A is the leader; it will block on releaseFailure before throwing.
-        java.util.concurrent.CompletableFuture<java.lang.Throwable> leaderErr = new CompletableFuture<Throwable>();
-        java.lang.Thread leader = new Thread(() -> {
+        CompletableFuture<Throwable> leaderErr = new CompletableFuture<Throwable>();
+        Thread leader = new Thread(() -> {
             try {
                 coalescer.check(req());
                 leaderErr.complete(null);
@@ -78,15 +78,15 @@ class CoalescingTransportFailureEvictionTest {
 
         // Release the failure, then wait briefly for the leader to propagate.
         delegate.releaseFailure.countDown();
-        java.lang.Throwable lerr = leaderErr.get(2, TimeUnit.SECONDS);
+        Throwable lerr = leaderErr.get(2, TimeUnit.SECONDS);
         assertNotNull(lerr, "leader must have thrown");
-        assertInstanceOf(com.authx.sdk.exception.AuthxConnectionException.class, lerr);
+        assertInstanceOf(AuthxConnectionException.class, lerr);
 
         // Now a newcomer arrives AFTER leader failed. Under the fixed eviction
         // order (evict before publish), the inflight map has already been
         // cleared, so putIfAbsent returns null and the newcomer starts a fresh
         // call — which the stub transport returns successfully (call #2).
-        com.authx.sdk.model.CheckResult newcomerResult = coalescer.check(req());
+        CheckResult newcomerResult = coalescer.check(req());
         assertEquals(Permissionship.HAS_PERMISSION, newcomerResult.permissionship(),
                 "newcomer must start its own call and receive success, not ghost failure");
         assertEquals(2, delegate.calls.get(),
@@ -99,20 +99,20 @@ class CoalescingTransportFailureEvictionTest {
         // leader's future BEFORE it fails must still receive the exception
         // (coalescing's whole point). Only the post-eviction newcomers start
         // fresh.
-        com.authx.sdk.transport.CoalescingTransportFailureEvictionTest.GatedFailingTransport delegate = new GatedFailingTransport();
-        com.authx.sdk.transport.CoalescingTransport coalescer = new CoalescingTransport(delegate);
+        CoalescingTransportFailureEvictionTest.GatedFailingTransport delegate = new GatedFailingTransport();
+        CoalescingTransport coalescer = new CoalescingTransport(delegate);
 
-        java.util.concurrent.CompletableFuture<java.lang.Throwable> leaderErr = new CompletableFuture<Throwable>();
-        java.util.concurrent.CompletableFuture<java.lang.Throwable> waiterErr = new CompletableFuture<Throwable>();
+        CompletableFuture<Throwable> leaderErr = new CompletableFuture<Throwable>();
+        CompletableFuture<Throwable> waiterErr = new CompletableFuture<Throwable>();
 
-        java.lang.Thread leader = new Thread(() -> {
+        Thread leader = new Thread(() -> {
             try { coalescer.check(req()); leaderErr.complete(null); }
             catch (Throwable t) { leaderErr.complete(t); }
         }, "leader");
         leader.start();
         Thread.sleep(20);  // leader registers the inflight future
 
-        java.lang.Thread waiter = new Thread(() -> {
+        Thread waiter = new Thread(() -> {
             try { coalescer.check(req()); waiterErr.complete(null); }
             catch (Throwable t) { waiterErr.complete(t); }
         }, "waiter");
@@ -121,8 +121,8 @@ class CoalescingTransportFailureEvictionTest {
 
         delegate.releaseFailure.countDown();
 
-        java.lang.Throwable lerr = leaderErr.get(2, TimeUnit.SECONDS);
-        java.lang.Throwable werr = waiterErr.get(2, TimeUnit.SECONDS);
+        Throwable lerr = leaderErr.get(2, TimeUnit.SECONDS);
+        Throwable werr = waiterErr.get(2, TimeUnit.SECONDS);
         assertNotNull(lerr);
         assertNotNull(werr,
                 "waiter joined before eviction — must receive the leader's exception");

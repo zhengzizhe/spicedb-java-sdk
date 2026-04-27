@@ -3,7 +3,7 @@ package com.authx.sdk;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectRef;
-
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -97,7 +97,7 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
      */
     public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
     MultiFinder<R, P> findBy(ResourceType<SR, SP> subjectType, Iterable<String> ids) {
-        java.util.List<String> refs = new java.util.ArrayList<>();
+        List<String> refs = new ArrayList<>();
         for (String id : ids) refs.add(subjectType.name() + ":" + id);
         return findBy(refs);
     }
@@ -127,14 +127,14 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
 
     /** Canonical-string varargs form of {@link #findBy(SubjectRef...)}. */
     public MultiFinder<R, P> findBy(String... subjectRefs) {
-        java.util.ArrayList<com.authx.sdk.model.SubjectRef> refs = new java.util.ArrayList<SubjectRef>(subjectRefs.length);
+        ArrayList<SubjectRef> refs = new ArrayList<SubjectRef>(subjectRefs.length);
         for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
         return new MultiFinder<>(factory, refs);
     }
 
     /** {@link Iterable} overload of {@link #findBy(String...)}. */
     public MultiFinder<R, P> findBy(Iterable<String> subjectRefs) {
-        java.util.ArrayList<com.authx.sdk.model.SubjectRef> refs = new java.util.ArrayList<SubjectRef>();
+        ArrayList<SubjectRef> refs = new ArrayList<SubjectRef>();
         for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
         return new MultiFinder<>(factory, refs);
     }
@@ -158,7 +158,7 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
 
         /** Run one {@code LookupResources} per subject and collect results keyed by the subject's canonical ref string. */
         public Map<String, List<String>> can(P permission) {
-            java.util.LinkedHashMap<java.lang.String,java.util.List<java.lang.String>> out = new LinkedHashMap<String, List<String>>(subjects.size());
+            LinkedHashMap<String, List<String>> out = new LinkedHashMap<String, List<String>>(subjects.size());
             for (SubjectRef subject : subjects) {
                 out.put(subject.toRefString(), new TypedFinder<P>(factory, subject).limit(limit).can(permission));
             }

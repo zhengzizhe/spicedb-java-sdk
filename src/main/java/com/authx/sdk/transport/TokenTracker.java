@@ -1,10 +1,13 @@
 package com.authx.sdk.transport;
 
+import com.authx.sdk.event.SdkTypedEvent;
+import com.authx.sdk.event.TypedEventBus;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.policy.ReadConsistency;
 import com.authx.sdk.spi.DistributedTokenStore;
 import com.authx.sdk.trace.LogCtx;
-
+import java.time.Instant;
+import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
@@ -37,7 +40,7 @@ public class TokenTracker {
      * events ({@code TokenStoreUnavailable} / {@code TokenStoreRecovered}).
      * Null = events not published (zero-cost when no bus configured).
      */
-    private volatile com.authx.sdk.event.TypedEventBus eventBus;
+    private volatile TypedEventBus eventBus;
 
     public TokenTracker() {
         this(null);
@@ -48,7 +51,7 @@ public class TokenTracker {
     }
 
     /** Allow the builder to wire an event bus after construction. */
-    public void setEventBus(com.authx.sdk.event.TypedEventBus bus) {
+    public void setEventBus(TypedEventBus bus) {
         this.eventBus = bus;
     }
 
@@ -148,7 +151,7 @@ public class TokenTracker {
         if (distributedAvailable.compareAndSet(false, true)) {
             LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                     "Distributed token store recovered, cross-instance SESSION consistency restored"));
-            publishEvent(new com.authx.sdk.event.SdkTypedEvent.TokenStoreRecovered(java.time.Instant.now()));
+            publishEvent(new SdkTypedEvent.TokenStoreRecovered(Instant.now()));
         }
     }
 
@@ -165,14 +168,14 @@ public class TokenTracker {
             LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                     "Distributed token store unavailable, SESSION consistency degraded to local-only: {0}",
                     e.getMessage()));
-            publishEvent(new com.authx.sdk.event.SdkTypedEvent.TokenStoreUnavailable(
-                    java.time.Instant.now(),
+            publishEvent(new SdkTypedEvent.TokenStoreUnavailable(
+                    Instant.now(),
                     e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
         }
     }
 
-    private void publishEvent(com.authx.sdk.event.SdkTypedEvent event) {
-        com.authx.sdk.event.TypedEventBus bus = eventBus;
+    private void publishEvent(SdkTypedEvent event) {
+        TypedEventBus bus = eventBus;
         if (bus == null) return;
         try {
             bus.publish(event);
@@ -196,7 +199,7 @@ public class TokenTracker {
      * Returns an arbitrary token if multiple resource types have tokens, or null if none.
      */
     public String getLastWriteToken() {
-        java.util.Collection<java.lang.String> values = lastWriteTokens.values();
+        Collection<String> values = lastWriteTokens.values();
         return values.isEmpty() ? null : values.iterator().next();
     }
 }

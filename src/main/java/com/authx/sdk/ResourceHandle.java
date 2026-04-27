@@ -12,12 +12,11 @@ import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.ExpandTree;
 import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.transport.SdkTransport;
-
-import org.jspecify.annotations.Nullable;
-
 import java.util.concurrent.Executor;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A handle to a specific resource instance (e.g., {@code document:doc-123}).
@@ -134,7 +133,7 @@ public class ResourceHandle {
      * descriptor (e.g. {@code User}) so business code can avoid
      * hand-writing the type name string.
      */
-    public <R extends Enum<R> & com.authx.sdk.model.Relation.Named,
+    public <R extends Enum<R> & Relation.Named,
             P extends Enum<P> & Permission.Named>
     WhoBuilder who(ResourceType<R, P> subjectType) {
         return who(subjectType.name());

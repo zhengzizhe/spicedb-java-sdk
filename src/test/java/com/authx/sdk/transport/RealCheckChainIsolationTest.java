@@ -1,9 +1,11 @@
 package com.authx.sdk.transport;
 
 import com.authx.sdk.exception.AuthxAuthException;
+import com.authx.sdk.exception.AuthxException;
 import com.authx.sdk.model.CheckRequest;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
+import com.authx.sdk.model.GrantResult;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
@@ -12,11 +14,10 @@ import com.authx.sdk.model.enums.Permissionship;
 import com.authx.sdk.model.enums.SdkAction;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.spi.SdkInterceptor.OperationContext;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -51,10 +52,10 @@ class RealCheckChainIsolationTest {
             checkCalls.incrementAndGet();
             return new CheckResult(Permissionship.HAS_PERMISSION, "tok", Optional.empty());
         }
-        @Override public com.authx.sdk.model.GrantResult writeRelationships(
-                java.util.List<SdkTransport.RelationshipUpdate> updates) {
+        @Override public GrantResult writeRelationships(
+                List<SdkTransport.RelationshipUpdate> updates) {
             writeCalls.incrementAndGet();
-            return new com.authx.sdk.model.GrantResult("tok", updates == null ? 0 : updates.size());
+            return new GrantResult("tok", updates == null ? 0 : updates.size());
         }
     }
 
@@ -62,8 +63,8 @@ class RealCheckChainIsolationTest {
 
     @Test
     void read_chain_skips_broken_interceptor_and_continues() {
-        java.util.concurrent.atomic.AtomicInteger aCalls = new AtomicInteger();
-        java.util.concurrent.atomic.AtomicInteger cCalls = new AtomicInteger();
+        AtomicInteger aCalls = new AtomicInteger();
+        AtomicInteger cCalls = new AtomicInteger();
 
         SdkInterceptor a = new SdkInterceptor() {
             @Override public CheckResult interceptCheck(CheckChain chain) {
@@ -83,9 +84,9 @@ class RealCheckChainIsolationTest {
             }
         };
 
-        com.authx.sdk.transport.RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
-        com.authx.sdk.transport.RealCheckChain chain = new RealCheckChain(List.of(a, b_broken, c), 0, req(), transport, ctx());
-        com.authx.sdk.model.CheckResult result = chain.proceed(req());
+        RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
+        RealCheckChain chain = new RealCheckChain(List.of(a, b_broken, c), 0, req(), transport, ctx());
+        CheckResult result = chain.proceed(req());
 
         assertEquals(Permissionship.HAS_PERMISSION, result.permissionship(),
                 "Despite broken interceptor B, the request must complete.");
@@ -96,17 +97,17 @@ class RealCheckChainIsolationTest {
 
     @Test
     void read_chain_propagates_authx_exceptions_unchanged() {
-        com.authx.sdk.exception.AuthxAuthException authException = new AuthxAuthException("denied", null);
+        AuthxAuthException authException = new AuthxAuthException("denied", null);
         SdkInterceptor denier = new SdkInterceptor() {
             @Override public CheckResult interceptCheck(CheckChain chain) {
                 throw authException;
             }
         };
 
-        com.authx.sdk.transport.RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
-        com.authx.sdk.transport.RealCheckChain chain = new RealCheckChain(List.of(denier), 0, req(), transport, ctx());
+        RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
+        RealCheckChain chain = new RealCheckChain(List.of(denier), 0, req(), transport, ctx());
 
-        com.authx.sdk.exception.AuthxAuthException ex = assertThrows(AuthxAuthException.class, () -> chain.proceed(req()));
+        AuthxAuthException ex = assertThrows(AuthxAuthException.class, () -> chain.proceed(req()));
         assertSame(authException, ex, "AuthxException subclasses must pass through unchanged");
         assertEquals(0, transport.checkCalls.get(), "transport MUST NOT be called on Authx denial");
     }
@@ -115,25 +116,25 @@ class RealCheckChainIsolationTest {
 
     @Test
     void write_chain_aborts_on_interceptor_bug() {
-        java.util.concurrent.atomic.AtomicInteger cCalls = new AtomicInteger();
+        AtomicInteger cCalls = new AtomicInteger();
 
         SdkInterceptor bug = new SdkInterceptor() {
-            @Override public com.authx.sdk.model.GrantResult interceptWrite(WriteChain chain) {
+            @Override public GrantResult interceptWrite(WriteChain chain) {
                 throw new IllegalStateException("policy enforcement failed");
             }
         };
         SdkInterceptor c = new SdkInterceptor() {
-            @Override public com.authx.sdk.model.GrantResult interceptWrite(WriteChain chain) {
+            @Override public GrantResult interceptWrite(WriteChain chain) {
                 cCalls.incrementAndGet();
                 return chain.proceed(chain.request());
             }
         };
 
-        com.authx.sdk.transport.RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
-        com.authx.sdk.model.WriteRequest writeReq = new WriteRequest(java.util.List.of());
-        com.authx.sdk.transport.RealWriteChain chain = new RealWriteChain(List.of(bug, c), 0, writeReq, transport, writeCtx());
+        RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
+        WriteRequest writeReq = new WriteRequest(List.of());
+        RealWriteChain chain = new RealWriteChain(List.of(bug, c), 0, writeReq, transport, writeCtx());
 
-        com.authx.sdk.exception.AuthxException ex = assertThrows(com.authx.sdk.exception.AuthxException.class,
+        AuthxException ex = assertThrows(AuthxException.class,
                 () -> chain.proceed(writeReq));
         assertNotNull(ex.getCause(), "original bug must be preserved as cause");
         assertInstanceOf(IllegalStateException.class, ex.getCause());

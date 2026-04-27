@@ -1,7 +1,6 @@
 package com.authx.sdk.transport;
 
 import com.authx.sdk.model.*;
-
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -38,7 +37,7 @@ public class InMemoryTransport implements SdkTransport {
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
         Map<String, CheckResult> results = new LinkedHashMap<>();
         for (SubjectRef sub : subjects) {
-            com.authx.sdk.model.CheckRequest subRequest = CheckRequest.of(request.resource(), request.permission(), sub, request.consistency());
+            CheckRequest subRequest = CheckRequest.of(request.resource(), request.permission(), sub, request.consistency());
             results.put(sub.id(), check(subRequest));
         }
         return new BulkCheckResult(results);
@@ -46,7 +45,7 @@ public class InMemoryTransport implements SdkTransport {
 
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        for (com.authx.sdk.transport.SdkTransport.RelationshipUpdate u : updates) {
+        for (SdkTransport.RelationshipUpdate u : updates) {
             String key = tupleKey(u.resource().type(), u.resource().id(), u.relation().name(),
                     u.subject().type(), u.subject().id(), u.subject().relation());
             if (u.operation() == RelationshipUpdate.Operation.DELETE) {
@@ -61,7 +60,7 @@ public class InMemoryTransport implements SdkTransport {
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        for (com.authx.sdk.transport.SdkTransport.RelationshipUpdate u : updates) {
+        for (SdkTransport.RelationshipUpdate u : updates) {
             String key = tupleKey(u.resource().type(), u.resource().id(), u.relation().name(),
                     u.subject().type(), u.subject().id(), u.subject().relation());
             store.remove(key);
@@ -81,7 +80,7 @@ public class InMemoryTransport implements SdkTransport {
     @Override
     public List<SubjectRef> lookupSubjects(LookupSubjectsRequest request) {
         // In-memory: match on relation == permission (no recursive permission computation)
-        java.util.List<com.authx.sdk.model.SubjectRef> all = store.values().stream()
+        List<SubjectRef> all = store.values().stream()
                 .filter(t -> t.resourceType().equals(request.resource().type()))
                 .filter(t -> t.resourceId().equals(request.resource().id()))
                 .filter(t -> t.relation().equals(request.permission().name()))
@@ -94,7 +93,7 @@ public class InMemoryTransport implements SdkTransport {
     @Override
     public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
         // In-memory: match on relation == permission (no recursive permission computation)
-        java.util.List<com.authx.sdk.model.ResourceRef> all = store.values().stream()
+        List<ResourceRef> all = store.values().stream()
                 .filter(t -> t.resourceType().equals(request.resourceType()))
                 .filter(t -> t.relation().equals(request.permission().name()))
                 .filter(t -> t.subjectType().equals(request.subject().type()))

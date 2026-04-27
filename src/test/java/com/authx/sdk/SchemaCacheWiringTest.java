@@ -12,11 +12,10 @@ import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.spi.HealthProbe;
 import com.authx.sdk.transport.InMemoryTransport;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,19 +32,19 @@ class SchemaCacheWiringTest {
 
     /** Build an AuthxClient backed by InMemoryTransport with the given SchemaCache. */
     private AuthxClient client(SchemaCache cache) {
-        com.authx.sdk.event.DefaultTypedEventBus bus = new DefaultTypedEventBus();
-        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
+        DefaultTypedEventBus bus = new DefaultTypedEventBus();
+        LifecycleManager lm = new LifecycleManager(bus);
         lm.begin(); lm.complete();
-        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
-        com.authx.sdk.internal.SdkObservability obs = new SdkObservability(new SdkMetrics(), bus, null);
-        com.authx.sdk.internal.SdkConfig cfg = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
+        SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
+        SdkObservability obs = new SdkObservability(new SdkMetrics(), bus, null);
+        SdkConfig cfg = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
         return new AuthxClient(
                 new InMemoryTransport(), infra, obs, cfg, HealthProbe.up(),
                 new SchemaClient(cache), cache);
     }
 
     private SchemaCache schemaFor(String type, String relation, List<SubjectType> sts) {
-        com.authx.sdk.cache.SchemaCache c = new SchemaCache();
+        SchemaCache c = new SchemaCache();
         c.updateFromMap(Map.of(type, new SchemaCache.DefinitionCache(
                 Set.of(relation), Set.of(), Map.of(relation, sts))));
         return c;
@@ -53,9 +52,9 @@ class SchemaCacheWiringTest {
 
     @Test
     void untypedChainEnforcesValidationWhenCachePopulated() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        try (com.authx.sdk.AuthxClient c = client(cache)) {
-            com.authx.sdk.ResourceFactory factory = c.on("document");
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        try (AuthxClient c = client(cache)) {
+            ResourceFactory factory = c.on("document");
             assertThatThrownBy(() -> factory.resource("d-1").grant("folder").to("user:alice"))
                     .isInstanceOf(InvalidRelationException.class)
                     .hasMessageContaining("[folder]");
@@ -66,8 +65,8 @@ class SchemaCacheWiringTest {
 
     @Test
     void oneOffResourceHandleAlsoEnforcesValidation() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        try (com.authx.sdk.AuthxClient c = client(cache)) {
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        try (AuthxClient c = client(cache)) {
             assertThatThrownBy(() -> c.resource("document", "d-1").grant("folder").to("user:alice"))
                     .isInstanceOf(InvalidRelationException.class)
                     .hasMessageContaining("[folder]");
@@ -76,13 +75,13 @@ class SchemaCacheWiringTest {
 
     @Test
     void nullCacheIsFailOpen() {
-        com.authx.sdk.event.DefaultTypedEventBus bus = new DefaultTypedEventBus();
-        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
+        DefaultTypedEventBus bus = new DefaultTypedEventBus();
+        LifecycleManager lm = new LifecycleManager(bus);
         lm.begin(); lm.complete();
-        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
-        com.authx.sdk.internal.SdkObservability obs = new SdkObservability(new SdkMetrics(), bus, null);
-        com.authx.sdk.internal.SdkConfig cfg = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
-        try (com.authx.sdk.AuthxClient c = new AuthxClient(new InMemoryTransport(), infra, obs, cfg, HealthProbe.up())) {
+        SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
+        SdkObservability obs = new SdkObservability(new SdkMetrics(), bus, null);
+        SdkConfig cfg = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
+        try (AuthxClient c = new AuthxClient(new InMemoryTransport(), infra, obs, cfg, HealthProbe.up())) {
             // No schema cache → any subject string accepted (fail-open).
             c.on("document").resource("d-1").grant("folder").to("user:alice");
         }

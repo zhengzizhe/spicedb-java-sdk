@@ -1,9 +1,9 @@
 package com.authx.sdk.trace;
 
-import org.junit.jupiter.api.Test;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,7 +47,7 @@ class LogFieldsTest {
 
     @Test
     void toMdcMap_skipsNullAndBlank() {
-        java.util.Map<java.lang.String,java.lang.String> map = LogFields.toMdcMap("CHECK", "document", "doc-1",
+        Map<String, String> map = LogFields.toMdcMap("CHECK", "document", "doc-1",
                 "view", null, "user:alice", "minimize_latency");
         assertThat(map)
                 .containsEntry(LogFields.KEY_ACTION, "CHECK")
@@ -58,7 +58,7 @@ class LogFieldsTest {
 
     @Test
     void toMdcMap_allNull_returnsEmptyMap() {
-        java.util.Map<java.lang.String,java.lang.String> map = LogFields.toMdcMap(null, null, null, null, null, null, null);
+        Map<String, String> map = LogFields.toMdcMap(null, null, null, null, null, null, null);
         assertThat(map).isEmpty();
     }
 

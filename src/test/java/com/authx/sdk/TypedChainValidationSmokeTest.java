@@ -14,11 +14,10 @@ import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.spi.HealthProbe;
 import com.authx.sdk.transport.InMemoryTransport;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -64,19 +63,19 @@ class TypedChainValidationSmokeTest {
             ResourceType.of("document", TestRel.class, TestPerm.class);
 
     private AuthxClient client(SchemaCache cache) {
-        com.authx.sdk.event.DefaultTypedEventBus bus = new DefaultTypedEventBus();
-        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
+        DefaultTypedEventBus bus = new DefaultTypedEventBus();
+        LifecycleManager lm = new LifecycleManager(bus);
         lm.begin(); lm.complete();
-        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
-        com.authx.sdk.internal.SdkObservability obs = new SdkObservability(new SdkMetrics(), bus, null);
-        com.authx.sdk.internal.SdkConfig cfg = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
+        SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
+        SdkObservability obs = new SdkObservability(new SdkMetrics(), bus, null);
+        SdkConfig cfg = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
         return new AuthxClient(
                 new InMemoryTransport(), infra, obs, cfg, HealthProbe.up(),
                 new SchemaClient(cache), cache);
     }
 
     private SchemaCache schemaFor(String type, String relation, List<SubjectType> sts) {
-        com.authx.sdk.cache.SchemaCache c = new SchemaCache();
+        SchemaCache c = new SchemaCache();
         c.updateFromMap(Map.of(type, new SchemaCache.DefinitionCache(
                 Set.of(relation), Set.of(), Map.of(relation, sts))));
         return c;
@@ -84,8 +83,8 @@ class TypedChainValidationSmokeTest {
 
     @Test
     void typedGrantRejectsWrongSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        try (com.authx.sdk.AuthxClient c = client(cache)) {
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        try (AuthxClient c = client(cache)) {
             // GrantFlow defers validation to .commit() — that's where the
             // schema check fires for the whole accumulated batch.
             assertThatThrownBy(() -> c.on(DOC_TYPE).select("d-1")
@@ -97,8 +96,8 @@ class TypedChainValidationSmokeTest {
 
     @Test
     void typedGrantAcceptsAllowedSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        try (com.authx.sdk.AuthxClient c = client(cache)) {
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        try (AuthxClient c = client(cache)) {
             // No throw — validation lets folder subjects through.
             c.on(DOC_TYPE).select("d-1").grant(TestRel.FOLDER).to("folder:f-1").commit();
         }
@@ -106,8 +105,8 @@ class TypedChainValidationSmokeTest {
 
     @Test
     void typedRevokeRejectsWrongSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        try (com.authx.sdk.AuthxClient c = client(cache)) {
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        try (AuthxClient c = client(cache)) {
             // Prime the store so there's something to revoke, with a matching subject.
             c.on(DOC_TYPE).select("d-1").grant(TestRel.FOLDER).to("folder:f-1").commit();
             assertThatThrownBy(() -> c.on(DOC_TYPE).select("d-1")

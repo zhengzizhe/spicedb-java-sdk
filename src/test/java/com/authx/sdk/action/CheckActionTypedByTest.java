@@ -1,12 +1,13 @@
 package com.authx.sdk.action;
 
 import com.authx.sdk.ResourceType;
+import com.authx.sdk.model.BulkCheckResult;
+import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.transport.InMemoryTransport;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,22 +43,22 @@ class CheckActionTypedByTest {
 
     @Test
     void byTypedBuildsCanonicalRef() {
-        com.authx.sdk.action.CheckAction a = new CheckAction("document", "d-1", new InMemoryTransport(),
+        CheckAction a = new CheckAction("document", "d-1", new InMemoryTransport(),
                 Runnable::run, new String[]{"view"});
-        com.authx.sdk.ResourceType<com.authx.sdk.action.CheckActionTypedByTest.R,com.authx.sdk.action.CheckActionTypedByTest.P> user = ResourceType.of("user", R.class, P.class);
+        ResourceType<CheckActionTypedByTest.R, CheckActionTypedByTest.P> user = ResourceType.of("user", R.class, P.class);
         // InMemoryTransport returns deny by default — all we want is that the
         // call dispatches without any overload-resolution / parse error.
-        com.authx.sdk.model.CheckResult result = a.by(user, "alice");
+        CheckResult result = a.by(user, "alice");
         assertThat(result).isNotNull();
         assertThat(result.hasPermission()).isFalse();
     }
 
     @Test
     void byAllTypedIterable() {
-        com.authx.sdk.action.CheckAction a = new CheckAction("document", "d-1", new InMemoryTransport(),
+        CheckAction a = new CheckAction("document", "d-1", new InMemoryTransport(),
                 Runnable::run, new String[]{"view"});
-        com.authx.sdk.ResourceType<com.authx.sdk.action.CheckActionTypedByTest.R,com.authx.sdk.action.CheckActionTypedByTest.P> user = ResourceType.of("user", R.class, P.class);
-        com.authx.sdk.model.BulkCheckResult m = a.byAll(user, List.of("alice", "bob", "carol"));
+        ResourceType<CheckActionTypedByTest.R, CheckActionTypedByTest.P> user = ResourceType.of("user", R.class, P.class);
+        BulkCheckResult m = a.byAll(user, List.of("alice", "bob", "carol"));
         assertThat(m).isNotNull();
         // InMemoryTransport stores no relationships → all three deny.
         assertThat(m.asMap()).hasSize(3);

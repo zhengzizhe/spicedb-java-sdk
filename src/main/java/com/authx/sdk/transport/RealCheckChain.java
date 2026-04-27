@@ -1,5 +1,6 @@
 package com.authx.sdk.transport;
 
+import com.authx.sdk.exception.AuthxException;
 import com.authx.sdk.model.CheckRequest;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.spi.AttributeKey;
@@ -8,7 +9,6 @@ import com.authx.sdk.spi.SdkInterceptor.CheckChain;
 import com.authx.sdk.spi.SdkInterceptor.OperationContext;
 import com.authx.sdk.trace.LogCtx;
 import com.authx.sdk.trace.LogFields;
-
 import java.util.List;
 
 /**
@@ -55,7 +55,7 @@ public final class RealCheckChain implements CheckChain {
             return transport.check(request);
         }
         // Create next chain with incremented index and (possibly modified) request
-        com.authx.sdk.transport.RealCheckChain next = new RealCheckChain(interceptors, index + 1, request, transport, ctx);
+        RealCheckChain next = new RealCheckChain(interceptors, index + 1, request, transport, ctx);
         // SR:C8 — isolate read-path interceptor exceptions. An interceptor that
         // throws non-Authx (user-code bug) is logged and skipped; the chain
         // continues with `next.proceed(request)` so downstream interceptors
@@ -66,10 +66,10 @@ public final class RealCheckChain implements CheckChain {
         // Authx SDK exceptions propagate unchanged — they represent genuine
         // upstream failures (auth denial, rate limit, etc.) that the caller
         // must see to handle correctly.
-        com.authx.sdk.spi.SdkInterceptor interceptor = interceptors.get(index);
+        SdkInterceptor interceptor = interceptors.get(index);
         try {
             return interceptor.interceptCheck(next);
-        } catch (com.authx.sdk.exception.AuthxException authx) {
+        } catch (AuthxException authx) {
             throw authx;
         } catch (RuntimeException bug) {
             LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(

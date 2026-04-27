@@ -30,7 +30,7 @@ public class PermissionSet {
      * @return whether the subject has the permission
      */
     public boolean can(String permission) {
-        com.authx.sdk.model.CheckResult r = results.get(permission);
+        CheckResult r = results.get(permission);
         return r != null && r.hasPermission();
     }
 

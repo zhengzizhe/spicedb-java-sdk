@@ -6,8 +6,8 @@ import com.authx.sdk.model.enums.OperationResult;
 import com.authx.sdk.model.enums.SdkAction;
 import com.authx.sdk.telemetry.TelemetryReporter;
 import com.authx.sdk.trace.TraceContext;
-
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -37,7 +37,7 @@ public class InstrumentedTransport extends ForwardingTransport {
                 request.subject().type(), request.subject().id(),
                 request.permission().name(),
                 () -> {
-                    com.authx.sdk.model.CheckResult r = delegate.check(request);
+                    CheckResult r = delegate.check(request);
                     return new InstrumentedResult<>(r, r.permissionship().name());
                 });
     }
@@ -108,7 +108,7 @@ public class InstrumentedTransport extends ForwardingTransport {
                               String subjectType, String subjectId, String permission,
                               Supplier<InstrumentedResult<T>> call) {
         // OTel span: child of current active span (business request)
-        java.util.Map<java.lang.String,java.lang.String> spanAttrs = java.util.Map.of(
+        Map<String, String> spanAttrs = Map.of(
                 "authx.action", action.name(),
                 "authx.resource.type", resourceType != null ? resourceType : "",
                 "authx.resource.id", resourceId != null ? resourceId : "",
@@ -119,7 +119,7 @@ public class InstrumentedTransport extends ForwardingTransport {
         boolean isError = true;
         String traceId = TraceContext.traceId();
 
-        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("authx." + action.name().toLowerCase(), spanAttrs)) {
+        try (TraceContext.SpanHandle span = TraceContext.startSpan("authx." + action.name().toLowerCase(), spanAttrs)) {
             // SR:req-7 — enrich span with subject for multi-tenant tracing
             if (subjectType != null && !subjectType.isEmpty()) {
                 String subjectRef = subjectId == null || subjectId.isEmpty()
@@ -127,7 +127,7 @@ public class InstrumentedTransport extends ForwardingTransport {
                 span.setAttribute("authx.subject", subjectRef);
             }
             try {
-                com.authx.sdk.transport.InstrumentedTransport.InstrumentedResult<T> ir = call.get();
+                InstrumentedTransport.InstrumentedResult<T> ir = call.get();
                 result = ir.resultLabel;
                 isError = false;
                 span.setSuccess();

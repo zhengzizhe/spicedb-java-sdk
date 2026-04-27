@@ -1,5 +1,6 @@
 package com.authx.sdk.model;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -140,7 +141,7 @@ public final class CheckMatrix {
 
     /** List of (permission → allowed) pairs for a specific resource/subject slice. */
     public Map<String, Boolean> forResourceAndSubject(String resourceId, String subjectId) {
-        java.util.LinkedHashMap<java.lang.String,java.lang.Boolean> out = new LinkedHashMap<String, Boolean>();
+        LinkedHashMap<String, Boolean> out = new LinkedHashMap<String, Boolean>();
         for (Cell c : cells) {
             if (c.resourceId.equals(resourceId) && c.subjectId.equals(subjectId)) {
                 out.put(c.permission, c.allowed);
@@ -187,7 +188,7 @@ public final class CheckMatrix {
     public static Builder builder() { return new Builder(); }
 
     public static final class Builder {
-        private final java.util.ArrayList<Cell> cells = new java.util.ArrayList<>();
+        private final ArrayList<Cell> cells = new ArrayList<>();
         private final Set<String> resources = new LinkedHashSet<>();
         private final Set<String> permissions = new LinkedHashSet<>();
         private final Set<String> subjects = new LinkedHashSet<>();

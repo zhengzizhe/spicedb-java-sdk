@@ -252,7 +252,7 @@ class TypedClassesTest {
         @Test
         void check_single_permission() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAction action = handle.check(TestPerm.VIEW);
             assertThat(action.by("user:alice")).isTrue();
@@ -263,7 +263,7 @@ class TypedClassesTest {
         void check_multiple_permissions() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-1").grant("edit").to("user:alice");
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             CheckMatrix matrix = handle.check(TestPerm.VIEW, TestPerm.EDIT).byAll("user:alice");
             assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
@@ -273,7 +273,7 @@ class TypedClassesTest {
         @Test
         void check_collection() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAction action = handle.check(List.of(TestPerm.VIEW));
             CheckMatrix matrix = action.byAll("user:alice");
@@ -282,7 +282,7 @@ class TypedClassesTest {
 
         @Test
         void grant_typed() {
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
             // No schema cache => validation is skipped
             handle.grant(TestRel.EDITOR).to("user:alice").commit();
 
@@ -292,7 +292,7 @@ class TypedClassesTest {
         @Test
         void revoke_typed() {
             docFactory.resource("doc-1").grant("editor").to("user:alice");
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
             handle.revoke(TestRel.EDITOR).from("user:alice").commit();
 
             assertThat(docFactory.resource("doc-1").check("editor").by("user:alice").hasPermission()).isFalse();
@@ -302,7 +302,7 @@ class TypedClassesTest {
         void checkAll_with_class() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-1").grant("edit").to("user:alice");
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedCheckAllAction<TestPerm> action = handle.checkAll(TestPerm.class);
             EnumMap<TestPerm, Boolean> result = action.by("user:alice");
@@ -315,16 +315,16 @@ class TypedClassesTest {
         @Test
         void checkAll_parameterless_withPermClass() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"}, TestPerm.class);
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
-            com.authx.sdk.TypedCheckAllAction action = handle.checkAll();
+            TypedCheckAllAction action = handle.checkAll();
             // Should work because permClass was provided
             assertThat(action).isNotNull();
         }
 
         @Test
         void checkAll_parameterless_withoutPermClass_throws() {
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             assertThatThrownBy(handle::checkAll)
                     .isInstanceOf(IllegalStateException.class);
@@ -333,7 +333,7 @@ class TypedClassesTest {
         @Test
         void who() {
             docFactory.resource("doc-1").grant("view").to("user:alice", "user:bob");
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
             TypedWhoQuery query = handle.who("user", TestPerm.VIEW);
             List<String> ids = query.fetchIds();
@@ -342,7 +342,7 @@ class TypedClassesTest {
 
         @Test
         void who_multipleIds_throws() {
-            com.authx.sdk.TypedHandle<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1", "doc-2"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1", "doc-2"});
 
             assertThatThrownBy(() -> handle.who("user", TestPerm.VIEW))
                     .isInstanceOf(IllegalStateException.class);
@@ -359,21 +359,21 @@ class TypedClassesTest {
         @Test
         void by_singleId_singlePerm_allowed() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             assertThat(action.by("user:alice")).isTrue();
         }
 
         @Test
         void by_singleId_singlePerm_denied() {
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             assertThat(action.by("user:alice")).isFalse();
         }
 
         @Test
         void by_multipleIds_throws() {
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
 
             assertThatThrownBy(() -> action.by("user:alice"))
                     .isInstanceOf(IllegalStateException.class);
@@ -381,7 +381,7 @@ class TypedClassesTest {
 
         @Test
         void by_multiplePerms_throws() {
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view", "edit"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view", "edit"});
 
             assertThatThrownBy(() -> action.by("user:alice"))
                     .isInstanceOf(IllegalStateException.class);
@@ -390,14 +390,14 @@ class TypedClassesTest {
         @Test
         void by_subjectRef() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             assertThat(action.by(SubjectRef.of("user", "alice"))).isTrue();
         }
 
         @Test
         void by_subjectRef_multipleIds_throws() {
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
 
             assertThatThrownBy(() -> action.by(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
@@ -406,7 +406,7 @@ class TypedClassesTest {
         @Test
         void detailedBy_returnsCheckResult() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckResult result = action.detailedBy("user:alice");
             assertThat(result.hasPermission()).isTrue();
@@ -414,7 +414,7 @@ class TypedClassesTest {
 
         @Test
         void detailedBy_multipleIds_throws() {
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view"});
 
             assertThatThrownBy(() -> action.detailedBy("user:alice"))
                     .isInstanceOf(IllegalStateException.class);
@@ -423,7 +423,7 @@ class TypedClassesTest {
         @Test
         void detailedBy_subjectRef() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckResult result = action.detailedBy(SubjectRef.of("user", "alice"));
             assertThat(result.hasPermission()).isTrue();
@@ -431,7 +431,7 @@ class TypedClassesTest {
 
         @Test
         void detailedBy_subjectRef_multiplePerms_throws() {
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view", "edit"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view", "edit"});
 
             assertThatThrownBy(() -> action.detailedBy(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
@@ -440,7 +440,7 @@ class TypedClassesTest {
         @Test
         void withConsistency() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
             action.withConsistency(Consistency.full());
 
             assertThat(action.by("user:alice")).isTrue();
@@ -449,7 +449,7 @@ class TypedClassesTest {
         @Test
         void withContext() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
             action.withContext(Map.of("ip", "10.0.0.1"));
 
             assertThat(action.by("user:alice")).isTrue();
@@ -458,7 +458,7 @@ class TypedClassesTest {
         @Test
         void byAll_strings() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckMatrix matrix = action.byAll("user:alice", "user:bob");
             assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
@@ -468,7 +468,7 @@ class TypedClassesTest {
         @Test
         void byAll_collection() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckMatrix matrix = action.byAll("user:alice");
             assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
@@ -477,7 +477,7 @@ class TypedClassesTest {
         @Test
         void byAll_subjectRefs() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             CheckMatrix matrix = action.byAll(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
             assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
@@ -486,7 +486,7 @@ class TypedClassesTest {
 
         @Test
         void byAll_empty_throws() {
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             assertThatThrownBy(() -> action.byAll(new String[]{}))
                     .isInstanceOf(IllegalArgumentException.class);
@@ -494,7 +494,7 @@ class TypedClassesTest {
 
         @Test
         void byAll_nullStrings_throws() {
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             assertThatThrownBy(() -> action.byAll((String[]) null))
                     .isInstanceOf(IllegalArgumentException.class);
@@ -504,7 +504,7 @@ class TypedClassesTest {
         void byAll_multiResource_multiPerm_multiSubject() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-2").grant("edit").to("user:bob");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view", "edit"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1", "doc-2"}, new String[]{"view", "edit"});
 
             CheckMatrix matrix = action.byAll("user:alice", "user:bob");
             assertThat(matrix.allowed("doc-1", "view", "user:alice")).isTrue();
@@ -515,7 +515,7 @@ class TypedClassesTest {
         @Test
         void byAll_singleCell_usesSimplePath() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
+            TypedCheckAction action = new TypedCheckAction(docFactory, new String[]{"doc-1"}, new String[]{"view"});
 
             // Single id x single perm x single subject -> simple path
             CheckMatrix matrix = action.byAll(SubjectRef.of("user", "alice"));
@@ -535,7 +535,7 @@ class TypedClassesTest {
         void by_singleUser() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-1").grant("edit").to("user:alice");
-            com.authx.sdk.TypedCheckAllAction<com.authx.sdk.TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
+            TypedCheckAllAction<TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
             EnumMap<TestPerm, Boolean> result = action.by("user:alice");
             assertThat(result.get(TestPerm.VIEW)).isTrue();
@@ -546,7 +546,7 @@ class TypedClassesTest {
         @Test
         void by_subjectRef() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAllAction<com.authx.sdk.TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
+            TypedCheckAllAction<TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
             EnumMap<TestPerm, Boolean> result = action.by(SubjectRef.of("user", "alice"));
             assertThat(result.get(TestPerm.VIEW)).isTrue();
@@ -554,7 +554,7 @@ class TypedClassesTest {
 
         @Test
         void by_multipleIds_throws() {
-            com.authx.sdk.TypedCheckAllAction<com.authx.sdk.TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
+            TypedCheckAllAction<TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
 
             assertThatThrownBy(() -> action.by("user:alice"))
                     .isInstanceOf(IllegalStateException.class);
@@ -562,7 +562,7 @@ class TypedClassesTest {
 
         @Test
         void by_subjectRef_multipleIds_throws() {
-            com.authx.sdk.TypedCheckAllAction<com.authx.sdk.TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
+            TypedCheckAllAction<TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
 
             assertThatThrownBy(() -> action.by(SubjectRef.of("user", "alice")))
                     .isInstanceOf(IllegalStateException.class);
@@ -572,7 +572,7 @@ class TypedClassesTest {
         void byAll_singleUser() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-2").grant("edit").to("user:alice");
-            com.authx.sdk.TypedCheckAllAction<com.authx.sdk.TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
+            TypedCheckAllAction<TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1", "doc-2"}, TestPerm.class);
 
             Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll("user:alice");
             assertThat(result).containsKeys("doc-1", "doc-2");
@@ -583,7 +583,7 @@ class TypedClassesTest {
         @Test
         void byAll_subjectRef() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAllAction<com.authx.sdk.TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
+            TypedCheckAllAction<TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
             Map<String, EnumMap<TestPerm, Boolean>> result = action.byAll(SubjectRef.of("user", "alice"));
             assertThat(result.get("doc-1").get(TestPerm.VIEW)).isTrue();
@@ -592,7 +592,7 @@ class TypedClassesTest {
         @Test
         void withConsistency_and_withContext() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.TypedCheckAllAction<com.authx.sdk.TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
+            TypedCheckAllAction<TypedClassesTest.TestPerm> action = new TypedCheckAllAction<>(docFactory, new String[]{"doc-1"}, TestPerm.class);
             action.withConsistency(Consistency.full());
             action.withContext(Map.of("ip", "10.0.0.1"));
 
@@ -618,7 +618,7 @@ class TypedClassesTest {
 
         @Test
         void asUserIds() {
-            com.authx.sdk.TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
+            TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             List<String> ids = query.fetchIds();
 
             assertThat(ids).containsExactlyInAnyOrder("alice", "bob", "carol");
@@ -626,7 +626,7 @@ class TypedClassesTest {
 
         @Test
         void asSubjectRefs() {
-            com.authx.sdk.TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
+            TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             List<SubjectRef> refs = query.asSubjectRefs();
 
             assertThat(refs).hasSize(3);
@@ -635,25 +635,25 @@ class TypedClassesTest {
 
         @Test
         void count() {
-            com.authx.sdk.TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
+            TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             assertThat(query.count()).isEqualTo(3);
         }
 
         @Test
         void exists_true() {
-            com.authx.sdk.TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
+            TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             assertThat(query.exists()).isTrue();
         }
 
         @Test
         void exists_false() {
-            com.authx.sdk.TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "edit");
+            TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "edit");
             assertThat(query.exists()).isFalse();
         }
 
         @Test
         void limit() {
-            com.authx.sdk.TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
+            TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             query.limit(2);
             List<String> ids = query.fetchIds();
 
@@ -662,7 +662,7 @@ class TypedClassesTest {
 
         @Test
         void exists_restoresLimit() {
-            com.authx.sdk.TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
+            TypedWhoQuery query = new TypedWhoQuery(docFactory, "doc-1", "user", "view");
             query.limit(0);
             query.exists(); // temporarily sets limit=1, then restores
             List<String> ids = query.fetchIds();
@@ -688,7 +688,7 @@ class TypedClassesTest {
 
         @Test
         void can_single() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.can(TestPerm.VIEW);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -696,7 +696,7 @@ class TypedClassesTest {
 
         @Test
         void can_withLimit() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             finder.limit(1);
             List<String> ids = finder.can(TestPerm.VIEW);
 
@@ -705,7 +705,7 @@ class TypedClassesTest {
 
         @Test
         void can_multiple() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(result.get(TestPerm.VIEW)).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -714,21 +714,21 @@ class TypedClassesTest {
 
         @Test
         void can_multiple_empty() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can();
             assertThat(result).isEmpty();
         }
 
         @Test
         void can_multiple_null() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can((TestPerm[]) null);
             assertThat(result).isEmpty();
         }
 
         @Test
         void can_collection() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(List.of(TestPerm.VIEW));
 
             assertThat(result.get(TestPerm.VIEW)).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -736,14 +736,14 @@ class TypedClassesTest {
 
         @Test
         void can_collection_empty() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             Map<TestPerm, List<String>> result = finder.can(List.of());
             assertThat(result).isEmpty();
         }
 
         @Test
         void canAny() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAny(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2", "doc-3");
@@ -751,7 +751,7 @@ class TypedClassesTest {
 
         @Test
         void canAny_empty() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAny();
             assertThat(ids).isEmpty();
         }
@@ -760,7 +760,7 @@ class TypedClassesTest {
         void canAll() {
             // alice has view on doc-1 and doc-2, edit on doc-3
             // Only doc-1 and doc-2 have view; none have both view AND edit
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll(TestPerm.VIEW, TestPerm.EDIT);
 
             assertThat(ids).isEmpty(); // no doc has both view and edit
@@ -768,7 +768,7 @@ class TypedClassesTest {
 
         @Test
         void canAll_singlePerm() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll(TestPerm.VIEW);
 
             assertThat(ids).containsExactlyInAnyOrder("doc-1", "doc-2");
@@ -776,7 +776,7 @@ class TypedClassesTest {
 
         @Test
         void canAll_empty() {
-            com.authx.sdk.TypedFinder<com.authx.sdk.TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
+            TypedFinder<TypedClassesTest.TestPerm> finder = new TypedFinder<TestPerm>(docFactory, SubjectRef.of("user", "alice"));
             List<String> ids = finder.canAll();
             assertThat(ids).isEmpty();
         }
@@ -854,7 +854,7 @@ class TypedClassesTest {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-2").grant("view").to("user:bob");
 
-            com.authx.sdk.TypedResourceEntry.MultiFinder<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> multi = entry.findBy("user:alice", "user:bob");
+            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.findBy("user:alice", "user:bob");
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("user:alice")).contains("doc-1");
@@ -865,7 +865,7 @@ class TypedClassesTest {
         void findBy_subjectRefs_varargs() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
 
-            com.authx.sdk.TypedResourceEntry.MultiFinder<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> multi = entry.findBy(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
+            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.findBy(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("user:alice")).contains("doc-1");
@@ -875,7 +875,7 @@ class TypedClassesTest {
         void findBy_subjectRefs_collection() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
 
-            com.authx.sdk.TypedResourceEntry.MultiFinder<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
+            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("user:alice")).contains("doc-1");
@@ -886,7 +886,7 @@ class TypedClassesTest {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-2").grant("view").to("user:alice");
 
-            com.authx.sdk.TypedResourceEntry.MultiFinder<com.authx.sdk.TypedClassesTest.TestRel,com.authx.sdk.TypedClassesTest.TestPerm> multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
+            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
             multi.limit(1);
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
@@ -904,13 +904,13 @@ class TypedClassesTest {
         @BeforeEach
         void grantSome() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            com.authx.sdk.ResourceFactory taskFactory = new ResourceFactory("task", transport, SYNC_EXEC);
+            ResourceFactory taskFactory = new ResourceFactory("task", transport, SYNC_EXEC);
             taskFactory.resource("t-1").grant("complete").to("user:alice");
         }
 
         @Test
         void add_stringBased_and_fetch() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.add("document", "doc-1", "view", SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
@@ -919,7 +919,7 @@ class TypedClassesTest {
 
         @Test
         void add_permissionNamed() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
@@ -928,7 +928,7 @@ class TypedClassesTest {
 
         @Test
         void add_permissionNamed_userId() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
@@ -937,7 +937,7 @@ class TypedClassesTest {
 
         @Test
         void add_resourceType_descriptor() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
@@ -946,7 +946,7 @@ class TypedClassesTest {
 
         @Test
         void add_resourceType_userId() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.add(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
@@ -955,7 +955,7 @@ class TypedClassesTest {
 
         @Test
         void addAll_resourceType() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.addAll(DOC_TYPE, List.of("doc-1", "doc-2"), TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
@@ -965,7 +965,7 @@ class TypedClassesTest {
 
         @Test
         void addAll_string() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.addAll("document", List.of("doc-1"), TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
             CheckMatrix matrix = builder.fetch();
@@ -974,7 +974,7 @@ class TypedClassesTest {
 
         @Test
         void addAll_cells() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.addAll(List.of(
                     BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice")),
                     BatchCheckBuilder.Cell.of(DOC_TYPE, "doc-1", TestPerm.VIEW, SubjectRef.of("user", "bob"))
@@ -987,7 +987,7 @@ class TypedClassesTest {
 
         @Test
         void fetch_empty() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             CheckMatrix matrix = builder.fetch();
 
             assertThat(matrix.size()).isEqualTo(0);
@@ -995,7 +995,7 @@ class TypedClassesTest {
 
         @Test
         void withConsistency() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.withConsistency(Consistency.full());
             builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
 
@@ -1005,7 +1005,7 @@ class TypedClassesTest {
 
         @Test
         void crossResource_batch() {
-            com.authx.sdk.BatchCheckBuilder builder = new BatchCheckBuilder(transport);
+            BatchCheckBuilder builder = new BatchCheckBuilder(transport);
             builder.add("document", "doc-1", TestPerm.VIEW, SubjectRef.of("user", "alice"));
             builder.add("task", "t-1", TaskPerm.COMPLETE, SubjectRef.of("user", "alice"));
 
@@ -1026,7 +1026,7 @@ class TypedClassesTest {
         void on_string_grant_and_revoke() {
             docFactory.resource("doc-1").grant("owner").to("user:alice");
 
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             BatchResult result = builder
                     .on("document", "doc-1")
                         .grant("editor").to("user:bob")
@@ -1041,7 +1041,7 @@ class TypedClassesTest {
         @Test
         void on_resourceHandle() {
             ResourceHandle handle = docFactory.resource("doc-1");
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on(handle).grant("editor").to("user:alice").execute();
 
             assertThat(docFactory.resource("doc-1").check("editor").by("user:alice").hasPermission()).isTrue();
@@ -1049,7 +1049,7 @@ class TypedClassesTest {
 
         @Test
         void on_resourceType() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on(DOC_TYPE, "doc-1").grant("editor").to("user:alice").execute();
 
             assertThat(docFactory.resource("doc-1").check("editor").by("user:alice").hasPermission()).isTrue();
@@ -1057,7 +1057,7 @@ class TypedClassesTest {
 
         @Test
         void multipleResources() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder
                     .on("document", "doc-1").grant("editor").to("user:alice")
                     .on("document", "doc-2").grant("viewer").to("user:bob")
@@ -1069,7 +1069,7 @@ class TypedClassesTest {
 
         @Test
         void grant_toSubjects() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").grant("viewer").to("group:eng#member").execute();
 
             assertThat(transport.size()).isEqualTo(1);
@@ -1077,7 +1077,7 @@ class TypedClassesTest {
 
         @Test
         void grant_typedRelation() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").grant(TestRel.EDITOR).to("user:alice").execute();
 
             assertThat(docFactory.resource("doc-1").check("editor").by("user:alice").hasPermission()).isTrue();
@@ -1086,7 +1086,7 @@ class TypedClassesTest {
         @Test
         void revoke_typedRelation() {
             docFactory.resource("doc-1").grant("editor").to("user:alice");
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").revoke(TestRel.EDITOR).from("user:alice").execute();
 
             assertThat(docFactory.resource("doc-1").check("editor").by("user:alice").hasPermission()).isFalse();
@@ -1096,7 +1096,7 @@ class TypedClassesTest {
         void revoke_fromCollection() {
             docFactory.resource("doc-1").grant("editor").to("user:alice");
             docFactory.resource("doc-1").grant("editor").to("user:bob");
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").revoke("editor").from("user:alice", "user:bob").execute();
 
             assertThat(transport.size()).isEqualTo(0);
@@ -1104,7 +1104,7 @@ class TypedClassesTest {
 
         @Test
         void grant_toCollection() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").grant("editor").to("user:alice", "user:bob").execute();
 
             assertThat(transport.size()).isEqualTo(2);
@@ -1112,7 +1112,7 @@ class TypedClassesTest {
 
         @Test
         void commit_alias() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             BatchResult result = builder.on("document", "doc-1").grant("editor").to("user:alice").commit();
 
             assertThat(result.zedToken()).isNotNull();
@@ -1120,7 +1120,7 @@ class TypedClassesTest {
 
         @Test
         void empty_execute() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             BatchResult result = builder.execute();
 
             assertThat(result.zedToken()).isNull();
@@ -1128,7 +1128,7 @@ class TypedClassesTest {
 
         @Test
         void scope_chaining_on() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             // Test chaining through ResourceScope.on()
             builder
                     .on("document", "doc-1").grant("editor").to("user:alice")
@@ -1141,7 +1141,7 @@ class TypedClassesTest {
 
         @Test
         void scope_commit_from_resourceScope() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             BatchResult result = builder.on("document", "doc-1").grant("editor").to("user:alice").commit();
 
             assertThat(result.zedToken()).isNotNull();
@@ -1149,7 +1149,7 @@ class TypedClassesTest {
 
         @Test
         void scope_execute_from_resourceScope() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             BatchResult result = builder.on("document", "doc-1").grant("editor").to("user:alice").execute();
 
             assertThat(result.zedToken()).isNotNull();
@@ -1159,7 +1159,7 @@ class TypedClassesTest {
 
         @Test
         void onAll_grant_fansAcrossIds() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2", "doc-3"))
                     .grant("viewer").to("user:alice")
                     .execute();
@@ -1172,7 +1172,7 @@ class TypedClassesTest {
 
         @Test
         void onAll_string_grant() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll("document", List.of("doc-1", "doc-2"))
                     .grant("editor").to("user:alice")
                     .execute();
@@ -1182,7 +1182,7 @@ class TypedClassesTest {
 
         @Test
         void onAll_grant_toSubjects() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
                     .grant("viewer").to("group:eng#member")
                     .execute();
@@ -1192,7 +1192,7 @@ class TypedClassesTest {
 
         @Test
         void onAll_grant_typedRelation() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
                     .grant(TestRel.EDITOR).to("user:alice")
                     .execute();
@@ -1205,7 +1205,7 @@ class TypedClassesTest {
             docFactory.resource("doc-1").grant("editor").to("user:alice");
             docFactory.resource("doc-2").grant("editor").to("user:alice");
 
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
                     .revoke("editor").from("user:alice")
                     .execute();
@@ -1218,7 +1218,7 @@ class TypedClassesTest {
             docFactory.resource("doc-1").grant("editor").to("user:alice");
             docFactory.resource("doc-2").grant("editor").to("user:alice");
 
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
                     .revoke(TestRel.EDITOR).from("user:alice")
                     .execute();
@@ -1231,7 +1231,7 @@ class TypedClassesTest {
             docFactory.resource("doc-1").grant("editor").to("user:alice");
             docFactory.resource("doc-1").grant("editor").to("user:bob");
 
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1"))
                     .revoke("editor").from("user:alice", "user:bob")
                     .execute();
@@ -1241,7 +1241,7 @@ class TypedClassesTest {
 
         @Test
         void onAll_chaining_to_on() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1", "doc-2"))
                     .grant("viewer").to("user:alice")
                     .on(DOC_TYPE, "doc-3").grant("editor").to("user:bob")
@@ -1252,7 +1252,7 @@ class TypedClassesTest {
 
         @Test
         void onAll_chaining_to_onAll() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1"))
                     .grant("viewer").to("user:alice")
                     .onAll(DOC_TYPE, List.of("doc-2"))
@@ -1264,7 +1264,7 @@ class TypedClassesTest {
 
         @Test
         void multiScope_on_string() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.onAll(DOC_TYPE, List.of("doc-1"))
                     .grant("viewer").to("user:alice")
                     .on("document", "doc-2").grant("editor").to("user:bob")
@@ -1275,18 +1275,18 @@ class TypedClassesTest {
 
         @Test
         void multiScope_execute_and_commit() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             BatchResult r1 = builder.onAll(DOC_TYPE, List.of("doc-1")).grant("viewer").to("user:alice").execute();
             assertThat(r1.zedToken()).isNotNull();
 
-            com.authx.sdk.CrossResourceBatchBuilder builder2 = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder2 = new CrossResourceBatchBuilder(transport);
             BatchResult r2 = builder2.onAll(DOC_TYPE, List.of("doc-2")).grant("viewer").to("user:bob").commit();
             assertThat(r2.zedToken()).isNotNull();
         }
 
         @Test
         void scope_onAll_from_resourceScope() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").grant("editor").to("user:alice")
                     .onAll(DOC_TYPE, List.of("doc-2", "doc-3")).grant("viewer").to("user:bob")
                     .execute();
@@ -1296,7 +1296,7 @@ class TypedClassesTest {
 
         @Test
         void scope_onAll_string_from_resourceScope() {
-            com.authx.sdk.CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
+            CrossResourceBatchBuilder builder = new CrossResourceBatchBuilder(transport);
             builder.on("document", "doc-1").grant("editor").to("user:alice")
                     .onAll("document", List.of("doc-2")).grant("viewer").to("user:bob")
                     .execute();
@@ -1317,7 +1317,7 @@ class TypedClassesTest {
 
         @Test
         void annotationValue() {
-            com.authx.sdk.PermissionResource ann = TestPermResource.class.getAnnotation(PermissionResource.class);
+            PermissionResource ann = TestPermResource.class.getAnnotation(PermissionResource.class);
             assertThat(ann).isNotNull();
             assertThat(ann.value()).isEqualTo("document");
         }

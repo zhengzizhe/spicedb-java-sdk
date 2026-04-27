@@ -7,6 +7,7 @@ Remove Java local variable type inference (`var`) from SDK Java source and test 
 ## Requirements
 
 - Replace every Java local variable declaration using `var` under SDK code paths with an explicit type.
+- When the explicit type is a fully-qualified `com.authx.*` or common `java.*` type introduced by the mechanical replacement, move the type reference to a normal top-of-file import where appropriate and use simple class names in code.
 - Cover main source, test source, optional modules, and example app Java files:
   - `src/**/*.java`
   - `sdk-redisson/**/*.java`
@@ -18,6 +19,7 @@ Remove Java local variable type inference (`var`) from SDK Java source and test 
 ## Acceptance Criteria
 
 - [x] `rg -n '\bvar\s+[A-Za-z_$]' src sdk-redisson test-app --glob '*.java'` returns no matches for Java local variable declarations.
+- [x] `rg` checks show no local variable declarations start with fully-qualified `com.authx.*` or importable common `java.*` type names introduced by the replacement.
 - [x] Java compilation passes.
 - [x] Relevant tests pass, or any skipped tests are reported with reason.
 

@@ -4,11 +4,10 @@ import com.authx.sdk.cache.SchemaCache;
 import com.authx.sdk.exception.InvalidRelationException;
 import com.authx.sdk.model.SubjectType;
 import com.authx.sdk.transport.InMemoryTransport;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -22,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class BatchActionsValidationTest {
 
     private SchemaCache schemaFor(String type, String relation, List<SubjectType> sts) {
-        com.authx.sdk.cache.SchemaCache c = new SchemaCache();
+        SchemaCache c = new SchemaCache();
         c.updateFromMap(Map.of(type, new SchemaCache.DefinitionCache(
                 Set.of(relation), Set.of(), Map.of(relation, sts))));
         return c;
@@ -30,8 +29,8 @@ class BatchActionsValidationTest {
 
     @Test
     void batchGrant_rejectsWrongSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        com.authx.sdk.action.BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), cache);
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), cache);
         assertThatThrownBy(() -> batch.grant("folder").to("user:alice"))
                 .isInstanceOf(InvalidRelationException.class)
                 .hasMessageContaining("[folder]");
@@ -39,16 +38,16 @@ class BatchActionsValidationTest {
 
     @Test
     void batchGrant_acceptsAllowedSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        com.authx.sdk.action.BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), cache);
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), cache);
         batch.grant("folder").to("folder:f-1"); // no throw
         batch.execute();
     }
 
     @Test
     void batchRevoke_rejectsWrongSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        com.authx.sdk.action.BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), cache);
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), cache);
         assertThatThrownBy(() -> batch.revoke("folder").from("user:alice"))
                 .isInstanceOf(InvalidRelationException.class)
                 .hasMessageContaining("[folder]");
@@ -56,22 +55,22 @@ class BatchActionsValidationTest {
 
     @Test
     void batchRevoke_acceptsAllowedSubjectType() {
-        com.authx.sdk.cache.SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
-        com.authx.sdk.action.BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), cache);
+        SchemaCache cache = schemaFor("document", "folder", List.of(SubjectType.of("folder")));
+        BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), cache);
         batch.revoke("folder").from("folder:f-1"); // no throw
         batch.execute();
     }
 
     @Test
     void nullCacheIsFailOpenOnBothSides() {
-        com.authx.sdk.action.BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), null);
+        BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), null);
         batch.grant("folder").to("user:alice");     // no throw
         batch.revoke("folder").from("user:alice");  // no throw
     }
 
     @Test
     void emptyCacheIsFailOpen() {
-        com.authx.sdk.action.BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), new SchemaCache());
+        BatchBuilder batch = new BatchBuilder("document", "d-1", new InMemoryTransport(), new SchemaCache());
         batch.grant("folder").to("user:alice");     // no throw
         batch.revoke("folder").from("user:alice");  // no throw
     }

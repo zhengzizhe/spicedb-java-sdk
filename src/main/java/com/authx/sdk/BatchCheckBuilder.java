@@ -7,7 +7,6 @@ import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -132,7 +131,7 @@ public final class BatchCheckBuilder {
                     e.subject));
         }
         List<CheckResult> results = transport.checkBulkMulti(items, consistency);
-        com.authx.sdk.model.CheckMatrix.Builder b = CheckMatrix.builder();
+        CheckMatrix.Builder b = CheckMatrix.builder();
         for (int i = 0; i < results.size(); i++) {
             Entry e = entries.get(i);
             String compositeId = e.resourceType + ":" + e.resourceId;

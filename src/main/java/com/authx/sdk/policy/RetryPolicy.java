@@ -1,5 +1,14 @@
 package com.authx.sdk.policy;
 
+import com.authx.sdk.exception.AuthxAuthException;
+import com.authx.sdk.exception.AuthxInvalidArgumentException;
+import com.authx.sdk.exception.AuthxPreconditionException;
+import com.authx.sdk.exception.AuthxResourceExhaustedException;
+import com.authx.sdk.exception.AuthxUnimplementedException;
+import com.authx.sdk.exception.CircuitBreakerOpenException;
+import com.authx.sdk.exception.InvalidPermissionException;
+import com.authx.sdk.exception.InvalidRelationException;
+import com.authx.sdk.exception.InvalidResourceException;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
@@ -77,20 +86,20 @@ public class RetryPolicy {
     /** Returns the default retry policy (3 attempts, exponential backoff, non-retryable exceptions excluded). */
     public static RetryPolicy defaults() {
         return new Builder()
-                .doNotRetryOn(com.authx.sdk.exception.CircuitBreakerOpenException.class)
-                .doNotRetryOn(com.authx.sdk.exception.AuthxAuthException.class)
-                .doNotRetryOn(com.authx.sdk.exception.AuthxResourceExhaustedException.class)
-                .doNotRetryOn(com.authx.sdk.exception.AuthxInvalidArgumentException.class)
-                .doNotRetryOn(com.authx.sdk.exception.AuthxUnimplementedException.class)
-                .doNotRetryOn(com.authx.sdk.exception.AuthxPreconditionException.class)
+                .doNotRetryOn(CircuitBreakerOpenException.class)
+                .doNotRetryOn(AuthxAuthException.class)
+                .doNotRetryOn(AuthxResourceExhaustedException.class)
+                .doNotRetryOn(AuthxInvalidArgumentException.class)
+                .doNotRetryOn(AuthxUnimplementedException.class)
+                .doNotRetryOn(AuthxPreconditionException.class)
                 // SR:C4 — schema-validation errors are permanent. Previously
                 // they extended AuthxException directly and were NOT matched
                 // by any entry on the non-retryable list, so the retry budget
                 // was consumed on every attempt even though the schema was
                 // never going to change mid-call.
-                .doNotRetryOn(com.authx.sdk.exception.InvalidPermissionException.class)
-                .doNotRetryOn(com.authx.sdk.exception.InvalidRelationException.class)
-                .doNotRetryOn(com.authx.sdk.exception.InvalidResourceException.class)
+                .doNotRetryOn(InvalidPermissionException.class)
+                .doNotRetryOn(InvalidRelationException.class)
+                .doNotRetryOn(InvalidResourceException.class)
                 .doNotRetryOn(io.github.resilience4j.circuitbreaker.CallNotPermittedException.class)
                 .build();
     }

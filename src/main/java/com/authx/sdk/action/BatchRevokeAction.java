@@ -6,7 +6,8 @@ import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
-
+import java.util.ArrayList;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -66,7 +67,7 @@ public class BatchRevokeAction {
 
     /** {@link Iterable} overload of {@link #from(String...)}. */
     public BatchBuilder from(Iterable<String> subjectRefs) {
-        java.util.List<SubjectRef> parsed = new java.util.ArrayList<>();
+        List<SubjectRef> parsed = new ArrayList<>();
         for (String ref : subjectRefs) parsed.add(SubjectRef.parse(ref));
         return from(parsed.toArray(SubjectRef[]::new));
     }
