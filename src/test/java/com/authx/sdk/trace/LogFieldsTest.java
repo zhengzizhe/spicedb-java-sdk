@@ -47,7 +47,7 @@ class LogFieldsTest {
 
     @Test
     void toMdcMap_skipsNullAndBlank() {
-        var map = LogFields.toMdcMap("CHECK", "document", "doc-1",
+        java.util.Map<java.lang.String,java.lang.String> map = LogFields.toMdcMap("CHECK", "document", "doc-1",
                 "view", null, "user:alice", "minimize_latency");
         assertThat(map)
                 .containsEntry(LogFields.KEY_ACTION, "CHECK")
@@ -58,7 +58,7 @@ class LogFieldsTest {
 
     @Test
     void toMdcMap_allNull_returnsEmptyMap() {
-        var map = LogFields.toMdcMap(null, null, null, null, null, null, null);
+        java.util.Map<java.lang.String,java.lang.String> map = LogFields.toMdcMap(null, null, null, null, null, null, null);
         assertThat(map).isEmpty();
     }
 

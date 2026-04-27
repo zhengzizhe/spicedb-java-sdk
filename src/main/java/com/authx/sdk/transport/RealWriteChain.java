@@ -54,7 +54,7 @@ public final class RealWriteChain implements WriteChain {
             return transport.writeRelationships(request.updates());
         }
         // Create next chain with incremented index and (possibly modified) request
-        var next = new RealWriteChain(interceptors, index + 1, request, transport, ctx);
+        com.authx.sdk.transport.RealWriteChain next = new RealWriteChain(interceptors, index + 1, request, transport, ctx);
         // SR:C8 — WRITE path is asymmetric to read paths: an interceptor that
         // throws must NOT be silently skipped. Write interceptors are often
         // doing policy enforcement (audit hooks, mandatory caveat injection,
@@ -65,7 +65,7 @@ public final class RealWriteChain implements WriteChain {
         // Fail-closed policy: any non-Authx exception from a write interceptor
         // aborts the chain and surfaces as an AuthxException so callers see a
         // typed, retryable-classified error.
-        var interceptor = interceptors.get(index);
+        com.authx.sdk.spi.SdkInterceptor interceptor = interceptors.get(index);
         try {
             return interceptor.interceptWrite(next);
         } catch (com.authx.sdk.exception.AuthxException authx) {
@@ -75,7 +75,7 @@ public final class RealWriteChain implements WriteChain {
             // batch writes can span types, but the first entry still tells the
             // on-call engineer where to start looking. Empty update list is
             // uncommon but handled.
-            var first = request.updates().isEmpty() ? null : request.updates().get(0);
+            com.authx.sdk.transport.SdkTransport.RelationshipUpdate first = request.updates().isEmpty() ? null : request.updates().get(0);
             LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
                     "Write interceptor {0} threw {1}; aborting write (fail-closed)."
                             + LogFields.suffixRel(

@@ -202,7 +202,7 @@ public class AuthxClientBuilder {
         // top (add interceptors, inject components, etc.). Running them
         // before the validation step below lets a customizer even fix
         // missing config — e.g. a test harness injecting a stub target.
-        for (var c : clientCustomizers) {
+        for (com.authx.sdk.spi.AuthxClientCustomizer c : clientCustomizers) {
             c.customize(this);
         }
 
@@ -231,18 +231,18 @@ public class AuthxClientBuilder {
             policies = policyRegistry;
         } else if (!policyCustomizers.isEmpty()) {
             PolicyRegistry.Builder pBuilder = PolicyRegistry.builder();
-            for (var customizer : policyCustomizers) {
+            for (com.authx.sdk.spi.PolicyCustomizer customizer : policyCustomizers) {
                 customizer.customize(pBuilder);
             }
             policies = pBuilder.build();
         } else {
             policies = PolicyRegistry.withDefaults();
         }
-        var spi = components != null ? components : SdkComponents.defaults();
-        var bus = eventBus != null ? eventBus : new DefaultTypedEventBus();
-        var lm = new LifecycleManager(bus);
-        var sdkMetrics = new SdkMetrics();
-        var tokenTracker = new TokenTracker(spi.tokenStore());
+        com.authx.sdk.spi.SdkComponents spi = components != null ? components : SdkComponents.defaults();
+        com.authx.sdk.event.TypedEventBus bus = eventBus != null ? eventBus : new DefaultTypedEventBus();
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
+        com.authx.sdk.metrics.SdkMetrics sdkMetrics = new SdkMetrics();
+        com.authx.sdk.transport.TokenTracker tokenTracker = new TokenTracker(spi.tokenStore());
         // Wire the event bus so cross-instance SESSION degradation/recovery
         // become observable. Must use the resolved `bus` (not the nullable
         // `eventBus` field) so subscribers on AuthxClient.eventBus() receive
@@ -304,9 +304,9 @@ public class AuthxClientBuilder {
                     : Runnable::run;
 
             // Build aggregation objects
-            var infraObj = new SdkInfrastructure(grpcChannel, ctx.scheduler, asyncExec, lm);
-            var observabilityObj = new SdkObservability(sdkMetrics, bus, ctx.telemetryReporter);
-            var configObj = new SdkConfig(policies, coalescingEnabled, useVirtualThreads);
+            com.authx.sdk.internal.SdkInfrastructure infraObj = new SdkInfrastructure(grpcChannel, ctx.scheduler, asyncExec, lm);
+            com.authx.sdk.internal.SdkObservability observabilityObj = new SdkObservability(sdkMetrics, bus, ctx.telemetryReporter);
+            com.authx.sdk.internal.SdkConfig configObj = new SdkConfig(policies, coalescingEnabled, useVirtualThreads);
 
             // Resolve health probe: user-provided takes precedence, otherwise
             // default to a composite of channel-state + schema-read so diagnostics
@@ -322,24 +322,24 @@ public class AuthxClientBuilder {
             // disabled. Failures are non-fatal — the loader logs and the cache
             // stays empty. The SchemaClient exposed via AuthxClient#schema() is
             // always non-null so callers don't need a null check.
-            var schemaCache = new com.authx.sdk.cache.SchemaCache();
+            com.authx.sdk.cache.SchemaCache schemaCache = new com.authx.sdk.cache.SchemaCache();
             if (loadSchemaOnStart) {
-                var authMetadata = new io.grpc.Metadata();
+                io.grpc.Metadata authMetadata = new io.grpc.Metadata();
                 authMetadata.put(
                         io.grpc.Metadata.Key.of("authorization", io.grpc.Metadata.ASCII_STRING_MARSHALLER),
                         "Bearer " + presharedKey);
                 new com.authx.sdk.transport.SchemaLoader().load(grpcChannel, authMetadata, schemaCache);
             }
-            var schemaClient = new SchemaClient(schemaCache);
+            com.authx.sdk.SchemaClient schemaClient = new SchemaClient(schemaCache);
 
             // Hand the cache to AuthxClient so ResourceFactory/Handle/GrantAction
             // can consume it for runtime subject-type validation. The
             // SchemaClient public accessor wraps the same instance.
-            var client = new AuthxClient(transport, infraObj, observabilityObj, configObj, probe,
+            com.authx.sdk.AuthxClient client = new AuthxClient(transport, infraObj, observabilityObj, configObj, probe,
                     schemaClient, schemaCache);
 
             if (registerShutdownHook) {
-                var hook = new Thread(client::close, "authx-sdk-shutdown");
+                java.lang.Thread hook = new Thread(client::close, "authx-sdk-shutdown");
                 Runtime.getRuntime().addShutdownHook(hook);
                 infraObj.setShutdownHook(hook);
             }
@@ -386,8 +386,8 @@ public class AuthxClientBuilder {
         // to ResilientTransport so it skips recording. When telemetry is
         // disabled, ResilientTransport is the outermost layer in the stack and
         // owns the recording itself.
-        var resilientMetrics = telemetryEnabled ? null : sdkMetrics;
-        var resilientTransport = new ResilientTransport(t, policies, bus, resilientMetrics);
+        com.authx.sdk.metrics.SdkMetrics resilientMetrics = telemetryEnabled ? null : sdkMetrics;
+        com.authx.sdk.transport.ResilientTransport resilientTransport = new ResilientTransport(t, policies, bus, resilientMetrics);
         ctx.resilientTransport = resilientTransport;
         t = resilientTransport;
 

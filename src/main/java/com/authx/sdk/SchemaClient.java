@@ -14,7 +14,7 @@ import java.util.Set;
  * Exposed via {@link AuthxClient#schema()}.
  *
  * <pre>
- * var schema = client.schema();
+ * SchemaClient schema = client.schema();
  * schema.resourceTypes();                            // ["document", "folder", "group"]
  * schema.relationsOf("document");                    // ["owner", "editor", "viewer", "folder", ...]
  * schema.permissionsOf("document");                  // ["view", "edit", "delete", ...]

@@ -57,7 +57,7 @@ public class BatchBuilder {
     public BatchResult execute() {
         if (updates.isEmpty()) return new BatchResult(null);
         // Send all updates (TOUCH + DELETE) in a single writeRelationships call
-        var r = transport.writeRelationships(updates);
+        com.authx.sdk.model.GrantResult r = transport.writeRelationships(updates);
         return new BatchResult(r.zedToken());
     }
 }

@@ -81,14 +81,14 @@ public class GrpcTransport implements SdkTransport {
         authMetadata.put(
                 Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
                 "Bearer " + presharedKey);
-        var tracedChannel = ClientInterceptors.intercept(channel, new TraceParentInterceptor());
+        io.grpc.Channel tracedChannel = ClientInterceptors.intercept(channel, new TraceParentInterceptor());
         this.baseStub = PermissionsServiceGrpc.newBlockingStub(tracedChannel)
                 .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(authMetadata));
     }
 
     @Override
     public CheckResult check(CheckRequest request) {
-        var grpcRequestBuilder = CheckPermissionRequest.newBuilder()
+        com.authzed.api.v1.CheckPermissionRequest.Builder grpcRequestBuilder = CheckPermissionRequest.newBuilder()
                 .setResource(objRef(request.resource()))
                 .setPermission(request.permission().name())
                 .setSubject(subRef(request.subject()))
@@ -98,7 +98,7 @@ public class GrpcTransport implements SdkTransport {
             grpcRequestBuilder.setContext(toStruct(request.caveatContext()));
         }
 
-        var response = withErrorHandling(() -> stub().checkPermission(grpcRequestBuilder.build()));
+        com.authzed.api.v1.CheckPermissionResponse response = withErrorHandling(() -> stub().checkPermission(grpcRequestBuilder.build()));
         String token = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
         return mapPermissionship(response.getPermissionship(), token);
@@ -106,7 +106,7 @@ public class GrpcTransport implements SdkTransport {
 
     @Override
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
-        var builder = CheckBulkPermissionsRequest.newBuilder()
+        com.authzed.api.v1.CheckBulkPermissionsRequest.Builder builder = CheckBulkPermissionsRequest.newBuilder()
                 .setConsistency(toGrpc(request.consistency()));
         List<String> subjectIds = new ArrayList<>(subjects.size());
         for (SubjectRef sub : subjects) {
@@ -117,12 +117,12 @@ public class GrpcTransport implements SdkTransport {
                     .setSubject(subRef(sub)));
         }
 
-        var response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
+        com.authzed.api.v1.CheckBulkPermissionsResponse response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
 
         Map<String, CheckResult> results = new LinkedHashMap<>();
         String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
         for (int i = 0; i < subjectIds.size() && i < response.getPairsCount(); i++) {
-            var pair = response.getPairs(i);
+            com.authzed.api.v1.CheckBulkPermissionsPair pair = response.getPairs(i);
             CheckResult cr;
             if (pair.hasError()) {
                 LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
@@ -146,7 +146,7 @@ public class GrpcTransport implements SdkTransport {
         }
         List<CheckResult> allResults = new ArrayList<>(items.size());
         for (int i = 0; i < items.size(); i += MAX_BATCH_SIZE) {
-            var batch = items.subList(i, Math.min(i + MAX_BATCH_SIZE, items.size()));
+            java.util.List<com.authx.sdk.transport.SdkTransport.BulkCheckItem> batch = items.subList(i, Math.min(i + MAX_BATCH_SIZE, items.size()));
             allResults.addAll(checkBulkBatch(batch, consistency));
         }
         return allResults;
@@ -154,21 +154,21 @@ public class GrpcTransport implements SdkTransport {
 
     private List<CheckResult> checkBulkBatch(List<BulkCheckItem> items,
                                               Consistency consistency) {
-        var builder = CheckBulkPermissionsRequest.newBuilder()
+        com.authzed.api.v1.CheckBulkPermissionsRequest.Builder builder = CheckBulkPermissionsRequest.newBuilder()
                 .setConsistency(toGrpc(consistency));
-        for (var item : items) {
+        for (com.authx.sdk.transport.SdkTransport.BulkCheckItem item : items) {
             builder.addItems(CheckBulkPermissionsRequestItem.newBuilder()
                     .setResource(objRef(item.resource()))
                     .setPermission(item.permission().name())
                     .setSubject(subRef(item.subject())));
         }
 
-        var response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
+        com.authzed.api.v1.CheckBulkPermissionsResponse response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
         String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
         List<CheckResult> results = new ArrayList<>(items.size());
         for (int i = 0; i < items.size() && i < response.getPairsCount(); i++) {
-            var pair = response.getPairs(i);
+            com.authzed.api.v1.CheckBulkPermissionsPair pair = response.getPairs(i);
             CheckResult cr;
             if (pair.hasError()) {
                 LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
@@ -185,49 +185,49 @@ public class GrpcTransport implements SdkTransport {
 
     @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        var builder = WriteRelationshipsRequest.newBuilder();
-        for (var u : updates) {
+        com.authzed.api.v1.WriteRelationshipsRequest.Builder builder = WriteRelationshipsRequest.newBuilder();
+        for (com.authx.sdk.transport.SdkTransport.RelationshipUpdate u : updates) {
             builder.addUpdates(com.authzed.api.v1.RelationshipUpdate.newBuilder()
                     .setOperation(toGrpcOp(u.operation()))
                     .setRelationship(toGrpcRel(u)));
         }
-        var response = withErrorHandling(() -> stub().writeRelationships(builder.build()));
+        com.authzed.api.v1.WriteRelationshipsResponse response = withErrorHandling(() -> stub().writeRelationships(builder.build()));
         String token = response.hasWrittenAt() ? response.getWrittenAt().getToken() : null;
         return new GrantResult(token, updates.size());
     }
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        var builder = WriteRelationshipsRequest.newBuilder();
-        for (var u : updates) {
+        com.authzed.api.v1.WriteRelationshipsRequest.Builder builder = WriteRelationshipsRequest.newBuilder();
+        for (com.authx.sdk.transport.SdkTransport.RelationshipUpdate u : updates) {
             builder.addUpdates(com.authzed.api.v1.RelationshipUpdate.newBuilder()
                     .setOperation(com.authzed.api.v1.RelationshipUpdate.Operation.OPERATION_DELETE)
                     .setRelationship(toGrpcRel(u)));
         }
-        var response = withErrorHandling(() -> stub().writeRelationships(builder.build()));
+        com.authzed.api.v1.WriteRelationshipsResponse response = withErrorHandling(() -> stub().writeRelationships(builder.build()));
         String token = response.hasWrittenAt() ? response.getWrittenAt().getToken() : null;
         return new RevokeResult(token, updates.size());
     }
 
     @Override
     public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
-        var filterBuilder = RelationshipFilter.newBuilder()
+        com.authzed.api.v1.RelationshipFilter.Builder filterBuilder = RelationshipFilter.newBuilder()
                 .setResourceType(resource.type())
                 .setOptionalResourceId(resource.id());
         if (relation != null) {
             filterBuilder.setOptionalRelation(relation.name());
         }
-        var requestBuilder = ReadRelationshipsRequest.newBuilder()
+        com.authzed.api.v1.ReadRelationshipsRequest.Builder requestBuilder = ReadRelationshipsRequest.newBuilder()
                 .setRelationshipFilter(filterBuilder.build())
                 .setConsistency(toGrpc(consistency));
-        var request = requestBuilder.build();
+        com.authzed.api.v1.ReadRelationshipsRequest request = requestBuilder.build();
 
-        try (var iterator = CloseableGrpcIterator.from(
+        try (com.authx.sdk.transport.CloseableGrpcIterator<com.authzed.api.v1.ReadRelationshipsResponse> iterator = CloseableGrpcIterator.from(
                 () -> stub().readRelationships(request), newCallContext())) {
             List<Tuple> tuples = new ArrayList<>();
             while (iterator.hasNext()) {
-                var resp = iterator.next();
-                var rel = resp.getRelationship();
+                com.authzed.api.v1.ReadRelationshipsResponse resp = iterator.next();
+                com.authzed.api.v1.Relationship rel = resp.getRelationship();
                 String subRel = rel.getSubject().getOptionalRelation();
                 tuples.add(new Tuple(
                         rel.getResource().getObjectType(), rel.getResource().getObjectId(),
@@ -251,18 +251,18 @@ public class GrpcTransport implements SdkTransport {
         // impractical. The limit is applied Java-side via the stream
         // iterator cutoff below — a few extra rows on the wire before
         // the stream is cancelled is negligible vs the compatibility gain.
-        var builder = com.authzed.api.v1.LookupSubjectsRequest.newBuilder()
+        com.authzed.api.v1.LookupSubjectsRequest.Builder builder = com.authzed.api.v1.LookupSubjectsRequest.newBuilder()
                 .setResource(objRef(request.resource()))
                 .setPermission(request.permission().name())
                 .setSubjectObjectType(request.subjectType())
                 .setConsistency(toGrpc(request.consistency()));
 
         int limit = request.limit();
-        try (var iterator = CloseableGrpcIterator.from(
+        try (com.authx.sdk.transport.CloseableGrpcIterator<com.authzed.api.v1.LookupSubjectsResponse> iterator = CloseableGrpcIterator.from(
                 () -> stub().lookupSubjects(builder.build()), newCallContext())) {
             List<SubjectRef> subjects = new ArrayList<>();
             while (iterator.hasNext() && (limit <= 0 || subjects.size() < limit)) {
-                var resp = iterator.next();
+                com.authzed.api.v1.LookupSubjectsResponse resp = iterator.next();
                 subjects.add(SubjectRef.of(request.subjectType(), resp.getSubject().getSubjectObjectId(), null));
             }
             return subjects;
@@ -273,7 +273,7 @@ public class GrpcTransport implements SdkTransport {
 
     @Override
     public List<ResourceRef> lookupResources(LookupResourcesRequest request) {
-        var builder = com.authzed.api.v1.LookupResourcesRequest.newBuilder()
+        com.authzed.api.v1.LookupResourcesRequest.Builder builder = com.authzed.api.v1.LookupResourcesRequest.newBuilder()
                 .setResourceObjectType(request.resourceType())
                 .setPermission(request.permission().name())
                 .setSubject(subRef(request.subject()))
@@ -281,11 +281,11 @@ public class GrpcTransport implements SdkTransport {
         if (request.limit() > 0) builder.setOptionalLimit(request.limit());
 
         int rlimit = request.limit();
-        try (var iterator = CloseableGrpcIterator.from(
+        try (com.authx.sdk.transport.CloseableGrpcIterator<com.authzed.api.v1.LookupResourcesResponse> iterator = CloseableGrpcIterator.from(
                 () -> stub().lookupResources(builder.build()), newCallContext())) {
             List<ResourceRef> resources = new ArrayList<>();
             while (iterator.hasNext() && (rlimit <= 0 || resources.size() < rlimit)) {
-                var resp = iterator.next();
+                com.authzed.api.v1.LookupResourcesResponse resp = iterator.next();
                 resources.add(ResourceRef.of(request.resourceType(), resp.getResourceObjectId()));
             }
             return resources;
@@ -297,36 +297,36 @@ public class GrpcTransport implements SdkTransport {
     @Override
     public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
-        var filterBuilder = RelationshipFilter.newBuilder()
+        com.authzed.api.v1.RelationshipFilter.Builder filterBuilder = RelationshipFilter.newBuilder()
                 .setResourceType(resource.type())
                 .setOptionalResourceId(resource.id());
         if (optionalRelation != null) {
             filterBuilder.setOptionalRelation(optionalRelation.name());
         }
 
-        var subFilter = SubjectFilter.newBuilder()
+        com.authzed.api.v1.SubjectFilter.Builder subFilter = SubjectFilter.newBuilder()
                 .setSubjectType(subject.type())
                 .setOptionalSubjectId(subject.id());
         filterBuilder.setOptionalSubjectFilter(subFilter);
 
-        var request = DeleteRelationshipsRequest.newBuilder()
+        com.authzed.api.v1.DeleteRelationshipsRequest request = DeleteRelationshipsRequest.newBuilder()
                 .setRelationshipFilter(filterBuilder.build())
                 .build();
 
-        var response = withErrorHandling(() -> stub().deleteRelationships(request));
+        com.authzed.api.v1.DeleteRelationshipsResponse response = withErrorHandling(() -> stub().deleteRelationships(request));
         String token = response.hasDeletedAt() ? response.getDeletedAt().getToken() : null;
         return new RevokeResult(token, 0);
     }
 
     @Override
     public ExpandTree expand(ResourceRef resource, Permission permission, Consistency consistency) {
-        var request = ExpandPermissionTreeRequest.newBuilder()
+        com.authzed.api.v1.ExpandPermissionTreeRequest request = ExpandPermissionTreeRequest.newBuilder()
                 .setResource(objRef(resource))
                 .setPermission(permission.name())
                 .setConsistency(toGrpc(consistency))
                 .build();
 
-        var response = withErrorHandling(() -> stub().expandPermissionTree(request));
+        com.authzed.api.v1.ExpandPermissionTreeResponse response = withErrorHandling(() -> stub().expandPermissionTree(request));
         return mapTree(response.getTreeRoot());
     }
 
@@ -379,7 +379,7 @@ public class GrpcTransport implements SdkTransport {
     }
 
     private static SubjectReference subRef(SubjectRef ref) {
-        var b = SubjectReference.newBuilder().setObject(
+        com.authzed.api.v1.SubjectReference.Builder b = SubjectReference.newBuilder().setObject(
                 ObjectReference.newBuilder().setObjectType(ref.type()).setObjectId(ref.id()).build());
         if (ref.relation() != null) b.setOptionalRelation(ref.relation());
         return b.build();
@@ -393,12 +393,12 @@ public class GrpcTransport implements SdkTransport {
     }
 
     private static Relationship toGrpcRel(RelationshipUpdate u) {
-        var builder = Relationship.newBuilder()
+        com.authzed.api.v1.Relationship.Builder builder = Relationship.newBuilder()
                 .setResource(objRef(u.resource()))
                 .setRelation(u.relation().name())
                 .setSubject(subRef(u.subject()));
         if (u.caveat() != null) {
-            var caveatBuilder = com.authzed.api.v1.ContextualizedCaveat.newBuilder()
+            com.authzed.api.v1.ContextualizedCaveat.Builder caveatBuilder = com.authzed.api.v1.ContextualizedCaveat.newBuilder()
                     .setCaveatName(u.caveat().name());
             if (u.caveat().context() != null && !u.caveat().context().isEmpty()) {
                 caveatBuilder.setContext(toStruct(u.caveat().context()));
@@ -424,8 +424,8 @@ public class GrpcTransport implements SdkTransport {
     }
 
     private static Struct toStruct(Map<String, Object> map) {
-        var builder = Struct.newBuilder();
-        for (var entry : map.entrySet()) {
+        com.google.protobuf.Struct.Builder builder = Struct.newBuilder();
+        for (java.util.Map.Entry<java.lang.String,java.lang.Object> entry : map.entrySet()) {
             String key = entry.getKey();
             if (key == null || key.isEmpty()) {
                 throw new IllegalArgumentException(
@@ -456,7 +456,7 @@ public class GrpcTransport implements SdkTransport {
                     .setStructValue(toStruct((Map<String, Object>) m))
                     .build();
         } else if (obj instanceof List<?> list) {
-            var listBuilder = ListValue.newBuilder();
+            com.google.protobuf.ListValue.Builder listBuilder = ListValue.newBuilder();
             for (Object element : list) {
                 listBuilder.addValues(toValue(element));
             }

@@ -39,7 +39,7 @@ class ResourceTypeSubclassTest {
 
     @Test
     void subclassRetainsMetadataFromProtectedConstructor() {
-        var desc = new TestDescriptor();
+        com.authx.sdk.ResourceTypeSubclassTest.TestDescriptor desc = new TestDescriptor();
         assertThat(desc.name()).isEqualTo("test");
         assertThat(desc.relClass()).isEqualTo(TestRel.class);
         assertThat(desc.permClass()).isEqualTo(TestPerm.class);
@@ -47,8 +47,8 @@ class ResourceTypeSubclassTest {
 
     @Test
     void subclassEqualsFactoryBuiltDescriptorByName() {
-        var fromSubclass = new TestDescriptor();
-        var fromFactory  = ResourceType.of("test", TestRel.class, TestPerm.class);
+        com.authx.sdk.ResourceTypeSubclassTest.TestDescriptor fromSubclass = new TestDescriptor();
+        com.authx.sdk.ResourceType<com.authx.sdk.ResourceTypeSubclassTest.TestRel,com.authx.sdk.ResourceTypeSubclassTest.TestPerm> fromFactory  = ResourceType.of("test", TestRel.class, TestPerm.class);
         assertThat(fromSubclass).isEqualTo(fromFactory);
         assertThat(fromSubclass.hashCode()).isEqualTo(fromFactory.hashCode());
     }

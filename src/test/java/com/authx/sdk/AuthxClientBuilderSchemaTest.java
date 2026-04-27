@@ -10,7 +10,7 @@ class AuthxClientBuilderSchemaTest {
 
     @Test
     void loadSchemaOnStartDefaultsTrue() throws Exception {
-        var b = AuthxClient.builder();
+        com.authx.sdk.AuthxClientBuilder b = AuthxClient.builder();
         Field f = AuthxClientBuilder.class.getDeclaredField("loadSchemaOnStart");
         f.setAccessible(true);
         assertThat(f.getBoolean(b)).isTrue();
@@ -18,7 +18,7 @@ class AuthxClientBuilderSchemaTest {
 
     @Test
     void loadSchemaOnStartCanBeDisabled() throws Exception {
-        var b = AuthxClient.builder().loadSchemaOnStart(false);
+        com.authx.sdk.AuthxClientBuilder b = AuthxClient.builder().loadSchemaOnStart(false);
         Field f = AuthxClientBuilder.class.getDeclaredField("loadSchemaOnStart");
         f.setAccessible(true);
         assertThat(f.getBoolean(b)).isFalse();
@@ -26,7 +26,7 @@ class AuthxClientBuilderSchemaTest {
 
     @Test
     void inMemoryClientReportsSchemaNotLoaded() {
-        try (var client = AuthxClient.inMemory()) {
+        try (com.authx.sdk.AuthxClient client = AuthxClient.inMemory()) {
             assertThat(client.schema()).isNotNull();
             assertThat(client.schema().isLoaded()).isFalse();
             assertThat(client.schema().resourceTypes()).isEmpty();

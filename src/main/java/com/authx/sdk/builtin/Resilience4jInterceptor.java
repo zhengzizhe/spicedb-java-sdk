@@ -33,7 +33,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
 
     @Override
     public CheckResult interceptCheck(CheckChain chain) {
-        var ctx = chain.operationContext();
+        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
         acquirePermissions(ctx);
         try {
             return chain.proceed(chain.request());
@@ -44,7 +44,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
 
     @Override
     public GrantResult interceptWrite(WriteChain chain) {
-        var ctx = chain.operationContext();
+        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
         acquirePermissions(ctx);
         try {
             return chain.proceed(chain.request());
@@ -55,7 +55,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
 
     @Override
     public <T> T interceptOperation(OperationChain<T> chain) {
-        var ctx = chain.context();
+        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.context();
         acquirePermissions(ctx);
         try {
             return chain.proceed();

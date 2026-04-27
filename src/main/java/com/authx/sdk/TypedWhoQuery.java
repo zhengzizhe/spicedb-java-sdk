@@ -56,7 +56,7 @@ public class TypedWhoQuery {
      * back into a grant/revoke chain:
      *
      * <pre>
-     * var oldEditors = client.on(Document).select(docId)
+     * List&lt;String&gt; oldEditors = client.on(Document).select(docId)
      *         .who("user", Document.Perm.EDIT).asSubjectRefs();
      * client.on(Document).select(newDocId)
      *         .grant(Document.Rel.EDITOR).to(oldEditors);
@@ -64,7 +64,7 @@ public class TypedWhoQuery {
      */
     public List<SubjectRef> asSubjectRefs() {
         List<String> ids = fetchIds();
-        var out = new ArrayList<SubjectRef>(ids.size());
+        java.util.ArrayList<com.authx.sdk.model.SubjectRef> out = new ArrayList<SubjectRef>(ids.size());
         for (String id : ids) {
             out.add(SubjectRef.of(subjectType, id));
         }

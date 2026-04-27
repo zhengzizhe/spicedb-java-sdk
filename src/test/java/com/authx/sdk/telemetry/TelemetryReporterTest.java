@@ -16,10 +16,10 @@ class TelemetryReporterTest {
 
     @Test
     void flush_sendsEventsToSink() {
-        var received = new CopyOnWriteArrayList<List<Map<String, Object>>>();
+        java.util.concurrent.CopyOnWriteArrayList<java.util.List<java.util.Map<java.lang.String,java.lang.Object>>> received = new CopyOnWriteArrayList<List<Map<String, Object>>>();
         TelemetrySink sink = received::add;
 
-        var reporter = new TelemetryReporter(sink, 100, 10, 60_000, false);
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(sink, 100, 10, 60_000, false);
         reporter.record("CHECK", "doc", "1", "user", "alice", "view", "ALLOWED", 5, "");
         reporter.flush();
 
@@ -33,7 +33,7 @@ class TelemetryReporterTest {
     void sinkFailure_incrementsDroppedCount() {
         TelemetrySink failingSink = batch -> { throw new RuntimeException("sink down"); };
 
-        var reporter = new TelemetryReporter(failingSink, 100, 10, 60_000, false);
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(failingSink, 100, 10, 60_000, false);
         reporter.record("CHECK", "doc", "1", "user", "alice", "view", "ALLOWED", 5, "");
         reporter.flush();
 
@@ -44,7 +44,7 @@ class TelemetryReporterTest {
     @Test
     void bufferFull_incrementsBufferFullDropCount() {
         // Buffer capacity of 2
-        var reporter = new TelemetryReporter(TelemetrySink.NOOP, 2, 10, 60_000, false);
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(TelemetrySink.NOOP, 2, 10, 60_000, false);
         reporter.record("A", "", "", "", "", "", "", 0, "");
         reporter.record("B", "", "", "", "", "", "", 0, "");
         reporter.record("C", "", "", "", "", "", "", 0, ""); // should be dropped
@@ -55,10 +55,10 @@ class TelemetryReporterTest {
 
     @Test
     void close_flushesRemainingEvents() {
-        var received = new CopyOnWriteArrayList<List<Map<String, Object>>>();
+        java.util.concurrent.CopyOnWriteArrayList<java.util.List<java.util.Map<java.lang.String,java.lang.Object>>> received = new CopyOnWriteArrayList<List<Map<String, Object>>>();
         TelemetrySink sink = received::add;
 
-        var reporter = new TelemetryReporter(sink, 100, 10, 60_000, false);
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(sink, 100, 10, 60_000, false);
         reporter.record("CHECK", "doc", "1", "user", "alice", "view", "ALLOWED", 5, "");
         reporter.close();
 
@@ -67,7 +67,7 @@ class TelemetryReporterTest {
 
     @Test
     void pendingCount_reflectsBufferSize() {
-        var reporter = new TelemetryReporter(TelemetrySink.NOOP, 100, 10, 60_000, false);
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(TelemetrySink.NOOP, 100, 10, 60_000, false);
         assertThat(reporter.pendingCount()).isZero();
 
         reporter.record("A", "", "", "", "", "", "", 0, "");

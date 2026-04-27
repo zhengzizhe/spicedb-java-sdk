@@ -47,7 +47,7 @@ class ActionPackageTest {
 
         @Test
         void grant_singleUser() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.GrantAction grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             GrantResult result = grant.to("user:alice");
 
             assertThat(result.count()).isEqualTo(1);
@@ -57,7 +57,7 @@ class ActionPackageTest {
 
         @Test
         void grant_multipleUsers() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            com.authx.sdk.action.GrantAction grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
             GrantResult result = grant.to("user:alice", "user:bob", "user:carol");
 
             assertThat(result.count()).isEqualTo(3);
@@ -66,7 +66,7 @@ class ActionPackageTest {
 
         @Test
         void grant_multipleRelations_multipleUsers() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor", "viewer"});
+            com.authx.sdk.action.GrantAction grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor", "viewer"});
             GrantResult result = grant.to("user:alice", "user:bob");
 
             // 2 relations x 2 users = 4 updates
@@ -76,7 +76,7 @@ class ActionPackageTest {
 
         @Test
         void grant_toCollection() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.GrantAction grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             GrantResult result = grant.to("user:alice", "user:bob");
 
             assertThat(result.count()).isEqualTo(2);
@@ -84,12 +84,12 @@ class ActionPackageTest {
 
         @Test
         void grant_toSubjects_parsesRef() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            com.authx.sdk.action.GrantAction grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
             grant.to("department:eng#member");
 
-            var tuples = transport.allTuples();
+            java.util.Collection<com.authx.sdk.model.Tuple> tuples = transport.allTuples();
             assertThat(tuples).hasSize(1);
-            var tuple = tuples.iterator().next();
+            com.authx.sdk.model.Tuple tuple = tuples.iterator().next();
             assertThat(tuple.subjectType()).isEqualTo("department");
             assertThat(tuple.subjectId()).isEqualTo("eng");
             assertThat(tuple.subjectRelation()).isEqualTo("member");
@@ -97,7 +97,7 @@ class ActionPackageTest {
 
         @Test
         void grant_toSubjects_collection() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            com.authx.sdk.action.GrantAction grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
             grant.to("user:alice", "group:eng#member");
 
             assertThat(transport.size()).isEqualTo(2);
@@ -105,7 +105,7 @@ class ActionPackageTest {
 
         @Test
         void grant_withCaveat() {
-            var grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.GrantAction grant = new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             grant.withCaveat("ip_range", Map.of("allowed_cidr", "10.0.0.0/8"));
             GrantResult result = grant.to("user:alice");
 
@@ -130,7 +130,7 @@ class ActionPackageTest {
 
         @Test
         void check_by_allowed() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            com.authx.sdk.action.CheckAction check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
             CheckResult result = check.by("user:alice");
 
             assertThat(result.hasPermission()).isTrue();
@@ -138,7 +138,7 @@ class ActionPackageTest {
 
         @Test
         void check_by_denied() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            com.authx.sdk.action.CheckAction check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
             CheckResult result = check.by("user:bob");
 
             assertThat(result.hasPermission()).isFalse();
@@ -146,7 +146,7 @@ class ActionPackageTest {
 
         @Test
         void check_withConsistency() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            com.authx.sdk.action.CheckAction check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
             check.withConsistency(Consistency.full());
             CheckResult result = check.by("user:alice");
 
@@ -155,7 +155,7 @@ class ActionPackageTest {
 
         @Test
         void check_byAsync_returns_future() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            com.authx.sdk.action.CheckAction check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
             CompletableFuture<CheckResult> future = check.byAsync("user:alice");
 
             assertThat(future.join().hasPermission()).isTrue();
@@ -163,7 +163,7 @@ class ActionPackageTest {
 
         @Test
         void check_byAll_varargs() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"viewer"});
+            com.authx.sdk.action.CheckAction check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"viewer"});
             BulkCheckResult result = check.byAll("user:alice", "user:bob", "user:carol");
 
             assertThat(result.get("alice").hasPermission()).isTrue();
@@ -174,7 +174,7 @@ class ActionPackageTest {
 
         @Test
         void check_byAll_collection() {
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
+            com.authx.sdk.action.CheckAction check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
             BulkCheckResult result = check.byAll("user:alice", "user:bob");
 
             assertThat(result.get("alice").hasPermission()).isTrue();
@@ -199,7 +199,7 @@ class ActionPackageTest {
 
         @Test
         void checkAll_by_singleUser() {
-            var action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer", "owner"});
+            com.authx.sdk.action.CheckAllAction action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer", "owner"});
             PermissionSet perms = action.by("user:alice");
 
             assertThat(perms.can("editor")).isTrue();
@@ -210,7 +210,7 @@ class ActionPackageTest {
 
         @Test
         void checkAll_byAll_matrix() {
-            var action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer"});
+            com.authx.sdk.action.CheckAllAction action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer"});
             PermissionMatrix matrix = action.byAll("user:alice", "user:bob");
 
             assertThat(matrix.get("user:alice").can("editor")).isTrue();
@@ -221,7 +221,7 @@ class ActionPackageTest {
 
         @Test
         void checkAll_byAll_collection() {
-            var action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer"});
+            com.authx.sdk.action.CheckAllAction action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor", "viewer"});
             PermissionMatrix matrix = action.byAll("user:alice", "user:bob");
 
             assertThat(matrix.get("user:alice")).isNotNull();
@@ -230,7 +230,7 @@ class ActionPackageTest {
 
         @Test
         void checkAll_withConsistency() {
-            var action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor"});
+            com.authx.sdk.action.CheckAllAction action = new CheckAllAction(RES_TYPE, RES_ID, transport,                     new String[]{"editor"});
             action.withConsistency(Consistency.full());
             PermissionSet perms = action.by("user:alice");
 
@@ -253,7 +253,7 @@ class ActionPackageTest {
 
         @Test
         void revoke_from_singleUser() {
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.RevokeAction revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             RevokeResult result = revoke.from("user:alice");
 
             assertThat(result.count()).isEqualTo(1);
@@ -263,7 +263,7 @@ class ActionPackageTest {
 
         @Test
         void revoke_from_multipleUsers() {
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.RevokeAction revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             RevokeResult result = revoke.from("user:alice", "user:bob");
 
             assertThat(result.count()).isEqualTo(2);
@@ -272,7 +272,7 @@ class ActionPackageTest {
 
         @Test
         void revoke_from_collection() {
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.RevokeAction revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             RevokeResult result = revoke.from("user:alice");
 
             assertThat(result.count()).isEqualTo(1);
@@ -284,7 +284,7 @@ class ActionPackageTest {
             new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
                     .to("department:eng#member");
 
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            com.authx.sdk.action.RevokeAction revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
             revoke.from("department:eng#member");
 
             // Only the two editor grants should remain
@@ -296,7 +296,7 @@ class ActionPackageTest {
             new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
                     .to("group:eng#member");
 
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            com.authx.sdk.action.RevokeAction revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
             revoke.from("group:eng#member");
 
             assertThat(transport.size()).isEqualTo(2);
@@ -306,7 +306,7 @@ class ActionPackageTest {
         void revoke_multipleRelations() {
             new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"viewer"})
                     .to("user:alice");
-            var revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor", "viewer"});
+            com.authx.sdk.action.RevokeAction revoke = new RevokeAction(RES_TYPE, RES_ID, transport, new String[]{"editor", "viewer"});
             revoke.from("user:alice");
 
             // Both editor and viewer removed for alice; bob's editor remains
@@ -330,7 +330,7 @@ class ActionPackageTest {
 
         @Test
         void revokeAll_noRelations_removesAll() {
-            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, null);
+            com.authx.sdk.action.RevokeAllAction action = new RevokeAllAction(RES_TYPE, RES_ID, transport, null);
             RevokeResult result = action.from("user:alice");
 
             assertThat(result.count()).isEqualTo(3);
@@ -339,7 +339,7 @@ class ActionPackageTest {
 
         @Test
         void revokeAll_emptyRelations_removesAll() {
-            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, new String[]{});
+            com.authx.sdk.action.RevokeAllAction action = new RevokeAllAction(RES_TYPE, RES_ID, transport, new String[]{});
             RevokeResult result = action.from("user:alice");
 
             assertThat(result.count()).isEqualTo(3);
@@ -348,7 +348,7 @@ class ActionPackageTest {
 
         @Test
         void revokeAll_specificRelations_removesOnlyMatching() {
-            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport,
+            com.authx.sdk.action.RevokeAllAction action = new RevokeAllAction(RES_TYPE, RES_ID, transport,
                     new String[]{"editor", "viewer"});
             RevokeResult result = action.from("user:alice");
 
@@ -360,7 +360,7 @@ class ActionPackageTest {
         @Test
         void revokeAll_multipleUsers() {
             new GrantAction(RES_TYPE, RES_ID, transport, new String[]{"editor"}).to("user:bob");
-            var action = new RevokeAllAction(RES_TYPE, RES_ID, transport, null);
+            com.authx.sdk.action.RevokeAllAction action = new RevokeAllAction(RES_TYPE, RES_ID, transport, null);
             action.from("user:alice", "user:bob");
 
             assertThat(transport.size()).isEqualTo(0);
@@ -387,7 +387,7 @@ class ActionPackageTest {
 
             assertThat(result.zedToken()).isNotNull();
             // Verify: alice lost owner, bob has editor, carol+dave have viewer
-            var check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"owner"});
+            com.authx.sdk.action.CheckAction check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"owner"});
             assertThat(check.by("user:alice").hasPermission()).isFalse();
 
             check = new CheckAction(RES_TYPE, RES_ID, transport, SYNC_EXEC, new String[]{"editor"});
@@ -473,7 +473,7 @@ class ActionPackageTest {
 
         @Test
         void fetch_all() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
             List<Tuple> tuples = query.fetch();
 
             assertThat(tuples).hasSize(3);
@@ -481,7 +481,7 @@ class ActionPackageTest {
 
         @Test
         void fetch_nullRelations() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, null);
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, null);
             List<Tuple> tuples = query.fetch();
 
             assertThat(tuples).hasSize(3);
@@ -489,7 +489,7 @@ class ActionPackageTest {
 
         @Test
         void fetch_filtered() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             List<Tuple> tuples = query.fetch();
 
             assertThat(tuples).hasSize(1);
@@ -498,7 +498,7 @@ class ActionPackageTest {
 
         @Test
         void fetch_multipleRelations() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"editor", "viewer"});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"editor", "viewer"});
             List<Tuple> tuples = query.fetch();
 
             assertThat(tuples).hasSize(3);
@@ -506,7 +506,7 @@ class ActionPackageTest {
 
         @Test
         void fetchSet() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
             Set<Tuple> set = query.fetchSet();
 
             assertThat(set).hasSize(3);
@@ -514,25 +514,25 @@ class ActionPackageTest {
 
         @Test
         void fetchCount() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
             assertThat(query.fetchCount()).isEqualTo(3);
         }
 
         @Test
         void fetchExists_true() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             assertThat(query.fetchExists()).isTrue();
         }
 
         @Test
         void fetchExists_false() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"owner"});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"owner"});
             assertThat(query.fetchExists()).isFalse();
         }
 
         @Test
         void fetchFirst_present() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"editor"});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"editor"});
             Optional<Tuple> first = query.fetchFirst();
 
             assertThat(first).isPresent();
@@ -541,13 +541,13 @@ class ActionPackageTest {
 
         @Test
         void fetchFirst_empty() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"owner"});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"owner"});
             assertThat(query.fetchFirst()).isEmpty();
         }
 
         @Test
         void fetchSubjectIds() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
             List<String> ids = query.fetchSubjectIds();
 
             assertThat(ids).containsExactlyInAnyOrder("bob", "carol");
@@ -555,7 +555,7 @@ class ActionPackageTest {
 
         @Test
         void fetchSubjectIdSet() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{"viewer"});
             Set<String> ids = query.fetchSubjectIdSet();
 
             assertThat(ids).containsExactlyInAnyOrder("bob", "carol");
@@ -563,7 +563,7 @@ class ActionPackageTest {
 
         @Test
         void groupByRelationTuples() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
             Map<String, List<Tuple>> grouped = query.groupByRelationTuples();
 
             assertThat(grouped).containsKeys("editor", "viewer");
@@ -573,7 +573,7 @@ class ActionPackageTest {
 
         @Test
         void groupByRelation() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
             Map<String, List<String>> grouped = query.groupByRelation();
 
             assertThat(grouped.get("editor")).containsExactly("alice");
@@ -582,7 +582,7 @@ class ActionPackageTest {
 
         @Test
         void withConsistency() {
-            var query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
+            com.authx.sdk.action.RelationQuery query = new RelationQuery(RES_TYPE, RES_ID, transport, new String[]{});
             query.withConsistency(Consistency.full());
             assertThat(query.fetchCount()).isEqualTo(3);
         }
@@ -603,7 +603,7 @@ class ActionPackageTest {
 
         @Test
         void fetch_permission() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
             List<String> ids = query.fetch();
 
             assertThat(ids).containsExactlyInAnyOrder("alice", "bob");
@@ -611,7 +611,7 @@ class ActionPackageTest {
 
         @Test
         void fetch_relation() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", false);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", false);
             List<String> ids = query.fetch();
 
             assertThat(ids).containsExactlyInAnyOrder("alice", "bob");
@@ -619,7 +619,7 @@ class ActionPackageTest {
 
         @Test
         void fetchSet() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
             Set<String> ids = query.fetchSet();
 
             assertThat(ids).containsExactlyInAnyOrder("alice", "bob");
@@ -627,7 +627,7 @@ class ActionPackageTest {
 
         @Test
         void fetchFirst() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
             Optional<String> first = query.fetchFirst();
 
             assertThat(first).isPresent();
@@ -636,37 +636,37 @@ class ActionPackageTest {
 
         @Test
         void fetchFirst_empty() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "owner", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "owner", true);
             assertThat(query.fetchFirst()).isEmpty();
         }
 
         @Test
         void fetchCount() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
             assertThat(query.fetchCount()).isEqualTo(2);
         }
 
         @Test
         void fetchExists_true() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
             assertThat(query.fetchExists()).isTrue();
         }
 
         @Test
         void fetchExists_false_permission() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "owner", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "owner", true);
             assertThat(query.fetchExists()).isFalse();
         }
 
         @Test
         void fetchExists_false_relation() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "owner", false);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "owner", false);
             assertThat(query.fetchExists()).isFalse();
         }
 
         @Test
         void limit_permission() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
             query.limit(1);
             List<String> ids = query.fetch();
 
@@ -675,7 +675,7 @@ class ActionPackageTest {
 
         @Test
         void limit_relation() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", false);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", false);
             query.limit(1);
             List<String> ids = query.fetch();
 
@@ -684,14 +684,14 @@ class ActionPackageTest {
 
         @Test
         void withConsistency() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
             query.withConsistency(Consistency.full());
             assertThat(query.fetchCount()).isEqualTo(2);
         }
 
         @Test
         void fetchAsync() {
-            var query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
+            com.authx.sdk.action.SubjectQuery query = new SubjectQuery(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC, "editor", true);
             CompletableFuture<List<String>> future = query.fetchAsync();
 
             assertThat(future.join()).containsExactlyInAnyOrder("alice", "bob");
@@ -713,7 +713,7 @@ class ActionPackageTest {
 
         @Test
         void withPermission() {
-            var who = new WhoBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC);
+            com.authx.sdk.action.WhoBuilder who = new WhoBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC);
             List<String> editors = who.withPermission("editor").fetch();
 
             assertThat(editors).containsExactlyInAnyOrder("alice", "bob");
@@ -721,7 +721,7 @@ class ActionPackageTest {
 
         @Test
         void withRelation() {
-            var who = new WhoBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC);
+            com.authx.sdk.action.WhoBuilder who = new WhoBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC);
             List<String> viewers = who.withRelation("viewer").fetch();
 
             assertThat(viewers).containsExactly("carol");
@@ -729,7 +729,7 @@ class ActionPackageTest {
 
         @Test
         void withPermission_limit() {
-            var who = new WhoBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC);
+            com.authx.sdk.action.WhoBuilder who = new WhoBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC);
             List<String> limited = who.withPermission("editor").limit(1).fetch();
 
             assertThat(limited).hasSize(1);
@@ -737,7 +737,7 @@ class ActionPackageTest {
 
         @Test
         void withPermission_fetchSet() {
-            var who = new WhoBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC);
+            com.authx.sdk.action.WhoBuilder who = new WhoBuilder(RES_TYPE, RES_ID, transport, DEFAULT_SUBJECT, SYNC_EXEC);
             Set<String> editors = who.withPermission("editor").fetchSet();
 
             assertThat(editors).containsExactlyInAnyOrder("alice", "bob");

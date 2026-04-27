@@ -56,8 +56,8 @@ public class InterceptorTransport extends ForwardingTransport {
                 consistencyLabel(request.consistency()));
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.check(request);
-            var ctx = buildCheckContext(request);
-            var chain = new RealCheckChain(interceptors, 0, request, delegate, ctx);
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = buildCheckContext(request);
+            com.authx.sdk.transport.RealCheckChain chain = new RealCheckChain(interceptors, 0, request, delegate, ctx);
             return chain.proceed(request);
         } catch (java.io.IOException e) {
             throw new RuntimeException("Unreachable: MDC Closeable does not throw", e);
@@ -73,9 +73,9 @@ public class InterceptorTransport extends ForwardingTransport {
         Map<String, String> mdc = mdcFields("GRANT", resType, resId, null, rel, subj, null);
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.writeRelationships(updates);
-            var ctx = new OperationContext(SdkAction.WRITE, resType, resId, "", "", "");
-            var writeRequest = new WriteRequest(updates);
-            var chain = new RealWriteChain(interceptors, 0, writeRequest, delegate, ctx);
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.WRITE, resType, resId, "", "", "");
+            com.authx.sdk.model.WriteRequest writeRequest = new WriteRequest(updates);
+            com.authx.sdk.transport.RealWriteChain chain = new RealWriteChain(interceptors, 0, writeRequest, delegate, ctx);
             return chain.proceed(writeRequest);
         } catch (java.io.IOException e) {
             throw new RuntimeException("Unreachable: MDC Closeable does not throw", e);
@@ -93,7 +93,7 @@ public class InterceptorTransport extends ForwardingTransport {
         Map<String, String> mdc = mdcFields("REVOKE", resType, resId, null, rel, subj, null);
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.deleteRelationships(updates);
-            var ctx = new OperationContext(SdkAction.DELETE, resType, resId, "", "", "");
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.DELETE, resType, resId, "", "", "");
             return chainOperation(ctx, () -> delegate.deleteRelationships(updates));
         } catch (java.io.IOException e) {
             throw new RuntimeException("Unreachable: MDC Closeable does not throw", e);
@@ -109,7 +109,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 refOf(subject), null);
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.deleteByFilter(resource, subject, optionalRelation);
-            var ctx = new OperationContext(SdkAction.DELETE, resource.type(), resource.id(),
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.DELETE, resource.type(), resource.id(),
                     "", subject.type(), subject.id());
             return chainOperation(ctx, () -> delegate.deleteByFilter(resource, subject, optionalRelation));
         } catch (java.io.IOException e) {
@@ -126,7 +126,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 null, consistencyLabel(consistency));
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.readRelationships(resource, relation, consistency);
-            var ctx = new OperationContext(SdkAction.READ, resource.type(), resource.id(),
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.READ, resource.type(), resource.id(),
                     relation != null ? relation.name() : "", "", "");
             return chainOperation(ctx, () -> delegate.readRelationships(resource, relation, consistency));
         } catch (java.io.IOException e) {
@@ -142,7 +142,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 consistencyLabel(request.consistency()));
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.lookupSubjects(request);
-            var ctx = new OperationContext(SdkAction.LOOKUP_SUBJECTS,
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.LOOKUP_SUBJECTS,
                     request.resource().type(), request.resource().id(),
                     request.permission().name(), request.subjectType(), "");
             return chainOperation(ctx, () -> delegate.lookupSubjects(request));
@@ -160,7 +160,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 consistencyLabel(request.consistency()));
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.lookupResources(request);
-            var ctx = new OperationContext(SdkAction.LOOKUP_RESOURCES,
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.LOOKUP_RESOURCES,
                     request.resourceType(), "",
                     request.permission().name(),
                     request.subject().type(), request.subject().id());
@@ -177,7 +177,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 permission.name(), null, null, consistencyLabel(consistency));
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.expand(resource, permission, consistency);
-            var ctx = new OperationContext(SdkAction.EXPAND, resource.type(), resource.id(),
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.EXPAND, resource.type(), resource.id(),
                     permission.name(), "", "");
             return chainOperation(ctx, () -> delegate.expand(resource, permission, consistency));
         } catch (java.io.IOException e) {
@@ -193,7 +193,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 consistencyLabel(request.consistency()));
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.checkBulk(request, subjects);
-            var ctx = new OperationContext(SdkAction.CHECK_BULK,
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.CHECK_BULK,
                     request.resource().type(), request.resource().id(),
                     request.permission().name(),
                     request.subject().type(), request.subject().id());
@@ -210,7 +210,7 @@ public class InterceptorTransport extends ForwardingTransport {
                 consistencyLabel(consistency));
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.checkBulkMulti(items, consistency);
-            var ctx = new OperationContext(SdkAction.CHECK_BULK, resType, "", "", "", "");
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.CHECK_BULK, resType, "", "", "", "");
             return chainOperation(ctx, () -> delegate.checkBulkMulti(items, consistency));
         } catch (java.io.IOException e) {
             throw new RuntimeException("Unreachable: MDC Closeable does not throw", e);
@@ -225,7 +225,7 @@ public class InterceptorTransport extends ForwardingTransport {
     // ---- Internal helpers ----
 
     private <T> T chainOperation(OperationContext ctx, Supplier<T> terminalOperation) {
-        var chain = new RealOperationChain<>(interceptors, 0, terminalOperation, ctx);
+        com.authx.sdk.transport.RealOperationChain<T> chain = new RealOperationChain<>(interceptors, 0, terminalOperation, ctx);
         return chain.proceed();
     }
 

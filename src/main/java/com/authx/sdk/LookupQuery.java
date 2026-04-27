@@ -88,7 +88,7 @@ public class LookupQuery {
     public List<String> fetch() {
         if (permission == null) throw new IllegalStateException("withPermission() must be called before fetch()");
         if (subject == null) throw new IllegalStateException("by() must be called before fetch()");
-        var request = new LookupResourcesRequest(resourceType, Permission.of(permission),
+        com.authx.sdk.model.LookupResourcesRequest request = new LookupResourcesRequest(resourceType, Permission.of(permission),
                 subject, limit, consistency);
         return transport.lookupResources(request).stream()
                 .map(ResourceRef::id).toList();
@@ -101,7 +101,7 @@ public class LookupQuery {
 
     /** Execute the lookup and return the first matching resource id, if any. */
     public Optional<String> fetchFirst() {
-        var list = fetch();
+        java.util.List<java.lang.String> list = fetch();
         return list.isEmpty() ? Optional.empty() : Optional.of(list.getFirst());
     }
 

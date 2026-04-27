@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * Connects directly to SpiceDB via gRPC. No platform dependency.
  *
  * <pre>
- * var client = AuthxClient.builder()
+ * AuthxClient client = AuthxClient.builder()
  *     .connection(c -> c.target("dns:///spicedb.prod:50051").presharedKey("my-key"))
  *     .build();
  * </pre>
@@ -104,12 +104,12 @@ public class AuthxClient implements AutoCloseable {
      * to {@code SubjectRef.parse} and throws if the id has no {@code ':'}.
      */
     public static AuthxClient inMemory(@Nullable SchemaCache schemaCache) {
-        var bus = new DefaultTypedEventBus();
-        var lm = new LifecycleManager(bus);
+        com.authx.sdk.event.DefaultTypedEventBus bus = new DefaultTypedEventBus();
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
         lm.begin(); lm.complete();
-        var infra = new SdkInfrastructure(null, null, Runnable::run, lm);
-        var observability = new SdkObservability(new SdkMetrics(), bus, null);
-        var config = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
+        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(null, null, Runnable::run, lm);
+        com.authx.sdk.internal.SdkObservability observability = new SdkObservability(new SdkMetrics(), bus, null);
+        com.authx.sdk.internal.SdkConfig config = new SdkConfig(PolicyRegistry.withDefaults(), false, false);
         return new AuthxClient(new InMemoryTransport(), infra, observability, config,
                 HealthProbe.up(), new SchemaClient(schemaCache), schemaCache);
     }
@@ -124,7 +124,7 @@ public class AuthxClient implements AutoCloseable {
      * client.on("document").resource("doc-1").check("view").by("alice");
      *
      * // Store factory, reuse
-     * var doc = client.on("document");
+     * ResourceHandle doc = client.on("document");
      * doc.resource("doc-1").check("view").by("alice");
      * doc.resource("doc-2").grant("editor").to("bob");
      *
@@ -176,13 +176,13 @@ public class AuthxClient implements AutoCloseable {
      * </pre>
      */
     public <T extends ResourceFactory> T create(Class<T> clazz) {
-        var annotation = clazz.getAnnotation(PermissionResource.class);
+        com.authx.sdk.PermissionResource annotation = clazz.getAnnotation(PermissionResource.class);
         if (annotation == null) {
             throw new IllegalArgumentException(clazz.getSimpleName() + " must be annotated with @PermissionResource");
         }
         String resourceType = annotation.value();
         try {
-            var constructor = clazz.getDeclaredConstructor();
+            java.lang.reflect.Constructor<T> constructor = clazz.getDeclaredConstructor();
             constructor.setAccessible(true);
             T instance = constructor.newInstance();
             instance.init(resourceType, transport, infra.asyncExecutor());

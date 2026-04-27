@@ -12,7 +12,7 @@ class CheckBulkMultiTest {
 
     @Test
     void checkBulkMulti_duplicatePermissions_returnsAllResults() {
-        var transport = new InMemoryTransport();
+        com.authx.sdk.transport.InMemoryTransport transport = new InMemoryTransport();
         transport.writeRelationships(List.of(
                 new SdkTransport.RelationshipUpdate(
                         SdkTransport.RelationshipUpdate.Operation.TOUCH,
@@ -26,7 +26,7 @@ class CheckBulkMultiTest {
                         SubjectRef.of("user", "bob", null))
         ));
 
-        var items = List.of(
+        java.util.List<com.authx.sdk.transport.SdkTransport.BulkCheckItem> items = List.of(
                 new SdkTransport.BulkCheckItem(
                         ResourceRef.of("document", "doc-1"),
                         Permission.of("viewer"),

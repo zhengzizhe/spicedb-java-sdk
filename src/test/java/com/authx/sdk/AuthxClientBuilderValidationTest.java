@@ -18,19 +18,19 @@ class AuthxClientBuilderValidationTest {
 
     @Test
     void build_rejects_target_and_targets_both_set() {
-        var builder = AuthxClient.builder()
+        com.authx.sdk.AuthxClientBuilder builder = AuthxClient.builder()
                 .connection(c -> c
                         .target("dns:///a:50051")
                         .targets("dns:///b:50051")
                         .presharedKey("k"));
-        var ex = assertThrows(IllegalArgumentException.class, builder::build);
+        java.lang.IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, builder::build);
         assertTrue(ex.getMessage().contains("mutually exclusive"),
                 "message should mention mutual exclusion; was: " + ex.getMessage());
     }
 
     @Test
     void build_requires_at_least_target_or_targets() {
-        var builder = AuthxClient.builder()
+        com.authx.sdk.AuthxClientBuilder builder = AuthxClient.builder()
                 .connection(c -> c.presharedKey("k"));
         assertThrows(IllegalArgumentException.class, builder::build);
     }

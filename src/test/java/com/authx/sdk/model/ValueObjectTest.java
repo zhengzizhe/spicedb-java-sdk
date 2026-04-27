@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.*;
 class ValueObjectTest {
 
     @Test void resourceRef_of() {
-        var ref = ResourceRef.of("document", "doc-1");
+        com.authx.sdk.model.ResourceRef ref = ResourceRef.of("document", "doc-1");
         assertThat(ref.type()).isEqualTo("document");
         assertThat(ref.id()).isEqualTo("doc-1");
     }
@@ -22,7 +22,7 @@ class ValueObjectTest {
     }
 
     @Test void subjectRef_user() {
-        var ref = SubjectRef.of("user", "alice");
+        com.authx.sdk.model.SubjectRef ref = SubjectRef.of("user", "alice");
         assertThat(ref.type()).isEqualTo("user");
         assertThat(ref.id()).isEqualTo("alice");
         assertThat(ref.relation()).isNull();
@@ -30,7 +30,7 @@ class ValueObjectTest {
 
     @Test void subjectRef_of_twoArgs_hasNullRelation() {
         // The common type:id case — no need to pass an explicit `null` for relation.
-        var ref = SubjectRef.of("user", "alice");
+        com.authx.sdk.model.SubjectRef ref = SubjectRef.of("user", "alice");
         assertThat(ref.type()).isEqualTo("user");
         assertThat(ref.id()).isEqualTo("alice");
         assertThat(ref.relation()).isNull();
@@ -48,14 +48,14 @@ class ValueObjectTest {
     }
 
     @Test void subjectRef_parse_simple() {
-        var ref = SubjectRef.parse("user:alice");
+        com.authx.sdk.model.SubjectRef ref = SubjectRef.parse("user:alice");
         assertThat(ref.type()).isEqualTo("user");
         assertThat(ref.id()).isEqualTo("alice");
         assertThat(ref.relation()).isNull();
     }
 
     @Test void subjectRef_parse_withRelation() {
-        var ref = SubjectRef.parse("department:eng#all_members");
+        com.authx.sdk.model.SubjectRef ref = SubjectRef.parse("department:eng#all_members");
         assertThat(ref.type()).isEqualTo("department");
         assertThat(ref.id()).isEqualTo("eng");
         assertThat(ref.relation()).isEqualTo("all_members");
@@ -67,7 +67,7 @@ class ValueObjectTest {
     }
 
     @Test void subjectRef_wildcard() {
-        var ref = SubjectRef.wildcard("user");
+        com.authx.sdk.model.SubjectRef ref = SubjectRef.wildcard("user");
         assertThat(ref.type()).isEqualTo("user");
         assertThat(ref.id()).isEqualTo("*");
     }
@@ -79,20 +79,20 @@ class ValueObjectTest {
     }
 
     @Test void checkKey_equality() {
-        var k1 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
-        var k2 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
+        com.authx.sdk.model.CheckKey k1 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
+        com.authx.sdk.model.CheckKey k2 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
         assertThat(k1).isEqualTo(k2);
         assertThat(k1.hashCode()).isEqualTo(k2.hashCode());
     }
 
     @Test void checkKey_inequality() {
-        var k1 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
-        var k2 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("edit"), SubjectRef.of("user", "alice"));
+        com.authx.sdk.model.CheckKey k1 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
+        com.authx.sdk.model.CheckKey k2 = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("edit"), SubjectRef.of("user", "alice"));
         assertThat(k1).isNotEqualTo(k2);
     }
 
     @Test void checkKey_resourceIndex() {
-        var k = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
+        com.authx.sdk.model.CheckKey k = CheckKey.of(ResourceRef.of("document", "d1"), Permission.of("view"), SubjectRef.of("user", "alice"));
         assertThat(k.resourceIndex()).isEqualTo("document:d1");
     }
 
@@ -110,13 +110,13 @@ class ValueObjectTest {
     }
 
     @Test void caveatRef() {
-        var c = new CaveatRef("ip_range", java.util.Map.of("allowed", "10.0.0.0/8"));
+        com.authx.sdk.model.CaveatRef c = new CaveatRef("ip_range", java.util.Map.of("allowed", "10.0.0.0/8"));
         assertThat(c.name()).isEqualTo("ip_range");
         assertThat(c.context()).containsKey("allowed");
     }
 
     @Test void caveatRef_nullContext() {
-        var c = new CaveatRef("simple_caveat", null);
+        com.authx.sdk.model.CaveatRef c = new CaveatRef("simple_caveat", null);
         assertThat(c.name()).isEqualTo("simple_caveat");
         assertThat(c.context()).isNull();
     }

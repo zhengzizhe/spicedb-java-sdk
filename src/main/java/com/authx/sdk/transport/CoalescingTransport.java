@@ -38,7 +38,7 @@ public class CoalescingTransport extends ForwardingTransport {
 
     @Override
     public CheckResult check(CheckRequest request) {
-        var key = new CoalescingKey(request.resource(), request.permission(), request.subject(), request.consistency());
+        com.authx.sdk.transport.CoalescingTransport.CoalescingKey key = new CoalescingKey(request.resource(), request.permission(), request.subject(), request.consistency());
 
         // Try to be the "owner" of this request
         CompletableFuture<CheckResult> myFuture = new CompletableFuture<>();
@@ -90,7 +90,7 @@ public class CoalescingTransport extends ForwardingTransport {
         //   propagation. Evicting first means the new arrival gets null from
         //   putIfAbsent and starts its own call, which is correct semantics.
         try {
-            var result = delegate.check(request);
+            com.authx.sdk.model.CheckResult result = delegate.check(request);
             myFuture.complete(result);
             return result;
         } catch (Exception e) {

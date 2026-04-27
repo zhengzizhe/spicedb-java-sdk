@@ -59,7 +59,7 @@ final class SpiceDbTestSchema {
                     Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
                     "Bearer " + presharedKey);
 
-            var stub = SchemaServiceGrpc.newBlockingStub(channel)
+            com.authzed.api.v1.SchemaServiceGrpc.SchemaServiceBlockingStub stub = SchemaServiceGrpc.newBlockingStub(channel)
                     .withDeadlineAfter(10, TimeUnit.SECONDS)
                     .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata));
 

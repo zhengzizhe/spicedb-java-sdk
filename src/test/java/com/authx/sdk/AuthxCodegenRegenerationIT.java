@@ -27,19 +27,19 @@ class AuthxCodegenRegenerationIT {
 
     @Test
     void regeneratesDocumentWithSubjectTypes(@TempDir Path tmp) throws Exception {
-        var user = List.of(SubjectType.of("user"));
-        var userOrGroupOrDept = List.of(
+        java.util.List<com.authx.sdk.model.SubjectType> user = List.of(SubjectType.of("user"));
+        java.util.List<com.authx.sdk.model.SubjectType> userOrGroupOrDept = List.of(
                 SubjectType.of("user"),
                 SubjectType.of("group", "member"),
                 SubjectType.of("department", "all_members"));
-        var userOrGroupOrDeptOrWildcard = List.of(
+        java.util.List<com.authx.sdk.model.SubjectType> userOrGroupOrDeptOrWildcard = List.of(
                 SubjectType.of("user"),
                 SubjectType.of("group", "member"),
                 SubjectType.of("department", "all_members"),
                 SubjectType.wildcard("user"));
-        var wildcardOnly = List.of(SubjectType.wildcard("user"));
+        java.util.List<com.authx.sdk.model.SubjectType> wildcardOnly = List.of(SubjectType.wildcard("user"));
 
-        var cache = new SchemaCache();
+        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
         cache.updateFromMap(Map.of(
                 "document", new SchemaCache.DefinitionCache(
                         Set.of("folder", "space", "owner", "editor", "commenter", "viewer",
@@ -55,7 +55,7 @@ class AuthxCodegenRegenerationIT {
                                 "link_viewer", wildcardOnly,
                                 "link_editor", wildcardOnly))));
 
-        var schema = new SchemaClient(cache);
+        com.authx.sdk.SchemaClient schema = new SchemaClient(cache);
         AuthxCodegen.generate(schema, tmp.toString(), "com.example");
 
         String doc = Files.readString(tmp.resolve("com/example/Document.java"));

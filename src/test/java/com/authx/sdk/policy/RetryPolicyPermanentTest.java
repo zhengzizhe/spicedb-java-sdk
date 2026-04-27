@@ -24,7 +24,7 @@ class RetryPolicyPermanentTest {
 
     @Test
     void defaults_do_not_retry_permanent_exceptions() {
-        var policy = RetryPolicy.defaults();
+        com.authx.sdk.policy.RetryPolicy policy = RetryPolicy.defaults();
         assertFalse(policy.shouldRetry(new AuthxAuthException("x", null)));
         assertFalse(policy.shouldRetry(new AuthxInvalidArgumentException("x", null)));
         assertFalse(policy.shouldRetry(new AuthxUnimplementedException("x", null)));
@@ -40,14 +40,14 @@ class RetryPolicyPermanentTest {
 
     @Test
     void defaults_still_retry_transient_exceptions() {
-        var policy = RetryPolicy.defaults();
+        com.authx.sdk.policy.RetryPolicy policy = RetryPolicy.defaults();
         assertTrue(policy.shouldRetry(new AuthxConnectionException("net hiccup", null)));
         assertTrue(policy.shouldRetry(new AuthxTimeoutException("deadline", null)));
     }
 
     @Test
     void isPermanent_agrees_with_shouldRetry_complement() {
-        var policy = RetryPolicy.defaults();
+        com.authx.sdk.policy.RetryPolicy policy = RetryPolicy.defaults();
         // For every deny-listed class, isPermanent is true and shouldRetry is false.
         assertTrue(policy.isPermanent(new AuthxAuthException("x", null)));
         assertTrue(policy.isPermanent(new InvalidPermissionException("x")));
@@ -57,7 +57,7 @@ class RetryPolicyPermanentTest {
 
     @Test
     void isPermanent_returns_false_for_non_Exception_Throwable() {
-        var policy = RetryPolicy.defaults();
+        com.authx.sdk.policy.RetryPolicy policy = RetryPolicy.defaults();
         // Errors (OOM, StackOverflow) are not Exception — retry-pipeline
         // decisions don't apply. Contract is documented by returning false.
         assertFalse(policy.isPermanent(new OutOfMemoryError()));

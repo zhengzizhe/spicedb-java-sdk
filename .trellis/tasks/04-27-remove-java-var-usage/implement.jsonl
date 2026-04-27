@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for Java SDK coding guidelines and quality expectations."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Identifies SDK source/test/module layout and paths included in the refactor."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality and style guidance for broad Java refactors, including preserving behavior and tests."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Search-first guidance for mechanical changes that must cover all occurrences consistently."}

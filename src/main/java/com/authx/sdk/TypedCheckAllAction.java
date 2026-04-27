@@ -52,7 +52,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
         if (keyValues.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
         }
-        var map = new java.util.LinkedHashMap<String, Object>();
+        java.util.LinkedHashMap<java.lang.String,java.lang.Object> map = new java.util.LinkedHashMap<String, Object>();
         for (int i = 0; i < keyValues.length; i += 2) {
             if (!(keyValues[i] instanceof String key)) {
                 throw new IllegalArgumentException("Key at index " + i + " must be a String");
@@ -84,8 +84,8 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
                     "checkAll(...).by(SubjectRef) requires exactly one resource id");
         }
         E[] values = permClass.getEnumConstants();
-        var result = new EnumMap<E, Boolean>(permClass);
-        var items = new ArrayList<SdkTransport.BulkCheckItem>(values.length);
+        java.util.EnumMap<E,java.lang.Boolean> result = new EnumMap<E, Boolean>(permClass);
+        java.util.ArrayList<com.authx.sdk.transport.SdkTransport.BulkCheckItem> items = new ArrayList<SdkTransport.BulkCheckItem>(values.length);
         String resourceType = factory.resourceType();
         for (E v : values) {
             items.add(new SdkTransport.BulkCheckItem(
@@ -133,7 +133,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     public Map<String, EnumMap<E, Boolean>> byAll(SubjectRef subject) {
         E[] values = permClass.getEnumConstants();
         String resourceType = factory.resourceType();
-        var items = new ArrayList<SdkTransport.BulkCheckItem>(ids.length * values.length);
+        java.util.ArrayList<com.authx.sdk.transport.SdkTransport.BulkCheckItem> items = new ArrayList<SdkTransport.BulkCheckItem>(ids.length * values.length);
         for (String id : ids) {
             for (E v : values) {
                 items.add(new SdkTransport.BulkCheckItem(
@@ -143,10 +143,10 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
             }
         }
         List<CheckResult> results = factory.transport().checkBulkMulti(items, consistency);
-        var out = new LinkedHashMap<String, EnumMap<E, Boolean>>();
+        java.util.LinkedHashMap<java.lang.String,java.util.EnumMap<E,java.lang.Boolean>> out = new LinkedHashMap<String, EnumMap<E, Boolean>>();
         int idx = 0;
         for (String id : ids) {
-            var permMap = new EnumMap<E, Boolean>(permClass);
+            java.util.EnumMap<E,java.lang.Boolean> permMap = new EnumMap<E, Boolean>(permClass);
             for (E v : values) {
                 permMap.put(v, idx < results.size() && results.get(idx).hasPermission());
                 idx++;

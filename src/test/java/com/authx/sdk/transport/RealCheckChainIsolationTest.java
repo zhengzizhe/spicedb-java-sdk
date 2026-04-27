@@ -62,8 +62,8 @@ class RealCheckChainIsolationTest {
 
     @Test
     void read_chain_skips_broken_interceptor_and_continues() {
-        var aCalls = new AtomicInteger();
-        var cCalls = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger aCalls = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger cCalls = new AtomicInteger();
 
         SdkInterceptor a = new SdkInterceptor() {
             @Override public CheckResult interceptCheck(CheckChain chain) {
@@ -83,9 +83,9 @@ class RealCheckChainIsolationTest {
             }
         };
 
-        var transport = new CountingTransport();
-        var chain = new RealCheckChain(List.of(a, b_broken, c), 0, req(), transport, ctx());
-        var result = chain.proceed(req());
+        com.authx.sdk.transport.RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
+        com.authx.sdk.transport.RealCheckChain chain = new RealCheckChain(List.of(a, b_broken, c), 0, req(), transport, ctx());
+        com.authx.sdk.model.CheckResult result = chain.proceed(req());
 
         assertEquals(Permissionship.HAS_PERMISSION, result.permissionship(),
                 "Despite broken interceptor B, the request must complete.");
@@ -96,17 +96,17 @@ class RealCheckChainIsolationTest {
 
     @Test
     void read_chain_propagates_authx_exceptions_unchanged() {
-        var authException = new AuthxAuthException("denied", null);
+        com.authx.sdk.exception.AuthxAuthException authException = new AuthxAuthException("denied", null);
         SdkInterceptor denier = new SdkInterceptor() {
             @Override public CheckResult interceptCheck(CheckChain chain) {
                 throw authException;
             }
         };
 
-        var transport = new CountingTransport();
-        var chain = new RealCheckChain(List.of(denier), 0, req(), transport, ctx());
+        com.authx.sdk.transport.RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
+        com.authx.sdk.transport.RealCheckChain chain = new RealCheckChain(List.of(denier), 0, req(), transport, ctx());
 
-        var ex = assertThrows(AuthxAuthException.class, () -> chain.proceed(req()));
+        com.authx.sdk.exception.AuthxAuthException ex = assertThrows(AuthxAuthException.class, () -> chain.proceed(req()));
         assertSame(authException, ex, "AuthxException subclasses must pass through unchanged");
         assertEquals(0, transport.checkCalls.get(), "transport MUST NOT be called on Authx denial");
     }
@@ -115,7 +115,7 @@ class RealCheckChainIsolationTest {
 
     @Test
     void write_chain_aborts_on_interceptor_bug() {
-        var cCalls = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger cCalls = new AtomicInteger();
 
         SdkInterceptor bug = new SdkInterceptor() {
             @Override public com.authx.sdk.model.GrantResult interceptWrite(WriteChain chain) {
@@ -129,11 +129,11 @@ class RealCheckChainIsolationTest {
             }
         };
 
-        var transport = new CountingTransport();
-        var writeReq = new WriteRequest(java.util.List.of());
-        var chain = new RealWriteChain(List.of(bug, c), 0, writeReq, transport, writeCtx());
+        com.authx.sdk.transport.RealCheckChainIsolationTest.CountingTransport transport = new CountingTransport();
+        com.authx.sdk.model.WriteRequest writeReq = new WriteRequest(java.util.List.of());
+        com.authx.sdk.transport.RealWriteChain chain = new RealWriteChain(List.of(bug, c), 0, writeReq, transport, writeCtx());
 
-        var ex = assertThrows(com.authx.sdk.exception.AuthxException.class,
+        com.authx.sdk.exception.AuthxException ex = assertThrows(com.authx.sdk.exception.AuthxException.class,
                 () -> chain.proceed(writeReq));
         assertNotNull(ex.getCause(), "original bug must be preserved as cause");
         assertInstanceOf(IllegalStateException.class, ex.getCause());

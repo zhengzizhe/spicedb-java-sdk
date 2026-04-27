@@ -161,8 +161,8 @@ public class LifecycleManager {
      * Startup timing report: "connect=45ms channel=12ms schema=8ms total=78ms"
      */
     public String startupReport() {
-        var sb = new StringBuilder();
-        for (var entry : phaseDurations.entrySet()) {
+        java.lang.StringBuilder sb = new StringBuilder();
+        for (java.util.Map.Entry<com.authx.sdk.lifecycle.SdkPhase,java.lang.Long> entry : phaseDurations.entrySet()) {
             if (!sb.isEmpty()) sb.append(" ");
             sb.append(entry.getKey().name().toLowerCase()).append("=").append(entry.getValue()).append("ms");
         }

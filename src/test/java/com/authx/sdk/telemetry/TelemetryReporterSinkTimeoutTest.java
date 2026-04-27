@@ -32,8 +32,8 @@ class TelemetryReporterSinkTimeoutTest {
 
     @Test
     void hung_sink_does_not_block_close() throws Exception {
-        var sink = new HangingSink();
-        var reporter = new TelemetryReporter(
+        com.authx.sdk.telemetry.TelemetryReporterSinkTimeoutTest.HangingSink sink = new HangingSink();
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(
                 sink,
                 /*bufferCapacity*/ 100,
                 /*batchSize*/ 1,
@@ -77,9 +77,9 @@ class TelemetryReporterSinkTimeoutTest {
 
     @Test
     void fast_sink_records_no_timeouts() throws Exception {
-        var seen = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger seen = new AtomicInteger();
         TelemetrySink fast = batch -> seen.addAndGet(batch.size());
-        var reporter = new TelemetryReporter(
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(
                 fast, 100, 1, 50, false, Duration.ofSeconds(2));
 
         for (int i = 0; i < 3; i++) {

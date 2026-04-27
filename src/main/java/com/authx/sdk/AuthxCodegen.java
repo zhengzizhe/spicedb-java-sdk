@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
  * resource type plus per-caveat classes.
  *
  * <pre>
- * var client = AuthxClient.builder()
+ * AuthxClient client = AuthxClient.builder()
  *     .connection(c -&gt; c.target("localhost:50051").presharedKey("dev-token"))
  *     .build();
  * AuthxCodegen.generate(client, "test-app/src/main/java", "com.authx.testapp.schema");
@@ -79,7 +79,7 @@ public final class AuthxCodegen {
             // pass {@code User} to the typed subject overloads on
             // Grant/Revoke/Check/Lookup.
 
-            var relSTs = schema.allSubjectTypes(type);
+            java.util.Map<java.lang.String,java.util.List<com.authx.sdk.model.SubjectType>> relSTs = schema.allSubjectTypes(type);
             String file = emitTypeClass(type, relations, permissions, relSTs, packageName);
             Path out = basePkgDir.resolve(toPascalCase(type) + ".java");
             Files.writeString(out, file);
@@ -98,8 +98,8 @@ public final class AuthxCodegen {
         }
 
         // Gather per-type rel/perm sets for the Schema aggregator.
-        var relsByType  = new java.util.LinkedHashMap<String, Set<String>>();
-        var permsByType = new java.util.LinkedHashMap<String, Set<String>>();
+        java.util.LinkedHashMap<java.lang.String,java.util.Set<java.lang.String>> relsByType  = new java.util.LinkedHashMap<String, Set<String>>();
+        java.util.LinkedHashMap<java.lang.String,java.util.Set<java.lang.String>> permsByType = new java.util.LinkedHashMap<String, Set<String>>();
         for (String type : types) {
             relsByType.put(type, schema.relationsOf(type));
             permsByType.put(type, schema.permissionsOf(type));
@@ -112,7 +112,7 @@ public final class AuthxCodegen {
         Set<String> caveatNames = schema.getCaveatNames();
         if (!caveatNames.isEmpty()) {
             for (String name : caveatNames) {
-                var def = schema.getCaveat(name);
+                com.authx.sdk.cache.SchemaCache.CaveatDef def = schema.getCaveat(name);
                 if (def == null) continue;
                 String src = emitCaveatClass(def.name(), def.parameters(),
                         def.expression(), def.comment(), packageName);
@@ -139,7 +139,7 @@ public final class AuthxCodegen {
                                 Map<String, List<SubjectType>> relationSubjectTypes,
                                 String packageName) {
         String className = toPascalCase(typeName);
-        var sb = new StringBuilder();
+        java.lang.StringBuilder sb = new StringBuilder();
         sb.append("package ").append(packageName).append(";\n\n");
         sb.append("import com.authx.sdk.model.Permission;\n");
         sb.append("import com.authx.sdk.model.Relation;\n");
@@ -161,7 +161,7 @@ public final class AuthxCodegen {
         if (relations.isEmpty()) {
             sb.append("        ;\n");
         } else {
-            var rels = relations.stream().sorted().toList();
+            java.util.List<java.lang.String> rels = relations.stream().sorted().toList();
             for (int i = 0; i < rels.size(); i++) {
                 String rel = rels.get(i);
                 sb.append("        ").append(toConstant(rel)).append("(\"").append(rel).append("\"");
@@ -189,7 +189,7 @@ public final class AuthxCodegen {
         if (permissions.isEmpty()) {
             sb.append("        ;\n");
         } else {
-            var perms = permissions.stream().sorted().toList();
+            java.util.List<java.lang.String> perms = permissions.stream().sorted().toList();
             for (int i = 0; i < perms.size(); i++) {
                 String perm = perms.get(i);
                 sb.append("        ").append(toConstant(perm)).append("(\"").append(perm).append("\")");
@@ -208,7 +208,7 @@ public final class AuthxCodegen {
     }
 
     static String emitResourceTypes(String packageName, Set<String> allTypes) {
-        var sb = new StringBuilder();
+        java.lang.StringBuilder sb = new StringBuilder();
         sb.append("package ").append(packageName).append(";\n\n");
         sb.append("/**\n")
           .append(" * Canonical resource type names from the SpiceDB schema.\n")
@@ -252,7 +252,7 @@ public final class AuthxCodegen {
     static String emitCaveatClass(String caveatName, Map<String, String> parameters,
                                   String expression, String comment, String packageName) {
         String className = toPascalCase(caveatName);
-        var sb = new StringBuilder();
+        java.lang.StringBuilder sb = new StringBuilder();
         sb.append("package ").append(packageName).append(";\n\n");
         sb.append("import com.authx.sdk.model.CaveatRef;\n\n");
         sb.append("import java.util.LinkedHashMap;\n");
@@ -265,7 +265,7 @@ public final class AuthxCodegen {
         sb.append(" */\n");
         sb.append("public final class ").append(className).append(" {\n\n");
         sb.append("    public static final String NAME = \"").append(caveatName).append("\";\n\n");
-        for (var e : parameters.entrySet()) {
+        for (java.util.Map.Entry<java.lang.String,java.lang.String> e : parameters.entrySet()) {
             String javaType = mapSpiceDbType(e.getValue());
             sb.append("    /** Parameter {@code ").append(e.getKey())
               .append("} — expected type: {@code ")
@@ -287,7 +287,7 @@ public final class AuthxCodegen {
         sb.append("            throw new IllegalArgumentException(\n");
         sb.append("                    \"keyValues must have even length (alternating key, value pairs)\");\n");
         sb.append("        }\n");
-        sb.append("        var map = new LinkedHashMap<String, Object>();\n");
+        sb.append("        Map<String, Object> map = new LinkedHashMap<String, Object>();\n");
         sb.append("        for (int i = 0; i < kv.length; i += 2) {\n");
         sb.append("            if (!(kv[i] instanceof String)) {\n");
         sb.append("                throw new IllegalArgumentException(\n");
@@ -303,7 +303,7 @@ public final class AuthxCodegen {
     }
 
     static String emitCaveats(String packageName, Set<String> allCaveats) {
-        var sb = new StringBuilder();
+        java.lang.StringBuilder sb = new StringBuilder();
         sb.append("package ").append(packageName).append(";\n\n");
         sb.append("/**\n")
           .append(" * Canonical caveat names from the SpiceDB schema.\n")
@@ -335,7 +335,7 @@ public final class AuthxCodegen {
     static String emitSchema(String packageName,
                              Map<String, Set<String>> relationsByType,
                              Map<String, Set<String>> permissionsByType) {
-        var sb = new StringBuilder();
+        java.lang.StringBuilder sb = new StringBuilder();
         sb.append("package ").append(packageName).append(";\n\n");
         sb.append("import com.authx.sdk.PermissionProxy;\n");
         sb.append("import com.authx.sdk.ResourceType;\n\n");
@@ -353,13 +353,13 @@ public final class AuthxCodegen {
         sb.append("public final class Schema {\n\n");
         sb.append("    private Schema() {}\n\n");
 
-        var typesSorted = relationsByType.keySet().stream().sorted().toList();
+        java.util.List<java.lang.String> typesSorted = relationsByType.keySet().stream().sorted().toList();
         for (String type : typesSorted) {
             String className = toPascalCase(type);
             String fqn = packageName + "." + className;
-            var rels  = relationsByType.getOrDefault(type, Set.of())
+            java.util.List<java.lang.String> rels  = relationsByType.getOrDefault(type, Set.of())
                     .stream().sorted().toList();
-            var perms = permissionsByType.getOrDefault(type, Set.of())
+            java.util.List<java.lang.String> perms = permissionsByType.getOrDefault(type, Set.of())
                     .stream().sorted().toList();
 
             // ── Descriptor ──

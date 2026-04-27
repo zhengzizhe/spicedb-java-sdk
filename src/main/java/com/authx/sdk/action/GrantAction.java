@@ -168,7 +168,7 @@ public class GrantAction {
                         resourceType + "." + rel + " only accepts wildcards (" + shapes(sts)
                                 + "); use toWildcard(ResourceType) instead");
             }
-            var single = SubjectType.inferSingleType(sts);
+            java.util.Optional<com.authx.sdk.model.SubjectType> single = SubjectType.inferSingleType(sts);
             if (single.isEmpty()) {
                 throw new IllegalArgumentException(
                         "ambiguous subject type for " + resourceType + "." + rel

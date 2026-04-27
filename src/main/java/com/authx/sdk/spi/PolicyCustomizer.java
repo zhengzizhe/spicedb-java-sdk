@@ -51,7 +51,7 @@ import com.authx.sdk.policy.PolicyRegistry;
  *     &#64;Bean(destroyMethod = "close")
  *     public AuthxClient authxClient(SpiceDbProperties props,
  *                                    List&lt;PolicyCustomizer&gt; policyCustomizers) {
- *         var builder = AuthxClient.builder()
+ *         AuthxClientBuilder builder = AuthxClient.builder()
  *             .connection(c -&gt; c.targets(props.targets()).presharedKey(props.key()))
  *             .features(f -&gt; f.telemetry(true).shutdownHook(true));
  *         policyCustomizers.forEach(builder::customize);

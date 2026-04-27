@@ -35,8 +35,8 @@ class CoalescingTransportTest {
 
     @Test
     void singleRequestPassesThroughToDelegate() {
-        var transport = new CoalescingTransport(inner, metrics);
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(inner, metrics);
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertThat(result.hasPermission()).isTrue();
@@ -45,8 +45,8 @@ class CoalescingTransportTest {
 
     @Test
     void concurrentIdenticalRequestsAreCoalesced() throws Exception {
-        var callCount = new AtomicInteger(0);
-        var latch = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
+        java.util.concurrent.CountDownLatch latch = new CountDownLatch(1);
 
         // A slow delegate that counts invocations
         SdkTransport slowDelegate = new InMemoryTransport() {
@@ -70,14 +70,14 @@ class CoalescingTransportTest {
             }
         };
 
-        var transport = new CoalescingTransport(slowDelegate, metrics);
-        var request = CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
+        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(slowDelegate, metrics);
+        com.authx.sdk.model.CheckRequest request = CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
 
         // Launch multiple concurrent checks with the same request
         int threadCount = 5;
-        var startBarrier = new CyclicBarrier(threadCount);
-        var futures = new CompletableFuture[threadCount];
-        var executor = Executors.newFixedThreadPool(threadCount);
+        java.util.concurrent.CyclicBarrier startBarrier = new CyclicBarrier(threadCount);
+        java.util.concurrent.CompletableFuture[] futures = new CompletableFuture[threadCount];
+        java.util.concurrent.ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
         for (int i = 0; i < threadCount; i++) {
             futures[i] = CompletableFuture.supplyAsync(() -> {
@@ -95,8 +95,8 @@ class CoalescingTransportTest {
         latch.countDown();
 
         // All should complete successfully
-        for (var f : futures) {
-            var result = (CheckResult) f.get(5, TimeUnit.SECONDS);
+        for (java.util.concurrent.CompletableFuture f : futures) {
+            com.authx.sdk.model.CheckResult result = (CheckResult) f.get(5, TimeUnit.SECONDS);
             assertThat(result.hasPermission()).isTrue();
         }
 
@@ -110,7 +110,7 @@ class CoalescingTransportTest {
 
     @Test
     void differentRequestsAreNotCoalesced() {
-        var callCount = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport countingDelegate = new InMemoryTransport() {
             {
                 writeRelationships(List.of(
@@ -133,7 +133,7 @@ class CoalescingTransportTest {
             }
         };
 
-        var transport = new CoalescingTransport(countingDelegate, metrics);
+        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(countingDelegate, metrics);
 
         transport.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         transport.check(CheckRequest.of("document", "d1", "viewer", "user", "bob", Consistency.minimizeLatency()));
@@ -144,7 +144,7 @@ class CoalescingTransportTest {
 
     @Test
     void differentConsistencyLevelsAreNotCoalesced() {
-        var callCount = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger callCount = new AtomicInteger(0);
         SdkTransport countingDelegate = new InMemoryTransport() {
             {
                 writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
@@ -161,7 +161,7 @@ class CoalescingTransportTest {
             }
         };
 
-        var transport = new CoalescingTransport(countingDelegate, metrics);
+        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(countingDelegate, metrics);
 
         transport.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
         transport.check(CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.full()));
@@ -171,7 +171,7 @@ class CoalescingTransportTest {
 
     @Test
     void delegateExceptionPropagatedToAllWaiters() throws Exception {
-        var latch = new CountDownLatch(1);
+        java.util.concurrent.CountDownLatch latch = new CountDownLatch(1);
 
         SdkTransport failingDelegate = new InMemoryTransport() {
             @Override
@@ -185,12 +185,12 @@ class CoalescingTransportTest {
             }
         };
 
-        var transport = new CoalescingTransport(failingDelegate, metrics);
-        var request = CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
+        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(failingDelegate, metrics);
+        com.authx.sdk.model.CheckRequest request = CheckRequest.of("document", "d1", "editor", "user", "alice", Consistency.minimizeLatency());
 
-        var startBarrier = new CyclicBarrier(3);
-        var executor = Executors.newFixedThreadPool(3);
-        var futures = new CompletableFuture[3];
+        java.util.concurrent.CyclicBarrier startBarrier = new CyclicBarrier(3);
+        java.util.concurrent.ExecutorService executor = Executors.newFixedThreadPool(3);
+        java.util.concurrent.CompletableFuture[] futures = new CompletableFuture[3];
 
         for (int i = 0; i < 3; i++) {
             futures[i] = CompletableFuture.supplyAsync(() -> {
@@ -207,7 +207,7 @@ class CoalescingTransportTest {
         latch.countDown();
 
         // All futures should fail with the same root cause
-        for (var f : futures) {
+        for (java.util.concurrent.CompletableFuture f : futures) {
             assertThatThrownBy(() -> f.get(5, TimeUnit.SECONDS))
                     .hasCauseInstanceOf(RuntimeException.class)
                     .hasRootCauseMessage("SpiceDB down");
@@ -218,9 +218,9 @@ class CoalescingTransportTest {
 
     @Test
     void nonCheckOperationsPassThrough() {
-        var transport = new CoalescingTransport(inner, metrics);
+        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(inner, metrics);
 
-        var writeResult = transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
+        com.authx.sdk.model.GrantResult writeResult = transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
                 ResourceRef.of("document", "d2"),
                 Relation.of("viewer"),
@@ -231,8 +231,8 @@ class CoalescingTransportTest {
 
     @Test
     void constructorWithoutMetricsWorks() {
-        var transport = new CoalescingTransport(inner);
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(inner);
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertThat(result.hasPermission()).isTrue();
@@ -240,7 +240,7 @@ class CoalescingTransportTest {
 
     @Test
     void closeCleansDelegateAndInflightMap() {
-        var transport = new CoalescingTransport(inner, metrics);
+        com.authx.sdk.transport.CoalescingTransport transport = new CoalescingTransport(inner, metrics);
         transport.close();
         // After close, inner transport should be cleared
         assertThat(inner.size()).isZero();

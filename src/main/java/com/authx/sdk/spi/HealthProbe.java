@@ -172,7 +172,7 @@ public interface HealthProbe {
             // but a misbehaving custom probe could violate that and crash the
             // composite. Wrap each invocation so one bad probe can't take down
             // the whole health check chain.
-            var children = probes.stream()
+            java.util.List<com.authx.sdk.spi.HealthProbe.ProbeResult> children = probes.stream()
                     .map(this::checkSafely)
                     .toList();
             boolean healthy = switch (mode) {

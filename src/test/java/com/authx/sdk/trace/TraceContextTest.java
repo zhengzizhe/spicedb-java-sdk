@@ -29,7 +29,7 @@ class TraceContextTest {
     @Test
     void startSpanReturnsUsableHandle() {
         // Even without OTel SDK, the no-op tracer returns valid handles
-        try (var span = TraceContext.startSpan("test.operation", Map.of("key", "value"))) {
+        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", Map.of("key", "value"))) {
             span.setSuccess();
             span.setAttribute("extra", "data");
             span.setAttribute("count", 42L);
@@ -39,29 +39,29 @@ class TraceContextTest {
 
     @Test
     void startSpanWithNullAttributesDoesNotThrow() {
-        try (var span = TraceContext.startSpan("test.operation", null)) {
+        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", null)) {
             span.setSuccess();
         }
     }
 
     @Test
     void startSpanWithEmptyAttributesDoesNotThrow() {
-        try (var span = TraceContext.startSpan("test.operation", Map.of())) {
+        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("test.operation", Map.of())) {
             span.setSuccess();
         }
     }
 
     @Test
     void spanHandleSetErrorDoesNotThrow() {
-        try (var span = TraceContext.startSpan("test.error", Map.of())) {
+        try (com.authx.sdk.trace.TraceContext.SpanHandle span = TraceContext.startSpan("test.error", Map.of())) {
             span.setError(new RuntimeException("test error"));
         }
     }
 
     @Test
     void nestedSpansDoNotThrow() {
-        try (var outer = TraceContext.startSpan("outer", Map.of())) {
-            try (var inner = TraceContext.startSpan("inner", Map.of())) {
+        try (com.authx.sdk.trace.TraceContext.SpanHandle outer = TraceContext.startSpan("outer", Map.of())) {
+            try (com.authx.sdk.trace.TraceContext.SpanHandle inner = TraceContext.startSpan("inner", Map.of())) {
                 inner.setSuccess();
             }
             outer.setSuccess();

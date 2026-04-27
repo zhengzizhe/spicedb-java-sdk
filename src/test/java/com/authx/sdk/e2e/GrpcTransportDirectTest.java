@@ -39,7 +39,7 @@ class GrpcTransportDirectTest {
         // Write schema to the empty serve-testing instance
         SpiceDbTestSchema.writeSchema(target, "testkey");
 
-        var channel = io.grpc.ManagedChannelBuilder.forTarget(target)
+        io.grpc.ManagedChannel channel = io.grpc.ManagedChannelBuilder.forTarget(target)
                 .usePlaintext().build();
         transport = new GrpcTransport(channel, "testkey", 5000);
     }
@@ -72,7 +72,7 @@ class GrpcTransportDirectTest {
     @Test
     @Order(2)
     void readRelationships() {
-        var tuples = transport.readRelationships(
+        java.util.List<com.authx.sdk.model.Tuple> tuples = transport.readRelationships(
                 ResourceRef.of("document", "grpc-test-1"), Relation.of("editor"), Consistency.full());
         assertFalse(tuples.isEmpty());
         assertEquals("grpc-alice", tuples.getFirst().subjectId());
@@ -81,10 +81,10 @@ class GrpcTransportDirectTest {
     @Test
     @Order(3)
     void lookupSubjects() {
-        var request = new LookupSubjectsRequest(
+        com.authx.sdk.model.LookupSubjectsRequest request = new LookupSubjectsRequest(
                 ResourceRef.of("document", "grpc-test-1"),
                 Permission.of("editor"), "user", 0, Consistency.full());
-        var subjects = transport.lookupSubjects(request);
+        java.util.List<com.authx.sdk.model.SubjectRef> subjects = transport.lookupSubjects(request);
         assertTrue(subjects.stream().anyMatch(s -> s.id().equals("grpc-alice")));
     }
 

@@ -44,12 +44,12 @@ public class RevokeAllAction {
 
         for (SubjectRef subject : subjects) {
             if (relations == null || relations.length == 0) {
-                var result = transport.deleteByFilter(resource, subject, null);
+                com.authx.sdk.model.RevokeResult result = transport.deleteByFilter(resource, subject, null);
                 totalDeleted += result.count();
                 if (result.zedToken() != null) lastToken = result.zedToken();
             } else {
                 for (String rel : relations) {
-                    var result = transport.deleteByFilter(resource, subject, Relation.of(rel));
+                    com.authx.sdk.model.RevokeResult result = transport.deleteByFilter(resource, subject, Relation.of(rel));
                     totalDeleted += result.count();
                     if (result.zedToken() != null) lastToken = result.zedToken();
                 }

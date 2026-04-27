@@ -34,8 +34,8 @@ class ChannelStateHealthProbeTest {
         String name = InProcessServerBuilder.generateName();
         channel = InProcessChannelBuilder.forName(name).directExecutor().build();
 
-        var probe = new ChannelStateHealthProbe(channel);
-        var result = probe.check();
+        com.authx.sdk.health.ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel);
+        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isTrue();
         assertThat(result.details()).contains("IDLE");
@@ -47,8 +47,8 @@ class ChannelStateHealthProbeTest {
         channel = InProcessChannelBuilder.forName(name).directExecutor().build();
         channel.shutdown();
 
-        var probe = new ChannelStateHealthProbe(channel);
-        var result = probe.check();
+        com.authx.sdk.health.ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel);
+        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isFalse();
         assertThat(result.details()).contains("SHUTDOWN");
@@ -59,8 +59,8 @@ class ChannelStateHealthProbeTest {
         String name = InProcessServerBuilder.generateName();
         channel = InProcessChannelBuilder.forName(name).directExecutor().build();
 
-        var probe = new ChannelStateHealthProbe(channel, "my-custom-probe");
-        var result = probe.check();
+        com.authx.sdk.health.ChannelStateHealthProbe probe = new ChannelStateHealthProbe(channel, "my-custom-probe");
+        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.name()).isEqualTo("my-custom-probe");
         assertThat(probe.name()).isEqualTo("my-custom-probe");

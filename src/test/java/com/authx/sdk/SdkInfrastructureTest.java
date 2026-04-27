@@ -25,9 +25,9 @@ class SdkInfrastructureTest {
         // Now each step is wrapped in safeClose so a failure in one cleanup
         // never prevents the next from running.
 
-        var channelClosed = new AtomicBoolean(false);
-        var serverName = InProcessServerBuilder.generateName();
-        var server = InProcessServerBuilder.forName(serverName)
+        java.util.concurrent.atomic.AtomicBoolean channelClosed = new AtomicBoolean(false);
+        java.lang.String serverName = InProcessServerBuilder.generateName();
+        io.grpc.Server server = InProcessServerBuilder.forName(serverName)
                 .directExecutor()
                 .build()
                 .start();
@@ -38,7 +38,7 @@ class SdkInfrastructureTest {
         // A scheduler that throws on shutdown.
         ScheduledExecutorService throwingScheduler = new ThrowingScheduler();
 
-        var infra = new SdkInfrastructure(
+        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(
                 channel, throwingScheduler, Runnable::run, new LifecycleManager(new com.authx.sdk.event.DefaultTypedEventBus()));
 
         // Must not throw — failure in scheduler step is logged and skipped.
@@ -57,14 +57,14 @@ class SdkInfrastructureTest {
         // Same property in the other direction: channel.shutdown throwing
         // must not prevent removeShutdownHook from running.
 
-        var hookRemoved = new AtomicBoolean(false);
-        var hook = new Thread(() -> {});
+        java.util.concurrent.atomic.AtomicBoolean hookRemoved = new AtomicBoolean(false);
+        java.lang.Thread hook = new Thread(() -> {});
 
         // Channel that throws on shutdown.
         ManagedChannel throwingChannel = new ThrowingChannel();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-        var infra = new SdkInfrastructure(
+        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(
                 throwingChannel, scheduler, Runnable::run, new LifecycleManager(new com.authx.sdk.event.DefaultTypedEventBus()));
 
         // Register a shutdown hook so we can verify the third safeClose step
@@ -87,7 +87,7 @@ class SdkInfrastructureTest {
         // teardown calls it explicitly while AuthxClient is being GC'd).
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        var infra = new SdkInfrastructure(null, scheduler, Runnable::run, new LifecycleManager(new com.authx.sdk.event.DefaultTypedEventBus()));
+        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(null, scheduler, Runnable::run, new LifecycleManager(new com.authx.sdk.event.DefaultTypedEventBus()));
 
         infra.close();
         infra.close();   // must not throw

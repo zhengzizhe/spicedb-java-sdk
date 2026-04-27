@@ -15,7 +15,7 @@ class NoWatchStreamStartsTest {
     @Test
     void inMemoryClient_noWatchThreadStarted() throws Exception {
         int before = countAuthxWatchThreads();
-        try (var client = AuthxClient.inMemory()) {
+        try (com.authx.sdk.AuthxClient client = AuthxClient.inMemory()) {
             // Give a moment for any rogue background thread to start.
             Thread.sleep(100);
             int after = countAuthxWatchThreads();

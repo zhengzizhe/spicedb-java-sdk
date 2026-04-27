@@ -49,7 +49,7 @@ public class CheckAllAction {
      * N permissions -> 1 gRPC call (not N sequential calls).
      */
     public PermissionSet by(SubjectRef subject) {
-        var items = Arrays.stream(permissions)
+        java.util.List<com.authx.sdk.transport.SdkTransport.BulkCheckItem> items = Arrays.stream(permissions)
                 .map(perm -> new SdkTransport.BulkCheckItem(
                         ResourceRef.of(resourceType, resourceId),
                         Permission.of(perm),

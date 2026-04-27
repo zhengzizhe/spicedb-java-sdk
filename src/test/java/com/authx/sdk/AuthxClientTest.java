@@ -32,7 +32,7 @@ class AuthxClientTest {
 
     @Test
     void grant_single_thenCheck() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice");
 
         assertTrue(doc.check("editor").by("user:alice").hasPermission());
@@ -41,7 +41,7 @@ class AuthxClientTest {
 
     @Test
     void grant_multiple_users() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("viewer").to("user:alice", "user:bob", "user:carol");
 
         assertTrue(doc.check("viewer").by("user:alice").hasPermission());
@@ -52,7 +52,7 @@ class AuthxClientTest {
 
     @Test
     void grant_multiple_relations() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor", "can_download").to("user:alice");
 
         assertTrue(doc.check("editor").by("user:alice").hasPermission());
@@ -61,7 +61,7 @@ class AuthxClientTest {
 
     @Test
     void grant_collection() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("viewer").to("user:alice", "user:bob");
 
         assertTrue(doc.check("viewer").by("user:alice").hasPermission());
@@ -70,10 +70,10 @@ class AuthxClientTest {
 
     @Test
     void grant_toSubjects() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("viewer").to("department:eng#member");
 
-        var tuples = doc.relations("viewer").fetch();
+        java.util.List<com.authx.sdk.model.Tuple> tuples = doc.relations("viewer").fetch();
         assertEquals(1, tuples.size());
         assertEquals("department", tuples.getFirst().subjectType());
         assertEquals("eng", tuples.getFirst().subjectId());
@@ -82,7 +82,7 @@ class AuthxClientTest {
 
     @Test
     void grantResult_returnsCount() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         GrantResult r = doc.grant("editor").to("user:alice", "user:bob");
         assertEquals(2, r.count());
         assertNotNull(r.zedToken());
@@ -92,7 +92,7 @@ class AuthxClientTest {
 
     @Test
     void revoke_removesRelationship() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice");
         assertTrue(doc.check("editor").by("user:alice").hasPermission());
 
@@ -102,7 +102,7 @@ class AuthxClientTest {
 
     @Test
     void revokeAll_removesAllRelationsForUser() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice");
         doc.grant("viewer").to("user:alice");
         doc.grant("can_download").to("user:alice");
@@ -118,7 +118,7 @@ class AuthxClientTest {
 
     @Test
     void check_byAll() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("viewer").to("user:alice", "user:carol");
 
         BulkCheckResult result = doc.check("viewer").byAll("user:alice", "user:bob", "user:carol");
@@ -134,7 +134,7 @@ class AuthxClientTest {
 
     @Test
     void checkAll_permissionSet() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice");
         doc.grant("viewer").to("user:alice");
 
@@ -148,7 +148,7 @@ class AuthxClientTest {
 
     @Test
     void checkAll_permissionMatrix() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice");
         doc.grant("viewer").to("user:bob");
 
@@ -164,7 +164,7 @@ class AuthxClientTest {
 
     @Test
     void who_withRelation() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice", "user:bob");
         doc.grant("viewer").to("user:carol");
 
@@ -176,7 +176,7 @@ class AuthxClientTest {
 
     @Test
     void who_withPermission() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("viewer").to("user:alice", "user:bob");
 
         // InMemory: permission == relation match
@@ -186,7 +186,7 @@ class AuthxClientTest {
 
     @Test
     void who_fetchExists() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         assertFalse(doc.who("user").withRelation("editor").fetchExists());
 
         doc.grant("editor").to("user:alice");
@@ -195,7 +195,7 @@ class AuthxClientTest {
 
     @Test
     void who_fetchCount() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice", "user:bob", "user:carol");
         assertEquals(3, doc.who("user").withRelation("editor").fetchCount());
     }
@@ -204,7 +204,7 @@ class AuthxClientTest {
 
     @Test
     void relations_fetch() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice");
         doc.grant("viewer").to("user:bob");
 
@@ -214,7 +214,7 @@ class AuthxClientTest {
 
     @Test
     void relations_filtered() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice");
         doc.grant("viewer").to("user:bob");
 
@@ -225,7 +225,7 @@ class AuthxClientTest {
 
     @Test
     void relations_fetchSubjectIds() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice", "user:bob");
 
         Set<String> ids = doc.relations("editor").fetchSubjectIdSet();
@@ -234,7 +234,7 @@ class AuthxClientTest {
 
     @Test
     void relations_groupByRelation() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("editor").to("user:alice");
         doc.grant("viewer").to("user:bob", "user:carol");
 
@@ -269,7 +269,7 @@ class AuthxClientTest {
 
     @Test
     void batch_mixedGrantRevoke() {
-        var doc = client.resource("document", "doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("owner").to("user:alice");
 
         BatchResult result = doc.batch()

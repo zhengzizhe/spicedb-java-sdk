@@ -45,23 +45,23 @@ public class SchemaLoader {
     public boolean load(ManagedChannel channel, Metadata authMetadata, SchemaCache cache) {
         if (!reflectSupported) return false;
         try {
-            var stub = ExperimentalServiceGrpc.newBlockingStub(channel)
+            com.authzed.api.v1.ExperimentalServiceGrpc.ExperimentalServiceBlockingStub stub = ExperimentalServiceGrpc.newBlockingStub(channel)
                     .withDeadlineAfter(3, TimeUnit.SECONDS)
                     .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(authMetadata));
 
-            var resp = stub.experimentalReflectSchema(
+            com.authzed.api.v1.ExperimentalReflectSchemaResponse resp = stub.experimentalReflectSchema(
                     ExperimentalReflectSchemaRequest.newBuilder()
                             .setConsistency(Consistency.newBuilder().setFullyConsistent(true))
                             .build());
 
             Map<String, SchemaCache.DefinitionCache> defs = new HashMap<>();
-            for (var def : resp.getDefinitionsList()) {
+            for (com.authzed.api.v1.ExpDefinition def : resp.getDefinitionsList()) {
                 Set<String> relations = new HashSet<>();
                 Map<String, List<SubjectType>> relSTs = new HashMap<>();
-                for (var rel : def.getRelationsList()) {
+                for (com.authzed.api.v1.ExpRelation rel : def.getRelationsList()) {
                     relations.add(rel.getName());
                     List<SubjectType> sts = new ArrayList<>();
-                    for (var st : rel.getSubjectTypesList()) {
+                    for (com.authzed.api.v1.ExpTypeReference st : rel.getSubjectTypesList()) {
                         String relName = st.getOptionalRelationName();
                         if (relName != null && relName.isEmpty()) relName = null;
                         sts.add(new SubjectType(
@@ -72,7 +72,7 @@ public class SchemaLoader {
                     relSTs.put(rel.getName(), sts);
                 }
                 Set<String> permissions = new HashSet<>();
-                for (var perm : def.getPermissionsList()) {
+                for (com.authzed.api.v1.ExpPermission perm : def.getPermissionsList()) {
                     permissions.add(perm.getName());
                 }
                 defs.put(def.getName(), new SchemaCache.DefinitionCache(
@@ -81,9 +81,9 @@ public class SchemaLoader {
             cache.updateFromMap(defs);
 
             Map<String, SchemaCache.CaveatDef> caveats = new HashMap<>();
-            for (var cav : resp.getCaveatsList()) {
+            for (com.authzed.api.v1.ExpCaveat cav : resp.getCaveatsList()) {
                 Map<String, String> params = new LinkedHashMap<>();
-                for (var p : cav.getParametersList()) {
+                for (com.authzed.api.v1.ExpCaveatParameter p : cav.getParametersList()) {
                     params.put(p.getName(), p.getType());
                 }
                 caveats.put(cav.getName(), new SchemaCache.CaveatDef(

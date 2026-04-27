@@ -36,7 +36,7 @@ public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkL
     @Override
     default List<CheckResult> checkBulkMulti(List<BulkCheckItem> items, Consistency consistency) {
         List<CheckResult> results = new java.util.ArrayList<>(items.size());
-        for (var item : items) {
+        for (com.authx.sdk.transport.SdkTransport.BulkCheckItem item : items) {
             results.add(check(CheckRequest.of(item.resource(), item.permission(), item.subject(), consistency)));
         }
         return results;

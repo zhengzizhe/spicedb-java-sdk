@@ -34,19 +34,19 @@ public final class TraceContext {
      * Create a child span from the current active span.
      *
      * <pre>
-     * try (var span = TraceContext.startSpan("authx.check", attrs)) {
+     * try (TraceContext.SpanHandle span = TraceContext.startSpan("authx.check", attrs)) {
      *     result = doCheck();
      *     span.setSuccess();
      * }
      * </pre>
      */
     public static SpanHandle startSpan(String operationName, Map<String, String> attributes) {
-        var builder = TRACER.spanBuilder(operationName);
+        io.opentelemetry.api.trace.SpanBuilder builder = TRACER.spanBuilder(operationName);
         if (attributes != null) {
             attributes.forEach(builder::setAttribute);
         }
-        var span = builder.startSpan();
-        var scope = span.makeCurrent();
+        io.opentelemetry.api.trace.Span span = builder.startSpan();
+        io.opentelemetry.context.Scope scope = span.makeCurrent();
         return new SpanHandle(span, scope);
     }
 
@@ -55,7 +55,7 @@ public final class TraceContext {
      * Returns null if no active span.
      */
     public static String traceId() {
-        var ctx = Span.current().getSpanContext();
+        io.opentelemetry.api.trace.SpanContext ctx = Span.current().getSpanContext();
         return ctx.isValid() ? ctx.getTraceId() : null;
     }
 
@@ -64,7 +64,7 @@ public final class TraceContext {
      * Returns null if no active span.
      */
     public static String traceparent() {
-        var ctx = Span.current().getSpanContext();
+        io.opentelemetry.api.trace.SpanContext ctx = Span.current().getSpanContext();
         if (!ctx.isValid()) return null;
         return "00-" + ctx.getTraceId() + "-" + ctx.getSpanId() + "-" +
                 (ctx.isSampled() ? "01" : "00");

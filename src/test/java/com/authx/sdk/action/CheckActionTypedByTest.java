@@ -42,22 +42,22 @@ class CheckActionTypedByTest {
 
     @Test
     void byTypedBuildsCanonicalRef() {
-        var a = new CheckAction("document", "d-1", new InMemoryTransport(),
+        com.authx.sdk.action.CheckAction a = new CheckAction("document", "d-1", new InMemoryTransport(),
                 Runnable::run, new String[]{"view"});
-        var user = ResourceType.of("user", R.class, P.class);
+        com.authx.sdk.ResourceType<com.authx.sdk.action.CheckActionTypedByTest.R,com.authx.sdk.action.CheckActionTypedByTest.P> user = ResourceType.of("user", R.class, P.class);
         // InMemoryTransport returns deny by default — all we want is that the
         // call dispatches without any overload-resolution / parse error.
-        var result = a.by(user, "alice");
+        com.authx.sdk.model.CheckResult result = a.by(user, "alice");
         assertThat(result).isNotNull();
         assertThat(result.hasPermission()).isFalse();
     }
 
     @Test
     void byAllTypedIterable() {
-        var a = new CheckAction("document", "d-1", new InMemoryTransport(),
+        com.authx.sdk.action.CheckAction a = new CheckAction("document", "d-1", new InMemoryTransport(),
                 Runnable::run, new String[]{"view"});
-        var user = ResourceType.of("user", R.class, P.class);
-        var m = a.byAll(user, List.of("alice", "bob", "carol"));
+        com.authx.sdk.ResourceType<com.authx.sdk.action.CheckActionTypedByTest.R,com.authx.sdk.action.CheckActionTypedByTest.P> user = ResourceType.of("user", R.class, P.class);
+        com.authx.sdk.model.BulkCheckResult m = a.byAll(user, List.of("alice", "bob", "carol"));
         assertThat(m).isNotNull();
         // InMemoryTransport stores no relationships → all three deny.
         assertThat(m.asMap()).hasSize(3);

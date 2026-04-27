@@ -74,7 +74,7 @@ public class TypedCheckAction {
         if (keyValues.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
         }
-        var map = new java.util.LinkedHashMap<String, Object>();
+        java.util.LinkedHashMap<java.lang.String,java.lang.Object> map = new java.util.LinkedHashMap<String, Object>();
         for (int i = 0; i < keyValues.length; i += 2) {
             if (!(keyValues[i] instanceof String key)) {
                 throw new IllegalArgumentException("Key at index " + i + " must be a String");
@@ -246,7 +246,7 @@ public class TypedCheckAction {
             }
         }
         List<CheckResult> results = factory.transport().checkBulkMulti(items, consistency);
-        var b = CheckMatrix.builder();
+        com.authx.sdk.model.CheckMatrix.Builder b = CheckMatrix.builder();
         for (int i = 0; i < results.size(); i++) {
             b.add(cellIds[i], cellPerms[i], cellSubjects[i], results.get(i).hasPermission());
         }
@@ -254,7 +254,7 @@ public class TypedCheckAction {
     }
 
     private CheckResult runSingle(String id, String permission, SubjectRef subject) {
-        var request = new CheckRequest(
+        com.authx.sdk.model.CheckRequest request = new CheckRequest(
                 ResourceRef.of(factory.resourceType(), id),
                 Permission.of(permission),
                 subject,

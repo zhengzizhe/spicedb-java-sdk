@@ -69,7 +69,7 @@ public class RelationQuery {
 
     /** Execute the query and return the first matching tuple, if any. */
     public Optional<Tuple> fetchFirst() {
-        var list = fetch();
+        java.util.List<com.authx.sdk.model.Tuple> list = fetch();
         return list.isEmpty() ? Optional.empty() : Optional.of(list.getFirst());
     }
 

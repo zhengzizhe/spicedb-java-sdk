@@ -19,20 +19,20 @@ class SpiAdditionalTest {
         }
 
         @Test void fixedClock() {
-            var clock = new SdkClock.Fixed(1000L);
+            com.authx.sdk.spi.SdkClock.Fixed clock = new SdkClock.Fixed(1000L);
             assertThat(clock.currentTimeMillis()).isEqualTo(1000L);
             assertThat(clock.nanoTime()).isEqualTo(1000L * 1_000_000);
         }
 
         @Test void fixedClockAdvance() {
-            var clock = new SdkClock.Fixed(1000L);
+            com.authx.sdk.spi.SdkClock.Fixed clock = new SdkClock.Fixed(1000L);
             clock.advanceMs(500);
             assertThat(clock.currentTimeMillis()).isEqualTo(1500L);
             assertThat(clock.nanoTime()).isEqualTo(1500L * 1_000_000);
         }
 
         @Test void fixedClockSetMillis() {
-            var clock = new SdkClock.Fixed(1000L);
+            com.authx.sdk.spi.SdkClock.Fixed clock = new SdkClock.Fixed(1000L);
             clock.setMillis(5000L);
             assertThat(clock.currentTimeMillis()).isEqualTo(5000L);
             assertThat(clock.nanoTime()).isEqualTo(5000L * 1_000_000);
@@ -42,7 +42,7 @@ class SpiAdditionalTest {
     // ---- SdkInterceptor default methods ----
     @Nested class SdkInterceptorTest {
         @Test void operationContextFields() {
-            var ctx = new SdkInterceptor.OperationContext(
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(
                 SdkAction.CHECK, "document", "doc-1", "view", "user", "alice");
 
             assertThat(ctx.action()).isEqualTo(SdkAction.CHECK);
@@ -55,7 +55,7 @@ class SpiAdditionalTest {
         }
 
         @Test void operationContextMutableFields() {
-            var ctx = new SdkInterceptor.OperationContext(
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(
                 SdkAction.WRITE, "doc", "1", "edit", "user", "bob");
             ctx.setDurationMs(42);
             ctx.setResult("SUCCESS");
@@ -63,16 +63,16 @@ class SpiAdditionalTest {
             assertThat(ctx.result()).isEqualTo("SUCCESS");
             assertThat(ctx.error()).isNull();
 
-            var err = new RuntimeException("oops");
+            java.lang.RuntimeException err = new RuntimeException("oops");
             ctx.setError(err);
             assertThat(ctx.hasError()).isTrue();
             assertThat(ctx.error()).isSameAs(err);
         }
 
         @Test void operationContextTypedAttributes() {
-            var ctx = new SdkInterceptor.OperationContext(
+            com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = new SdkInterceptor.OperationContext(
                 SdkAction.CHECK, "doc", "1", "view", "user", "a");
-            var key = AttributeKey.withDefault("test-key", String.class, "default-val");
+            com.authx.sdk.spi.AttributeKey<java.lang.String> key = AttributeKey.withDefault("test-key", String.class, "default-val");
 
             assertThat(ctx.attr(key)).isEqualTo("default-val");
 

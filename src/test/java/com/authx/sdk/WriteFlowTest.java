@@ -153,7 +153,7 @@ class WriteFlowTest {
 
     @Test
     void grant_multipleRelationsPaired() {
-        var flow = newFlow()
+        com.authx.sdk.WriteFlow flow = newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
                 .grant(DocRel.EDITOR).to(User, "bob")
                 .grant(DocRel.ADMIN).to(Group, "eng", GroupRel.MEMBER);
@@ -164,7 +164,7 @@ class WriteFlowTest {
 
     @Test
     void grant_typedSubRelation_producesCanonicalUserset() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .grant(DocRel.VIEWER).to(Group, "eng", GroupRel.MEMBER)
                 .pending();
         assertThat(pending.get(0).subject().type()).isEqualTo("group");
@@ -173,7 +173,7 @@ class WriteFlowTest {
 
     @Test
     void grant_wildcard() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .grant(DocRel.VIEWER).toWildcard(User)
                 .pending();
         assertThat(pending.get(0).subject().id()).isEqualTo("*");
@@ -181,7 +181,7 @@ class WriteFlowTest {
 
     @Test
     void grant_allPendingAreTouchOperation() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice").to(User, "bob")
                 .pending();
         assertThat(pending).allMatch(u -> u.operation() == Operation.TOUCH);
@@ -211,7 +211,7 @@ class WriteFlowTest {
 
     @Test
     void revoke_wildcard() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .revoke(DocRel.VIEWER).fromWildcard(User)
                 .pending();
         assertThat(pending.get(0).subject().id()).isEqualTo("*");
@@ -220,7 +220,7 @@ class WriteFlowTest {
 
     @Test
     void revoke_allPendingAreDeleteOperation() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .revoke(DocRel.VIEWER).from(User, "alice").from(User, "bob")
                 .pending();
         assertThat(pending).allMatch(u -> u.operation() == Operation.DELETE);
@@ -243,7 +243,7 @@ class WriteFlowTest {
                 .grant(DocRel.VIEWER).to(User, "alice")
                 .commit();
 
-        var remaining = transport.readRelationships(
+        java.util.List<com.authx.sdk.model.Tuple> remaining = transport.readRelationships(
                 ResourceRef.of("document", "doc-1"), null, Consistency.full());
         assertThat(remaining).hasSize(1);
         assertThat(remaining.get(0).relation()).isEqualTo("viewer");
@@ -251,7 +251,7 @@ class WriteFlowTest {
 
     @Test
     void mixed_pendingContainsMixedOperations() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .revoke(DocRel.EDITOR).from(User, "alice")
                 .grant(DocRel.VIEWER).to(User, "alice")
                 .grant(DocRel.VIEWER).to(User, "bob")
@@ -267,7 +267,7 @@ class WriteFlowTest {
 
     @Test
     void mixed_freelySwitchModeBackAndForth() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
                 .revoke(DocRel.EDITOR).from(User, "bob")
                 .grant(DocRel.ADMIN).to(User, "carol")
@@ -282,7 +282,7 @@ class WriteFlowTest {
 
     @Test
     void withCaveat_onlyAffectsLastTouchBatch() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .grant(DocRel.VIEWER)
                 .to(User, "alice")                     // no caveat
                 .to(User, "bob", "carol")
@@ -298,7 +298,7 @@ class WriteFlowTest {
 
     @Test
     void expiringIn_onlyAffectsLastTouchBatch() {
-        var pending = newFlow()
+        java.util.List<com.authx.sdk.transport.SdkTransport.RelationshipUpdate> pending = newFlow()
                 .grant(DocRel.VIEWER)
                 .to(User, "alice")
                 .to(User, "bob").expiringIn(Duration.ofDays(7))
@@ -379,7 +379,7 @@ class WriteFlowTest {
 
     @Test
     void useAfterCommit_throws() {
-        var flow = newFlow().grant(DocRel.VIEWER).to(User, "alice");
+        com.authx.sdk.WriteFlow flow = newFlow().grant(DocRel.VIEWER).to(User, "alice");
         flow.commit();
         assertThatThrownBy(() -> flow.to(User, "bob"))
                 .isInstanceOf(IllegalStateException.class);
@@ -402,7 +402,7 @@ class WriteFlowTest {
 
     @Test
     void listener_firesImmediatelyOnCallingThread() {
-        var fired = new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger fired = new java.util.concurrent.atomic.AtomicInteger(0);
         newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
                 .commit()
@@ -412,7 +412,7 @@ class WriteFlowTest {
 
     @Test
     void listener_multipleFireInOrder() {
-        var order = new java.util.ArrayList<Integer>();
+        java.util.ArrayList<java.lang.Integer> order = new java.util.ArrayList<Integer>();
         newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
                 .commit()
@@ -424,7 +424,7 @@ class WriteFlowTest {
 
     @Test
     void listener_syncThrowStopsSubsequent() {
-        var fired = new java.util.ArrayList<Integer>();
+        java.util.ArrayList<java.lang.Integer> fired = new java.util.ArrayList<Integer>();
         assertThatThrownBy(() -> newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
                 .commit()
@@ -437,12 +437,12 @@ class WriteFlowTest {
 
     @Test
     void listenerAsync_dispatchesToExecutor() throws Exception {
-        var exec = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-            var t = new Thread(r); t.setName("wf-async"); return t;
+        java.util.concurrent.ExecutorService exec = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            java.lang.Thread t = new Thread(r); t.setName("wf-async"); return t;
         });
         try {
-            var done = new java.util.concurrent.CountDownLatch(1);
-            var threadName = new java.util.concurrent.atomic.AtomicReference<String>();
+            java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.atomic.AtomicReference<java.lang.String> threadName = new java.util.concurrent.atomic.AtomicReference<String>();
             newFlow()
                     .grant(DocRel.VIEWER).to(User, "alice")
                     .commit()
@@ -457,9 +457,9 @@ class WriteFlowTest {
 
     @Test
     void listenerAsync_exceptionSwallowed() {
-        var exec = java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.concurrent.ExecutorService exec = java.util.concurrent.Executors.newSingleThreadExecutor();
         try {
-            var c = newFlow()
+            com.authx.sdk.WriteCompletion c = newFlow()
                     .grant(DocRel.VIEWER).to(User, "alice")
                     .commit()
                     .listenerAsync(x -> { throw new RuntimeException("boom"); }, exec);
@@ -469,7 +469,7 @@ class WriteFlowTest {
 
     @Test
     void commitAsync_returnsCompletableFutureOfWriteCompletion() throws Exception {
-        var c = newFlow()
+        com.authx.sdk.WriteCompletion c = newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
                 .commitAsync()
                 .get(2, java.util.concurrent.TimeUnit.SECONDS);
@@ -479,7 +479,7 @@ class WriteFlowTest {
 
     @Test
     void commitAsync_emptyFlow_failsFuture() {
-        var future = newFlow().grant(DocRel.VIEWER).commitAsync();
+        java.util.concurrent.CompletableFuture<com.authx.sdk.WriteCompletion> future = newFlow().grant(DocRel.VIEWER).commitAsync();
         assertThat(future).isCompletedExceptionally();
     }
 }

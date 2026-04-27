@@ -40,11 +40,11 @@ public final class RealOperationChain<T> implements OperationChain<T> {
         if (index >= interceptors.size()) {
             return terminalOperation.get();
         }
-        var next = new RealOperationChain<>(interceptors, index + 1, terminalOperation, ctx);
+        com.authx.sdk.transport.RealOperationChain<T> next = new RealOperationChain<>(interceptors, index + 1, terminalOperation, ctx);
         // SR:C8 — isolate interceptor exceptions on generic read operations
         // (lookup/expand/read), same contract as RealCheckChain: skip the
         // broken interceptor, log at WARNING, continue the chain.
-        var interceptor = interceptors.get(index);
+        com.authx.sdk.spi.SdkInterceptor interceptor = interceptors.get(index);
         try {
             return interceptor.interceptOperation(next);
         } catch (com.authx.sdk.exception.AuthxException authx) {

@@ -33,7 +33,7 @@ public class DefaultTypedEventBus implements TypedEventBus {
 
     @Override
     public <E extends SdkTypedEvent> Registration subscribe(Class<E> eventType, TypedEventListener<E> listener) {
-        var list = listeners.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>());
+        java.util.List<com.authx.sdk.event.TypedEventListener<?>> list = listeners.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>());
         list.add(listener);
         return () -> list.remove(listener);
     }
@@ -49,9 +49,9 @@ public class DefaultTypedEventBus implements TypedEventBus {
     public void publish(SdkTypedEvent event) {
         publishExecutor.execute(() -> {
             // Notify type-specific listeners
-            var list = listeners.get(event.getClass());
+            java.util.List<com.authx.sdk.event.TypedEventListener<?>> list = listeners.get(event.getClass());
             if (list != null) {
-                for (var listener : list) {
+                for (com.authx.sdk.event.TypedEventListener<?> listener : list) {
                     try {
                         ((TypedEventListener<SdkTypedEvent>) listener).onEvent(event);
                     } catch (Exception e) {
@@ -62,7 +62,7 @@ public class DefaultTypedEventBus implements TypedEventBus {
                 }
             }
             // Notify global listeners
-            for (var listener : globalListeners) {
+            for (com.authx.sdk.event.TypedEventListener<com.authx.sdk.event.SdkTypedEvent> listener : globalListeners) {
                 try {
                     listener.onEvent(event);
                 } catch (Exception e) {

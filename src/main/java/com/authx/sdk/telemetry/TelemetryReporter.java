@@ -76,7 +76,7 @@ public class TelemetryReporter implements AutoCloseable {
     public void record(String action, String resourceType, String resourceId,
                        String subjectType, String subjectId, String permission,
                        String result, long latencyMs, String traceId) {
-        var event = Map.<String, Object>of(
+        java.util.Map<java.lang.String,java.lang.Object> event = Map.<String, Object>of(
                 "action", action,
                 "resourceType", resourceType != null ? resourceType : "",
                 "resourceId", resourceId != null ? resourceId : "",

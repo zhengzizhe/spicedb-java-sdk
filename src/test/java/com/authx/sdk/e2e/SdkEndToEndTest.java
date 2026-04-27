@@ -61,7 +61,7 @@ class SdkEndToEndTest {
     @Test
     @Order(2)
     void grant_and_check() {
-        var doc = client.resource("document", "e2e-doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-1");
 
         // Grant editor to alice
         GrantResult grantResult = doc.grant("editor").to("alice");
@@ -85,7 +85,7 @@ class SdkEndToEndTest {
     @Test
     @Order(3)
     void who_withRelation() {
-        var doc = client.resource("document", "e2e-doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-1");
 
         Set<String> editors = doc.who("user").withRelation("editor")
                 .withConsistency(com.authx.sdk.model.Consistency.full())
@@ -96,9 +96,9 @@ class SdkEndToEndTest {
     @Test
     @Order(4)
     void relations_read() {
-        var doc = client.resource("document", "e2e-doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-1");
 
-        var tuples = doc.relations("editor")
+        java.util.List<com.authx.sdk.model.Tuple> tuples = doc.relations("editor")
                 .withConsistency(com.authx.sdk.model.Consistency.full())
                 .fetch();
         assertFalse(tuples.isEmpty(), "should have at least one editor relationship");
@@ -117,7 +117,7 @@ class SdkEndToEndTest {
     @Test
     @Order(6)
     void revoke_and_verify() {
-        var doc = client.resource("document", "e2e-doc-1");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-1");
         doc.revoke("editor").from("alice");
 
         CheckResult checkResult = doc.check("editor")
@@ -129,9 +129,9 @@ class SdkEndToEndTest {
     @Test
     @Order(7)
     void batch_operations() {
-        var doc = client.resource("document", "e2e-doc-batch");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "e2e-doc-batch");
 
-        var result = doc.batch()
+        com.authx.sdk.model.BatchResult result = doc.batch()
                 .grant("owner").to("carol")
                 .grant("editor").to("dave")
                 .execute();

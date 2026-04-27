@@ -127,14 +127,14 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
 
     /** Canonical-string varargs form of {@link #findBy(SubjectRef...)}. */
     public MultiFinder<R, P> findBy(String... subjectRefs) {
-        var refs = new java.util.ArrayList<SubjectRef>(subjectRefs.length);
+        java.util.ArrayList<com.authx.sdk.model.SubjectRef> refs = new java.util.ArrayList<SubjectRef>(subjectRefs.length);
         for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
         return new MultiFinder<>(factory, refs);
     }
 
     /** {@link Iterable} overload of {@link #findBy(String...)}. */
     public MultiFinder<R, P> findBy(Iterable<String> subjectRefs) {
-        var refs = new java.util.ArrayList<SubjectRef>();
+        java.util.ArrayList<com.authx.sdk.model.SubjectRef> refs = new java.util.ArrayList<SubjectRef>();
         for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
         return new MultiFinder<>(factory, refs);
     }
@@ -158,7 +158,7 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
 
         /** Run one {@code LookupResources} per subject and collect results keyed by the subject's canonical ref string. */
         public Map<String, List<String>> can(P permission) {
-            var out = new LinkedHashMap<String, List<String>>(subjects.size());
+            java.util.LinkedHashMap<java.lang.String,java.util.List<java.lang.String>> out = new LinkedHashMap<String, List<String>>(subjects.size());
             for (SubjectRef subject : subjects) {
                 out.put(subject.toRefString(), new TypedFinder<P>(factory, subject).limit(limit).can(permission));
             }

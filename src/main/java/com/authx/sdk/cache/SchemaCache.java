@@ -75,24 +75,24 @@ public class SchemaCache {
     public boolean hasResourceType(String type) { return defs.get().containsKey(type); }
 
     public Set<String> getRelations(String type) {
-        var d = defs.get().get(type);
+        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(type);
         return d != null ? d.relations() : Set.of();
     }
 
     public Set<String> getPermissions(String type) {
-        var d = defs.get().get(type);
+        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(type);
         return d != null ? d.permissions() : Set.of();
     }
 
     public List<SubjectType> getSubjectTypes(String type, String relation) {
-        var d = defs.get().get(type);
+        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(type);
         if (d == null) return List.of();
-        var sts = d.relationSubjectTypes().get(relation);
+        java.util.List<com.authx.sdk.model.SubjectType> sts = d.relationSubjectTypes().get(relation);
         return sts != null ? sts : List.of();
     }
 
     public Map<String, List<SubjectType>> getAllSubjectTypes(String type) {
-        var d = defs.get().get(type);
+        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(type);
         return d != null ? d.relationSubjectTypes() : Map.of();
     }
 
@@ -118,9 +118,9 @@ public class SchemaCache {
      * without reading the schema by hand.
      */
     public void validateSubject(String resourceType, String relation, String subjectRef) {
-        var d = defs.get().get(resourceType);
+        com.authx.sdk.cache.SchemaCache.DefinitionCache d = defs.get().get(resourceType);
         if (d == null) return;                                  // fail-open
-        var allowed = d.relationSubjectTypes().get(relation);
+        java.util.List<com.authx.sdk.model.SubjectType> allowed = d.relationSubjectTypes().get(relation);
         if (allowed == null || allowed.isEmpty()) return;       // fail-open
 
         int colon = subjectRef.indexOf(':');

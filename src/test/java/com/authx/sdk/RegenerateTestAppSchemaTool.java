@@ -25,25 +25,25 @@ class RegenerateTestAppSchemaTool {
 
     @Test
     void regenerate() throws Exception {
-        var user = List.of(SubjectType.of("user"));
-        var userOrDept = List.of(
+        java.util.List<com.authx.sdk.model.SubjectType> user = List.of(SubjectType.of("user"));
+        java.util.List<com.authx.sdk.model.SubjectType> userOrDept = List.of(
                 SubjectType.of("user"),
                 SubjectType.of("department", "all_members"));
-        var userOrGroupMember = List.of(
+        java.util.List<com.authx.sdk.model.SubjectType> userOrGroupMember = List.of(
                 SubjectType.of("user"),
                 SubjectType.of("group", "member"));
-        var userOrGroupOrDept = List.of(
+        java.util.List<com.authx.sdk.model.SubjectType> userOrGroupOrDept = List.of(
                 SubjectType.of("user"),
                 SubjectType.of("group", "member"),
                 SubjectType.of("department", "all_members"));
-        var userOrGroupOrDeptOrWildcard = List.of(
+        java.util.List<com.authx.sdk.model.SubjectType> userOrGroupOrDeptOrWildcard = List.of(
                 SubjectType.of("user"),
                 SubjectType.of("group", "member"),
                 SubjectType.of("department", "all_members"),
                 SubjectType.wildcard("user"));
-        var wildcardOnly = List.of(SubjectType.wildcard("user"));
+        java.util.List<com.authx.sdk.model.SubjectType> wildcardOnly = List.of(SubjectType.wildcard("user"));
 
-        var cache = new SchemaCache();
+        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
         cache.updateFromMap(Map.ofEntries(
                 Map.entry("user", new SchemaCache.DefinitionCache(
                         Set.of(), Set.of(), Map.of())),

@@ -60,8 +60,8 @@ class VirtualThreadCompatibilityTest {
     void setup() {
         // Build a client with virtual threads enabled, using InMemoryTransport
         // to avoid needing a real SpiceDB instance.
-        var bus = new DefaultTypedEventBus();
-        var lm = new LifecycleManager(bus);
+        com.authx.sdk.event.DefaultTypedEventBus bus = new DefaultTypedEventBus();
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
         lm.begin();
         lm.complete();
 
@@ -69,9 +69,9 @@ class VirtualThreadCompatibilityTest {
         // useVirtualThreads=true.
         Executor vtExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-        var infra = new SdkInfrastructure(null, null, vtExecutor, lm);
-        var observability = new SdkObservability(new SdkMetrics(), bus, null);
-        var config = new SdkConfig(PolicyRegistry.withDefaults(), false, true);
+        com.authx.sdk.internal.SdkInfrastructure infra = new SdkInfrastructure(null, null, vtExecutor, lm);
+        com.authx.sdk.internal.SdkObservability observability = new SdkObservability(new SdkMetrics(), bus, null);
+        com.authx.sdk.internal.SdkConfig config = new SdkConfig(PolicyRegistry.withDefaults(), false, true);
         client = new AuthxClient(new InMemoryTransport(), infra, observability, config, HealthProbe.up());
     }
 
@@ -86,7 +86,7 @@ class VirtualThreadCompatibilityTest {
 
     @Test
     void clientWithVirtualThreads_basicOperationsWork() {
-        var doc = client.on("document");
+        com.authx.sdk.ResourceFactory doc = client.on("document");
         doc.resource("doc-1").grant("editor").to("user:alice");
         assertThat(doc.resource("doc-1").check("editor").by("user:alice").hasPermission()).isTrue();
         assertThat(doc.resource("doc-1").check("editor").by("user:bob").hasPermission()).isFalse();
@@ -99,17 +99,17 @@ class VirtualThreadCompatibilityTest {
     @Test
     void concurrentChecks_onVirtualThreads_allCorrect() throws Exception {
         // Seed data
-        var doc = client.on("document");
+        com.authx.sdk.ResourceFactory doc = client.on("document");
         for (int i = 0; i < 100; i++) {
             doc.resource("doc-" + i).grant("viewer").to("user:user-" + (i % 10));
         }
 
         int concurrency = 500;
-        var errors = new AtomicInteger(0);
-        var wrongResults = new AtomicInteger(0);
-        var latch = new CountDownLatch(concurrency);
+        java.util.concurrent.atomic.AtomicInteger errors = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger wrongResults = new AtomicInteger(0);
+        java.util.concurrent.CountDownLatch latch = new CountDownLatch(concurrency);
 
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (java.util.concurrent.ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int i = 0; i < concurrency; i++) {
                 final int idx = i;
                 executor.execute(() -> {
@@ -148,17 +148,17 @@ class VirtualThreadCompatibilityTest {
     @Test
     void mixedReadWrite_onVirtualThreads_noDeadlock() throws Exception {
         int concurrency = 200;
-        var errors = new AtomicInteger(0);
-        var latch = new CountDownLatch(concurrency);
-        var barrier = new CyclicBarrier(concurrency);
+        java.util.concurrent.atomic.AtomicInteger errors = new AtomicInteger(0);
+        java.util.concurrent.CountDownLatch latch = new CountDownLatch(concurrency);
+        java.util.concurrent.CyclicBarrier barrier = new CyclicBarrier(concurrency);
 
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (java.util.concurrent.ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int i = 0; i < concurrency; i++) {
                 final int idx = i;
                 executor.execute(() -> {
                     try {
                         barrier.await(5, TimeUnit.SECONDS);
-                        var doc = client.on("document");
+                        com.authx.sdk.ResourceFactory doc = client.on("document");
                         if (idx % 3 == 0) {
                             // Write
                             doc.resource("mixed-doc-" + (idx % 20)).grant("editor").to("user:mixed-user-" + idx);
@@ -191,8 +191,8 @@ class VirtualThreadCompatibilityTest {
         // The client's asyncExecutor is a virtual-thread-per-task executor.
         // ResourceFactory.grantAsync() and checkAsync() use it for callbacks.
         // Verify that the callback thread is indeed a virtual thread.
-        var threadRef = new AtomicReference<Thread>();
-        var latch = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<java.lang.Thread> threadRef = new AtomicReference<Thread>();
+        java.util.concurrent.CountDownLatch latch = new CountDownLatch(1);
 
         // Use the async executor directly (it's exposed via the client internals
         // through ResourceFactory). We simulate what checkAsync does.
@@ -219,9 +219,9 @@ class VirtualThreadCompatibilityTest {
         ThreadFactory tf = Thread.ofVirtual().name("authx-sdk-test-", 0).factory();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(tf);
 
-        var executionCount = new AtomicInteger(0);
-        var threadRef = new AtomicReference<Thread>();
-        var latch = new CountDownLatch(3);
+        java.util.concurrent.atomic.AtomicInteger executionCount = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicReference<java.lang.Thread> threadRef = new AtomicReference<Thread>();
+        java.util.concurrent.CountDownLatch latch = new CountDownLatch(3);
 
         scheduler.scheduleAtFixedRate(() -> {
             threadRef.compareAndSet(null, Thread.currentThread());
@@ -249,9 +249,9 @@ class VirtualThreadCompatibilityTest {
 
     @Test
     void telemetryReporter_flushesOnVirtualThread() throws Exception {
-        var flushThreadRef = new AtomicReference<Thread>();
-        var receivedBatches = Collections.synchronizedList(new ArrayList<List<Map<String, Object>>>());
-        var flushLatch = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<java.lang.Thread> flushThreadRef = new AtomicReference<Thread>();
+        java.util.List<java.util.List<java.util.Map<java.lang.String,java.lang.Object>>> receivedBatches = Collections.synchronizedList(new ArrayList<List<Map<String, Object>>>());
+        java.util.concurrent.CountDownLatch flushLatch = new CountDownLatch(1);
 
         TelemetrySink capturingSink = batch -> {
             flushThreadRef.compareAndSet(null, Thread.currentThread());
@@ -260,7 +260,7 @@ class VirtualThreadCompatibilityTest {
         };
 
         // useVirtualThreads=true triggers virtual thread factory for the scheduler
-        var reporter = new TelemetryReporter(capturingSink, 100, 5, 100, true);
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(capturingSink, 100, 5, 100, true);
 
         // Record enough events to trigger a batch flush
         for (int i = 0; i < 10; i++) {
@@ -288,10 +288,10 @@ class VirtualThreadCompatibilityTest {
 
     @Test
     void telemetryReporter_closeFlushesRemainingEvents_onVirtualThreads() {
-        var received = Collections.synchronizedList(new ArrayList<List<Map<String, Object>>>());
+        java.util.List<java.util.List<java.util.Map<java.lang.String,java.lang.Object>>> received = Collections.synchronizedList(new ArrayList<List<Map<String, Object>>>());
         TelemetrySink sink = received::add;
 
-        var reporter = new TelemetryReporter(sink, 100, 50, 60_000, true);
+        com.authx.sdk.telemetry.TelemetryReporter reporter = new TelemetryReporter(sink, 100, 50, 60_000, true);
         // Record fewer than batchSize so only close() triggers the flush
         for (int i = 0; i < 5; i++) {
             reporter.record("WRITE", "doc", String.valueOf(i), "user", "bob",
@@ -322,19 +322,19 @@ class VirtualThreadCompatibilityTest {
         // should not cause pinning. If this test passes but a similar test
         // with a real gRPC channel stalls, that confirms the Netty pinning issue.
         int concurrency = 1000;
-        var completed = new AtomicInteger(0);
-        var errors = new AtomicInteger(0);
-        var latch = new CountDownLatch(concurrency);
+        java.util.concurrent.atomic.AtomicInteger completed = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger errors = new AtomicInteger(0);
+        java.util.concurrent.CountDownLatch latch = new CountDownLatch(concurrency);
 
         // Seed some data first
-        var doc = client.on("document");
+        com.authx.sdk.ResourceFactory doc = client.on("document");
         for (int i = 0; i < 50; i++) {
             doc.resource("burst-doc-" + i).grant("viewer").to("user:burst-user-" + (i % 5));
         }
 
         long startNanos = System.nanoTime();
 
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (java.util.concurrent.ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int i = 0; i < concurrency; i++) {
                 final int idx = i;
                 executor.execute(() -> {
@@ -375,8 +375,8 @@ class VirtualThreadCompatibilityTest {
     @Test
     void virtualThreadExecutor_eachTaskGetsDistinctThread() throws Exception {
         int tasks = 50;
-        var threadIds = Collections.synchronizedList(new ArrayList<Long>());
-        var latch = new CountDownLatch(tasks);
+        java.util.List<java.lang.Long> threadIds = Collections.synchronizedList(new ArrayList<Long>());
+        java.util.concurrent.CountDownLatch latch = new CountDownLatch(tasks);
 
         Executor asyncExec = client.asyncExecutor();
         for (int i = 0; i < tasks; i++) {

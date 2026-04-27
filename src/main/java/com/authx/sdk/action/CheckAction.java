@@ -73,7 +73,7 @@ public class CheckAction {
         if (kv.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
         }
-        var map = new java.util.LinkedHashMap<String, Object>();
+        java.util.LinkedHashMap<java.lang.String,java.lang.Object> map = new java.util.LinkedHashMap<String, Object>();
         for (int i = 0; i < kv.length; i += 2) {
             if (!(kv[i] instanceof String key)) {
                 throw new IllegalArgumentException("Key at index " + i + " must be a String");
@@ -85,7 +85,7 @@ public class CheckAction {
 
     /** Execute the permission check against a single {@link SubjectRef subject}. */
     public CheckResult by(SubjectRef subject) {
-        var request = new CheckRequest(
+        com.authx.sdk.model.CheckRequest request = new CheckRequest(
                 ResourceRef.of(resourceType, resourceId),
                 Permission.of(permissions[0]),
                 subject,
@@ -127,7 +127,7 @@ public class CheckAction {
     /** Collection overload of {@link #byAll(SubjectRef...)}. */
     public BulkCheckResult byAll(Collection<SubjectRef> subjects) {
         SubjectRef head = subjects.iterator().next();
-        var request = CheckRequest.of(
+        com.authx.sdk.model.CheckRequest request = CheckRequest.of(
                 ResourceRef.of(resourceType, resourceId),
                 Permission.of(permissions[0]),
                 head,

@@ -57,8 +57,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        var probe = new SchemaReadHealthProbe(channel, "test-key");
-        var result = probe.check();
+        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
+        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isTrue();
         assertThat(result.name()).isEqualTo("spicedb-schema");
@@ -76,8 +76,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        var probe = new SchemaReadHealthProbe(channel, "test-key");
-        var result = probe.check();
+        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
+        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
 
         // Key assertion: NOT_FOUND is mapped to HEALTHY
         assertThat(result.healthy()).isTrue();
@@ -95,8 +95,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        var probe = new SchemaReadHealthProbe(channel, "bad-key");
-        var result = probe.check();
+        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "bad-key");
+        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isFalse();
         assertThat(result.details()).contains("UNAUTHENTICATED");
@@ -113,8 +113,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        var probe = new SchemaReadHealthProbe(channel, "test-key");
-        var result = probe.check();
+        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key");
+        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isFalse();
         assertThat(result.details()).contains("UNAVAILABLE");
@@ -129,8 +129,8 @@ class SchemaReadHealthProbeTest {
             }
         });
 
-        var probe = new SchemaReadHealthProbe(channel, "test-key", Duration.ofMillis(50));
-        var result = probe.check();
+        com.authx.sdk.health.SchemaReadHealthProbe probe = new SchemaReadHealthProbe(channel, "test-key", Duration.ofMillis(50));
+        com.authx.sdk.spi.HealthProbe.ProbeResult result = probe.check();
 
         assertThat(result.healthy()).isFalse();
         assertThat(result.details()).contains("DEADLINE_EXCEEDED");

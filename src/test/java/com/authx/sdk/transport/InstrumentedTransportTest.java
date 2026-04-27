@@ -43,9 +43,9 @@ class InstrumentedTransportTest {
 
     @Test
     void checkRecordsMetricsAndTelemetry() {
-        var transport = new InstrumentedTransport(inner, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
 
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertThat(result.hasPermission()).isTrue();
@@ -56,7 +56,7 @@ class InstrumentedTransportTest {
         reporter.close();
 
         assertThat(recordedEvents).hasSize(1);
-        var event = recordedEvents.getFirst();
+        java.util.Map<java.lang.String,java.lang.Object> event = recordedEvents.getFirst();
         assertThat(event.get("action")).isEqualTo("CHECK");
         assertThat(event.get("resourceType")).isEqualTo("document");
         assertThat(event.get("result")).isEqualTo("HAS_PERMISSION");
@@ -71,7 +71,7 @@ class InstrumentedTransportTest {
             }
         };
 
-        var transport = new InstrumentedTransport(failing, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(failing, reporter, metrics);
 
         assertThatThrownBy(() -> transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency())))
@@ -83,9 +83,9 @@ class InstrumentedTransportTest {
 
     @Test
     void writeRelationshipsRecordsMetrics() {
-        var transport = new InstrumentedTransport(inner, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
 
-        var result = transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
+        com.authx.sdk.model.GrantResult result = transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
                 ResourceRef.of("document", "d2"),
                 Relation.of("viewer"),
@@ -105,9 +105,9 @@ class InstrumentedTransportTest {
                 Relation.of("viewer"),
                 SubjectRef.of("user", "bob", null))));
 
-        var transport = new InstrumentedTransport(inner, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
 
-        var result = transport.deleteRelationships(List.of(new SdkTransport.RelationshipUpdate(
+        com.authx.sdk.model.RevokeResult result = transport.deleteRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.DELETE,
                 ResourceRef.of("document", "d2"),
                 Relation.of("viewer"),
@@ -119,9 +119,9 @@ class InstrumentedTransportTest {
 
     @Test
     void lookupSubjectsRecordsMetrics() {
-        var transport = new InstrumentedTransport(inner, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
 
-        var subjects = transport.lookupSubjects(new LookupSubjectsRequest(
+        java.util.List<com.authx.sdk.model.SubjectRef> subjects = transport.lookupSubjects(new LookupSubjectsRequest(
                 ResourceRef.of("document", "d1"),
                 Permission.of("editor"),
                 "user"));
@@ -132,9 +132,9 @@ class InstrumentedTransportTest {
 
     @Test
     void lookupResourcesRecordsMetrics() {
-        var transport = new InstrumentedTransport(inner, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
 
-        var resources = transport.lookupResources(new LookupResourcesRequest(
+        java.util.List<com.authx.sdk.model.ResourceRef> resources = transport.lookupResources(new LookupResourcesRequest(
                 "document",
                 Permission.of("editor"),
                 SubjectRef.of("user", "alice", null)));
@@ -145,9 +145,9 @@ class InstrumentedTransportTest {
 
     @Test
     void readRelationshipsRecordsMetrics() {
-        var transport = new InstrumentedTransport(inner, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
 
-        var tuples = transport.readRelationships(
+        java.util.List<com.authx.sdk.model.Tuple> tuples = transport.readRelationships(
                 ResourceRef.of("document", "d1"),
                 Relation.of("editor"),
                 Consistency.minimizeLatency());
@@ -158,9 +158,9 @@ class InstrumentedTransportTest {
 
     @Test
     void readRelationshipsWithNullRelation() {
-        var transport = new InstrumentedTransport(inner, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
 
-        var tuples = transport.readRelationships(
+        java.util.List<com.authx.sdk.model.Tuple> tuples = transport.readRelationships(
                 ResourceRef.of("document", "d1"),
                 null,
                 Consistency.minimizeLatency());
@@ -171,9 +171,9 @@ class InstrumentedTransportTest {
 
     @Test
     void nullMetricsDoesNotThrow() {
-        var transport = new InstrumentedTransport(inner, reporter, null);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, null);
 
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertThat(result.hasPermission()).isTrue();
@@ -181,7 +181,7 @@ class InstrumentedTransportTest {
 
     @Test
     void closeDelegates() {
-        var transport = new InstrumentedTransport(inner, reporter, metrics);
+        com.authx.sdk.transport.InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
         transport.close();
         assertThat(inner.size()).isZero();
     }

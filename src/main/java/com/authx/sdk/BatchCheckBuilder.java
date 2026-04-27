@@ -132,7 +132,7 @@ public final class BatchCheckBuilder {
                     e.subject));
         }
         List<CheckResult> results = transport.checkBulkMulti(items, consistency);
-        var b = CheckMatrix.builder();
+        com.authx.sdk.model.CheckMatrix.Builder b = CheckMatrix.builder();
         for (int i = 0; i < results.size(); i++) {
             Entry e = entries.get(i);
             String compositeId = e.resourceType + ":" + e.resourceId;

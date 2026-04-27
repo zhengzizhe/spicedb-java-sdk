@@ -112,7 +112,7 @@ public class ResilientTransport extends ForwardingTransport {
     @Override
     public CheckResult check(CheckRequest request) {
         String resourceType = request.resource().type();
-        var policy = policyRegistry.resolve(resourceType);
+        com.authx.sdk.policy.ResourcePolicy policy = policyRegistry.resolve(resourceType);
         Set<String> failOpenPerms = policy.circuitBreaker() != null
                 ? policy.circuitBreaker().failOpenPermissions() : Set.of();
 
@@ -184,7 +184,7 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     public io.github.resilience4j.circuitbreaker.CircuitBreaker.State getCircuitBreakerState(String resourceType) {
-        var breaker = breakers.get(resourceType);
+        io.github.resilience4j.circuitbreaker.CircuitBreaker breaker = breakers.get(resourceType);
         return breaker != null ? breaker.getState() : io.github.resilience4j.circuitbreaker.CircuitBreaker.State.DISABLED;
     }
 
@@ -237,7 +237,7 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private CircuitBreaker createBreaker(String resourceType) {
-        var policy = policyRegistry.resolve(resourceType).circuitBreaker();
+        com.authx.sdk.policy.CircuitBreakerPolicy policy = policyRegistry.resolve(resourceType).circuitBreaker();
         if (policy == null) policy = CircuitBreakerPolicy.defaults();
 
         CircuitBreakerConfig config = CircuitBreakerConfig.custom()
@@ -267,7 +267,7 @@ public class ResilientTransport extends ForwardingTransport {
 
         // Bridge events to TypedEventBus
         breaker.getEventPublisher().onStateTransition(event -> {
-            var transition = event.getStateTransition();
+            io.github.resilience4j.circuitbreaker.CircuitBreaker.StateTransition transition = event.getStateTransition();
             SdkTypedEvent sdkEvent = switch (transition) {
                 case CLOSED_TO_OPEN, HALF_OPEN_TO_OPEN, CLOSED_TO_FORCED_OPEN ->
                         new SdkTypedEvent.CircuitOpened(Instant.now(), resourceType, null);
@@ -305,7 +305,7 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     private Retry createRetry(String resourceType) {
-        var policy = policyRegistry.resolve(resourceType).retry();
+        com.authx.sdk.policy.RetryPolicy policy = policyRegistry.resolve(resourceType).retry();
         if (policy == null || policy.maxAttempts() <= 0) {
             return Retry.of("authx-" + resourceType + "-noop",
                     RetryConfig.custom().maxAttempts(1).build());
@@ -336,7 +336,7 @@ public class ResilientTransport extends ForwardingTransport {
         retry.getEventPublisher().onRetry(event -> {
             // SR:req-8 — enrich current OTel span with retry attempt + event
             try {
-                var span = io.opentelemetry.api.trace.Span.current();
+                io.opentelemetry.api.trace.Span span = io.opentelemetry.api.trace.Span.current();
                 span.setAttribute("authx.retry.attempt", event.getNumberOfRetryAttempts());
                 span.setAttribute("authx.retry.max", policy.maxAttempts());
                 span.addEvent("retry_attempt",

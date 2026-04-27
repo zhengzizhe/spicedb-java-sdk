@@ -14,8 +14,8 @@ class LifecycleManagerTest {
 
     @Test
     void phases_recordDurations() {
-        var bus = new DefaultTypedEventBus();
-        var lm = new LifecycleManager(bus);
+        com.authx.sdk.event.DefaultTypedEventBus bus = new DefaultTypedEventBus();
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
 
         lm.begin();
         assertEquals(SdkState.STARTING, lm.state());
@@ -29,7 +29,7 @@ class LifecycleManagerTest {
         assertTrue(lm.isHealthy());
         assertTrue(lm.totalStartupMs() >= 10);
 
-        var durations = lm.phaseDurations();
+        java.util.Map<com.authx.sdk.lifecycle.SdkPhase,java.lang.Long> durations = lm.phaseDurations();
         assertTrue(durations.containsKey(SdkPhase.CHANNEL));
         assertTrue(durations.containsKey(SdkPhase.CHANNEL));
         assertTrue(durations.get(SdkPhase.CHANNEL) >= 10);
@@ -37,7 +37,7 @@ class LifecycleManagerTest {
 
     @Test
     void startupReport_formatted() {
-        var lm = new LifecycleManager(new DefaultTypedEventBus());
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(new DefaultTypedEventBus());
         lm.begin();
         lm.phase(SdkPhase.CHANNEL, () -> {});
         lm.phase(SdkPhase.SCHEMA, () -> {});
@@ -50,11 +50,11 @@ class LifecycleManagerTest {
 
     @Test
     void complete_firesClientReadyEvent() {
-        var bus = new DefaultTypedEventBus();
+        com.authx.sdk.event.DefaultTypedEventBus bus = new DefaultTypedEventBus();
         List<SdkTypedEvent> events = new ArrayList<>();
         bus.subscribeAll(events::add);
 
-        var lm = new LifecycleManager(bus);
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(bus);
         lm.begin();
         lm.complete();
 
@@ -63,7 +63,7 @@ class LifecycleManagerTest {
 
     @Test
     void degraded_and_recovered() {
-        var lm = new LifecycleManager(new DefaultTypedEventBus());
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(new DefaultTypedEventBus());
         lm.begin();
         lm.complete();
 
@@ -83,7 +83,7 @@ class LifecycleManagerTest {
 
     @Test
     void stopping_stopped() {
-        var lm = new LifecycleManager(new DefaultTypedEventBus());
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(new DefaultTypedEventBus());
         lm.begin();
         lm.complete();
 
@@ -97,7 +97,7 @@ class LifecycleManagerTest {
 
     @Test
     void phaseFailed_propagatesException() {
-        var lm = new LifecycleManager(new DefaultTypedEventBus());
+        com.authx.sdk.lifecycle.LifecycleManager lm = new LifecycleManager(new DefaultTypedEventBus());
         lm.begin();
 
         assertThrows(RuntimeException.class, () ->
@@ -109,7 +109,7 @@ class LifecycleManagerTest {
 
     @Test
     void inMemoryClient_isReady() {
-        var client = AuthxClient.inMemory();
+        com.authx.sdk.AuthxClient client = AuthxClient.inMemory();
         assertTrue(client.lifecycle().isReady());
         assertEquals(SdkState.RUNNING, client.lifecycle().state());
         client.close();

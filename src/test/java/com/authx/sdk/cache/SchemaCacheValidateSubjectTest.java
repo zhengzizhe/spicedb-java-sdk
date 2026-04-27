@@ -74,7 +74,7 @@ class SchemaCacheValidateSubjectTest {
 
     @Test
     void emptySchemaIsFailOpen() {
-        var empty = new SchemaCache();
+        com.authx.sdk.cache.SchemaCache empty = new SchemaCache();
         assertThatCode(() -> empty.validateSubject("anything", "anything", "x:y"))
                 .doesNotThrowAnyException();
     }

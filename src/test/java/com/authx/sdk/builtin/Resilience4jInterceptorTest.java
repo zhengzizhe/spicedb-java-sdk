@@ -22,19 +22,19 @@ class Resilience4jInterceptorTest {
 
     @Test
     void rateLimiter_rejectsOverLimit() {
-        var interceptor = Resilience4jInterceptor.builder()
+        com.authx.sdk.builtin.Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
                 .rateLimiter(1)
                 .eventBus(new DefaultTypedEventBus())
                 .build();
 
-        var inner = new InMemoryTransport();
+        com.authx.sdk.transport.InMemoryTransport inner = new InMemoryTransport();
         inner.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
                 ResourceRef.of("doc", "1"), Relation.of("view"),
                 SubjectRef.of("user", "alice", null))));
 
-        var transport = new InterceptorTransport(inner, List.of(interceptor));
-        var request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(interceptor));
+        com.authx.sdk.model.CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         // First call succeeds
         transport.check(request);
@@ -47,13 +47,13 @@ class Resilience4jInterceptorTest {
 
     @Test
     void bulkhead_rejectsOverLimit() {
-        var interceptor = Resilience4jInterceptor.builder()
+        com.authx.sdk.builtin.Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
                 .bulkhead(1)
                 .eventBus(new DefaultTypedEventBus())
                 .build();
 
         // Use a transport that blocks to hold the bulkhead permit
-        var blockingTransport = new InMemoryTransport() {
+        InMemoryTransport blockingTransport = new InMemoryTransport() {
             @Override
             public CheckResult check(CheckRequest request) {
                 // Simulate a long-running check by checking bulkhead from a second call
@@ -61,8 +61,8 @@ class Resilience4jInterceptorTest {
             }
         };
 
-        var transport = new InterceptorTransport(blockingTransport, List.of(interceptor));
-        var request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(blockingTransport, List.of(interceptor));
+        com.authx.sdk.model.CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         // First call acquires bulkhead and succeeds (also releases in finally)
         transport.check(request);
@@ -73,18 +73,18 @@ class Resilience4jInterceptorTest {
 
     @Test
     void bothDisabled_isNoop() {
-        var interceptor = Resilience4jInterceptor.builder()
+        com.authx.sdk.builtin.Resilience4jInterceptor interceptor = Resilience4jInterceptor.builder()
                 .eventBus(new DefaultTypedEventBus())
                 .build();
 
-        var inner = new InMemoryTransport();
+        com.authx.sdk.transport.InMemoryTransport inner = new InMemoryTransport();
         inner.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
                 ResourceRef.of("doc", "1"), Relation.of("view"),
                 SubjectRef.of("user", "alice", null))));
 
-        var transport = new InterceptorTransport(inner, List.of(interceptor));
-        var request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(interceptor));
+        com.authx.sdk.model.CheckRequest request = CheckRequest.of("doc", "1", "view", "user", "alice", Consistency.minimizeLatency());
 
         for (int i = 0; i < 1000; i++) {
             transport.check(request);

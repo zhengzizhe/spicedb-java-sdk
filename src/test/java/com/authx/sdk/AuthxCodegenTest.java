@@ -121,7 +121,7 @@ class AuthxCodegenTest {
 
     @Test
     void endToEndFromFakeSchema(@org.junit.jupiter.api.io.TempDir Path tmp) throws Exception {
-        var cache = new SchemaCache();
+        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
         cache.updateFromMap(Map.of(
                 "document", new SchemaCache.DefinitionCache(
                         Set.of("folder", "viewer"),
@@ -137,7 +137,7 @@ class AuthxCodegenTest {
                         Map.of("cidrs", "list<string>"),
                         "client_ip in cidrs",
                         "")));
-        var schema = new SchemaClient(cache);
+        com.authx.sdk.SchemaClient schema = new SchemaClient(cache);
 
         AuthxCodegen.generate(schema, tmp.toString(), "com.example.perm");
 
@@ -173,13 +173,13 @@ class AuthxCodegenTest {
                 "package com.example.perm; public final class ResourceTypes {}");
         assertThat(Files.exists(staleFile)).isTrue();
 
-        var cache = new SchemaCache();
+        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
         cache.updateFromMap(Map.of(
                 "document", new SchemaCache.DefinitionCache(
                         Set.of("viewer"),
                         Set.of("view"),
                         Map.of("viewer", List.of(SubjectType.of("user"))))));
-        var schema = new SchemaClient(cache);
+        com.authx.sdk.SchemaClient schema = new SchemaClient(cache);
 
         AuthxCodegen.generate(schema, tmp.toString(), "com.example.perm");
 

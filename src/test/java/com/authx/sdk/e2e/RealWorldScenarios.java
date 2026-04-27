@@ -11,7 +11,7 @@ import java.util.*;
 public class RealWorldScenarios {
 
     public static void main(String[] args) {
-        var client = AuthxClient.inMemory();
+        com.authx.sdk.AuthxClient client = AuthxClient.inMemory();
 
         System.out.println("=== 场景 1：飞书文档协作 ===\n");
         feishuDocCollaboration(client);
@@ -52,7 +52,7 @@ public class RealWorldScenarios {
      * 创建文档 → 设置协作者 → 检查权限 → 移除协作者
      */
     static void feishuDocCollaboration(AuthxClient client) {
-        var doc = client.resource("document", "feishu-doc-001");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "feishu-doc-001");
 
         // 创建者自动成为 owner
         doc.grant("owner").to("zhang-san");
@@ -84,10 +84,10 @@ public class RealWorldScenarios {
      */
     static void folderInheritance(AuthxClient client) {
         // 创建文件夹层级：公司根目录 → 工程部 → 后端组 → 项目A
-        var companyRoot = client.resource("folder", "company-root");
-        var engDept = client.resource("folder", "eng-dept");
-        var backendTeam = client.resource("folder", "backend-team");
-        var projectA = client.resource("folder", "project-a");
+        com.authx.sdk.ResourceHandle companyRoot = client.resource("folder", "company-root");
+        com.authx.sdk.ResourceHandle engDept = client.resource("folder", "eng-dept");
+        com.authx.sdk.ResourceHandle backendTeam = client.resource("folder", "backend-team");
+        com.authx.sdk.ResourceHandle projectA = client.resource("folder", "project-a");
 
         // 设置权限（真实 SpiceDB 会通过 parent 关系递归继承）
         companyRoot.grant("viewer").to("all-employees");
@@ -134,7 +134,7 @@ public class RealWorldScenarios {
      * 一次请求拿到所有权限，决定哪些按钮可点击
      */
     static void renderUiButtons(AuthxClient client) {
-        var doc = client.resource("document", "design-spec");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "design-spec");
         doc.grant("editor").to("designer");
         doc.grant("owner").to("pm");
 
@@ -161,7 +161,7 @@ public class RealWorldScenarios {
      * 老 owner → 降为 editor，新 owner 接管
      */
     static void transferOwnership(AuthxClient client) {
-        var doc = client.resource("document", "important-doc");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "important-doc");
         doc.grant("owner").to("old-boss");
         doc.grant("editor").to("worker");
 
@@ -199,14 +199,14 @@ public class RealWorldScenarios {
      * 场景 7：协作者列表 + 按角色分组
      */
     static void collaboratorList(AuthxClient client) {
-        var doc = client.resource("document", "team-wiki");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "team-wiki");
         doc.grant("owner").to("team-lead");
         doc.grant("editor").to("senior-dev", "mid-dev");
         doc.grant("viewer").to("junior-dev", "intern-1", "intern-2");
 
         // 按角色分组
         Map<String, List<String>> grouped = doc.relations().groupByRelation();
-        for (var entry : grouped.entrySet()) {
+        for (java.util.Map.Entry<java.lang.String,java.util.List<java.lang.String>> entry : grouped.entrySet()) {
             System.out.printf("  %s: %s%n", entry.getKey(), entry.getValue());
         }
 
@@ -246,8 +246,8 @@ public class RealWorldScenarios {
      * 把用户从一个项目转到另一个项目
      */
     static void crossResourceBatch(AuthxClient client) {
-        var projectOld = client.resource("folder", "project-old");
-        var projectNew = client.resource("folder", "project-new");
+        com.authx.sdk.ResourceHandle projectOld = client.resource("folder", "project-old");
+        com.authx.sdk.ResourceHandle projectNew = client.resource("folder", "project-new");
 
         projectOld.grant("editor").to("migrating-user");
         System.out.println("  转移前 project-old editor: " + projectOld.who("user").withRelation("editor").fetch());
@@ -267,7 +267,7 @@ public class RealWorldScenarios {
      */
     static void sdkMetrics(AuthxClient client) {
         // 先跑一些操作让指标有数据
-        var doc = client.resource("document", "metrics-test");
+        com.authx.sdk.ResourceHandle doc = client.resource("document", "metrics-test");
         for (int i = 0; i < 100; i++) {
             doc.grant("viewer").to("user-" + i);
         }
@@ -275,7 +275,7 @@ public class RealWorldScenarios {
             doc.check("viewer").by("user-" + (i % 100));
         }
 
-        var m = client.metrics();
+        com.authx.sdk.metrics.SdkMetrics m = client.metrics();
         System.out.println("  " + m.snapshot());
     }
 }

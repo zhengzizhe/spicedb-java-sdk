@@ -8,7 +8,7 @@ package com.authx.sdk.spi;
  * SdkClock.SYSTEM
  *
  * // Test (controllable time)
- * var clock = new SdkClock.Fixed(1000L);
+ * SdkClock clock = new SdkClock.Fixed(1000L);
  * clock.advanceMs(5000); // advance 5 seconds
  * </pre>
  */

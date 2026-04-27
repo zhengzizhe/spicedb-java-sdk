@@ -172,7 +172,7 @@ public class TokenTracker {
     }
 
     private void publishEvent(com.authx.sdk.event.SdkTypedEvent event) {
-        var bus = eventBus;
+        com.authx.sdk.event.TypedEventBus bus = eventBus;
         if (bus == null) return;
         try {
             bus.publish(event);
@@ -196,7 +196,7 @@ public class TokenTracker {
      * Returns an arbitrary token if multiple resource types have tokens, or null if none.
      */
     public String getLastWriteToken() {
-        var values = lastWriteTokens.values();
+        java.util.Collection<java.lang.String> values = lastWriteTokens.values();
         return values.isEmpty() ? null : values.iterator().next();
     }
 }

@@ -39,8 +39,8 @@ class LookupQueryTypedOverloadTest {
 
     @Test
     void lookupByTypedBuildsCanonicalRef() {
-        var client = AuthxClient.inMemory();
-        var userType = ResourceType.of("user", R.class, P.class);
+        com.authx.sdk.AuthxClient client = AuthxClient.inMemory();
+        com.authx.sdk.ResourceType<com.authx.sdk.LookupQueryTypedOverloadTest.R,com.authx.sdk.LookupQueryTypedOverloadTest.P> userType = ResourceType.of("user", R.class, P.class);
         List<String> ids = client.lookup("document")
                 .withPermission("view")
                 .by(userType, "alice")
@@ -50,13 +50,13 @@ class LookupQueryTypedOverloadTest {
 
     @Test
     void handleWhoTypedBuildsLookup() {
-        var client = AuthxClient.inMemory();
-        var userType = ResourceType.of("user", R.class, P.class);
+        com.authx.sdk.AuthxClient client = AuthxClient.inMemory();
+        com.authx.sdk.ResourceType<com.authx.sdk.LookupQueryTypedOverloadTest.R,com.authx.sdk.LookupQueryTypedOverloadTest.P> userType = ResourceType.of("user", R.class, P.class);
         // who(ResourceType) unwraps to the string form — verify the returned
         // builder is non-null and can produce a subject query.
         WhoBuilder w = client.on("document").resource("d-1").who(userType);
         assertThat(w).isNotNull();
-        var subjects = w.withPermission("view").fetch();
+        java.util.List<java.lang.String> subjects = w.withPermission("view").fetch();
         assertThat(subjects).isEmpty();
     }
 }

@@ -55,7 +55,7 @@ public final class RealCheckChain implements CheckChain {
             return transport.check(request);
         }
         // Create next chain with incremented index and (possibly modified) request
-        var next = new RealCheckChain(interceptors, index + 1, request, transport, ctx);
+        com.authx.sdk.transport.RealCheckChain next = new RealCheckChain(interceptors, index + 1, request, transport, ctx);
         // SR:C8 — isolate read-path interceptor exceptions. An interceptor that
         // throws non-Authx (user-code bug) is logged and skipped; the chain
         // continues with `next.proceed(request)` so downstream interceptors
@@ -66,7 +66,7 @@ public final class RealCheckChain implements CheckChain {
         // Authx SDK exceptions propagate unchanged — they represent genuine
         // upstream failures (auth denial, rate limit, etc.) that the caller
         // must see to handle correctly.
-        var interceptor = interceptors.get(index);
+        com.authx.sdk.spi.SdkInterceptor interceptor = interceptors.get(index);
         try {
             return interceptor.interceptCheck(next);
         } catch (com.authx.sdk.exception.AuthxException authx) {

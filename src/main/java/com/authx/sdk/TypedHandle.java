@@ -14,7 +14,7 @@ import java.util.Collection;
  * to hold as a field:
  *
  * <pre>
- * var handle = new TypedHandle&lt;Document.Rel, Document.Perm&gt;(
+ * TypedHandle&lt;Document.Rel, Document.Perm&gt; handle = new TypedHandle&lt;Document.Rel, Document.Perm&gt;(
  *         client.on(Document), new String[]{"doc-1"});
  * boolean ok = handle.check(Document.Perm.VIEW).by("alice");
  * </pre>

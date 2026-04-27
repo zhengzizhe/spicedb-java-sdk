@@ -36,7 +36,7 @@ class InterceptorChainTest {
 
     @Test
     void chainProceedsThroughAllInterceptors() {
-        var order = new ArrayList<String>();
+        java.util.ArrayList<java.lang.String> order = new ArrayList<String>();
 
         SdkInterceptor first = new SdkInterceptor() {
             @Override
@@ -58,8 +58,8 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(inner, List.of(first, second));
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(first, second));
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertTrue(result.hasPermission());
@@ -87,8 +87,8 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(inner, List.of(shortCircuit, unreachable));
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(shortCircuit, unreachable));
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertFalse(result.hasPermission());
@@ -120,10 +120,10 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(inner, List.of(permissionRewriter));
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(permissionRewriter));
 
         // Bob is NOT an editor, but the interceptor rewrites to "viewer" check
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "bob", Consistency.minimizeLatency()));
         assertTrue(result.hasPermission());
     }
@@ -153,8 +153,8 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(failing, List.of(errorHandler));
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(failing, List.of(errorHandler));
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertFalse(result.hasPermission());
@@ -165,8 +165,8 @@ class InterceptorChainTest {
 
     @Test
     void emptyInterceptorListGoesDirectlyToTransport() {
-        var transport = new InterceptorTransport(inner, List.of());
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of());
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertTrue(result.hasPermission());
@@ -176,7 +176,7 @@ class InterceptorChainTest {
 
     @Test
     void writeChainProceedsThroughInterceptors() {
-        var events = new ArrayList<String>();
+        java.util.ArrayList<java.lang.String> events = new ArrayList<String>();
 
         SdkInterceptor writeInterceptor = new SdkInterceptor() {
             @Override
@@ -188,8 +188,8 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(inner, List.of(writeInterceptor));
-        var result = transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(writeInterceptor));
+        com.authx.sdk.model.GrantResult result = transport.writeRelationships(List.of(new SdkTransport.RelationshipUpdate(
                 SdkTransport.RelationshipUpdate.Operation.TOUCH,
                 ResourceRef.of("document", "d2"),
                 Relation.of("viewer"),
@@ -203,7 +203,7 @@ class InterceptorChainTest {
 
     @Test
     void chainAttributesSharedBetweenInterceptors() {
-        var TRACE_ID = AttributeKey.of("traceId", String.class);
+        com.authx.sdk.spi.AttributeKey<java.lang.String> TRACE_ID = AttributeKey.of("traceId", String.class);
 
         SdkInterceptor setter = new SdkInterceptor() {
             @Override
@@ -213,7 +213,7 @@ class InterceptorChainTest {
             }
         };
 
-        var capturedTraceId = new String[1];
+        java.lang.String[] capturedTraceId = new String[1];
         SdkInterceptor reader = new SdkInterceptor() {
             @Override
             public CheckResult interceptCheck(SdkInterceptor.CheckChain chain) {
@@ -222,7 +222,7 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(inner, List.of(setter, reader));
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(setter, reader));
         transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
@@ -233,7 +233,7 @@ class InterceptorChainTest {
 
     @Test
     void interceptorCanTimeProceedCall() {
-        var capturedDuration = new long[1];
+        long[] capturedDuration = new long[1];
 
         SdkInterceptor timer = new SdkInterceptor() {
             @Override
@@ -245,7 +245,7 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(inner, List.of(timer));
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(timer));
         transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
@@ -271,9 +271,9 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(failing, List.of(passthrough));
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(failing, List.of(passthrough));
 
-        var ex = assertThrows(RuntimeException.class, () ->
+        java.lang.RuntimeException ex = assertThrows(RuntimeException.class, () ->
                 transport.check(CheckRequest.of(
                         "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency())));
         assertEquals("connection refused", ex.getMessage());
@@ -291,8 +291,8 @@ class InterceptorChainTest {
             }
         };
 
-        var transport = new InterceptorTransport(inner, List.of(writeOnly));
-        var result = transport.check(CheckRequest.of(
+        com.authx.sdk.transport.InterceptorTransport transport = new InterceptorTransport(inner, List.of(writeOnly));
+        com.authx.sdk.model.CheckResult result = transport.check(CheckRequest.of(
                 "document", "d1", "editor", "user", "alice", Consistency.minimizeLatency()));
 
         assertTrue(result.hasPermission());

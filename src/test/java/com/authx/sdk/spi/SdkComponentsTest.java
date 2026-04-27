@@ -13,7 +13,7 @@ class SdkComponentsTest {
 
     @Test
     void defaults_hasNoopsAndNulls() {
-        var defaults = SdkComponents.defaults();
+        com.authx.sdk.spi.SdkComponents defaults = SdkComponents.defaults();
         assertThat(defaults.telemetrySink()).isEqualTo(TelemetrySink.NOOP);
         assertThat(defaults.clock()).isEqualTo(SdkClock.SYSTEM);
         assertThat(defaults.tokenStore()).isNull();
@@ -23,7 +23,7 @@ class SdkComponentsTest {
     @Test
     void builder_storesHealthProbe() {
         HealthProbe probe = HealthProbe.up();
-        var components = SdkComponents.builder()
+        com.authx.sdk.spi.SdkComponents components = SdkComponents.builder()
                 .healthProbe(probe)
                 .build();
 
@@ -35,7 +35,7 @@ class SdkComponentsTest {
         // Each setter should only affect its own field — no cross-contamination.
         HealthProbe probe = HealthProbe.up();
 
-        var components = SdkComponents.builder()
+        com.authx.sdk.spi.SdkComponents components = SdkComponents.builder()
                 .healthProbe(probe)
                 .build();
 

@@ -43,8 +43,8 @@ public class PolicyRegistry {
                 : ResourcePolicy.defaults();
         this.resourceTypePolicies = Map.copyOf(builder.resourceTypePolicies);
         // Pre-compute merged policies at construction time
-        var resolved = new HashMap<String, ResourcePolicy>();
-        for (var entry : this.resourceTypePolicies.entrySet()) {
+        java.util.HashMap<java.lang.String,com.authx.sdk.policy.ResourcePolicy> resolved = new HashMap<String, ResourcePolicy>();
+        for (java.util.Map.Entry<java.lang.String,com.authx.sdk.policy.ResourcePolicy> entry : this.resourceTypePolicies.entrySet()) {
             resolved.put(entry.getKey(), entry.getValue().mergeWith(this.defaultPolicy));
         }
         this.resolvedPolicies = Map.copyOf(resolved);

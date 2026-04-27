@@ -57,12 +57,12 @@ class CrossResourceBatchTypedSubRelTest {
     void enumSubRelationAndStringSubRelationProduceSameUpdates() {
         ResourceType<Rel, Perm> group = ResourceType.of("group", Rel.class, Perm.class);
 
-        var tr1 = new CapturingTransport();
+        com.authx.sdk.CrossResourceBatchTypedSubRelTest.CapturingTransport tr1 = new CapturingTransport();
         new CrossResourceBatchBuilder(tr1)
                 .on("document", "d-1").grant("viewer").to(group, "eng", Rel.MEMBER)
                 .commit();
 
-        var tr2 = new CapturingTransport();
+        com.authx.sdk.CrossResourceBatchTypedSubRelTest.CapturingTransport tr2 = new CapturingTransport();
         new CrossResourceBatchBuilder(tr2)
                 .on("document", "d-1").grant("viewer").to(group, "eng", "member")
                 .commit();

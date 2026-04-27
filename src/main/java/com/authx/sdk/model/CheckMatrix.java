@@ -140,7 +140,7 @@ public final class CheckMatrix {
 
     /** List of (permission → allowed) pairs for a specific resource/subject slice. */
     public Map<String, Boolean> forResourceAndSubject(String resourceId, String subjectId) {
-        var out = new LinkedHashMap<String, Boolean>();
+        java.util.LinkedHashMap<java.lang.String,java.lang.Boolean> out = new LinkedHashMap<String, Boolean>();
         for (Cell c : cells) {
             if (c.resourceId.equals(resourceId) && c.subjectId.equals(subjectId)) {
                 out.put(c.permission, c.allowed);

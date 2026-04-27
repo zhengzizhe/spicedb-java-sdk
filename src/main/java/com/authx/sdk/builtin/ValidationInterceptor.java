@@ -18,14 +18,14 @@ public class ValidationInterceptor implements SdkInterceptor {
 
     @Override
     public CheckResult interceptCheck(CheckChain chain) {
-        var ctx = chain.operationContext();
+        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
         validate(ctx.resourceType(), ctx.resourceId(), ctx.permission());
         return chain.proceed(chain.request());
     }
 
     @Override
     public GrantResult interceptWrite(WriteChain chain) {
-        var ctx = chain.operationContext();
+        com.authx.sdk.spi.SdkInterceptor.OperationContext ctx = chain.operationContext();
         validate(ctx.resourceType(), ctx.resourceId(), ctx.permission());
         return chain.proceed(chain.request());
     }

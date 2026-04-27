@@ -73,7 +73,7 @@ class SchemaLoaderTest {
             }
         });
 
-        var cache = new SchemaCache();
+        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
         boolean ok = new SchemaLoader().load(channel, new Metadata(), cache);
         assertThat(ok).isTrue();
         assertThat(cache.hasSchema()).isTrue();
@@ -96,8 +96,8 @@ class SchemaLoaderTest {
             }
         });
 
-        var cache = new SchemaCache();
-        var loader = new SchemaLoader();
+        com.authx.sdk.cache.SchemaCache cache = new SchemaCache();
+        com.authx.sdk.transport.SchemaLoader loader = new SchemaLoader();
         assertThat(loader.load(channel, new Metadata(), cache)).isFalse();
         // Second attempt short-circuits (reflectSupported = false).
         assertThat(loader.load(channel, new Metadata(), cache)).isFalse();

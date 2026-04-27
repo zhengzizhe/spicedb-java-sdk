@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Check agent should verify the change against backend guideline expectations."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Check agent should confirm all relevant Java source roots were considered."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check agent should apply project quality checks for broad Java refactors."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check agent should verify search coverage and consistency across repeated declarations."}
