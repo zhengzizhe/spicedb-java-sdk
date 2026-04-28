@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Project quality conventions for checking this hook/config change."}
+{"file": ".trellis/spec/tooling/index.md", "reason": "Project-local Codex hook and notification command review contract."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check that the implementation reuses existing hook patterns where appropriate."}
