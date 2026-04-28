@@ -297,9 +297,9 @@ public class AuthxClientBuilder {
                         System.Logger.Level.WARNING,
                         LogCtx.fmt(
                                 "No DistributedTokenStore configured — SESSION consistency only works " +
-                                "within a single JVM. For multi-instance deployments, provide a Redis-backed " +
-                                "tokenStore via .extend(e -> e.components(SdkComponents.builder()" +
-                                ".tokenStore(redisStore).build()))"));
+                                "within a single JVM. For multi-instance deployments, provide and operate " +
+                                "your own shared tokenStore via .extend(e -> e.components(SdkComponents.builder()" +
+                                ".tokenStore(sharedStore).build()))"));
             }
 
             // Async executor: virtual threads if enabled, otherwise direct (caller thread)

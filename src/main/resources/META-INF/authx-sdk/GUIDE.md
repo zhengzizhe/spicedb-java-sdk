@@ -42,10 +42,6 @@ dispatch cache for low-latency reads.
 // Gradle
 dependencies {
     implementation("io.github.authxkit:authx-spicedb-sdk:2.0.1")
-
-    // Optional: Redisson-backed DistributedTokenStore for cross-JVM
-    // SESSION consistency. Main SDK stays Redisson-free.
-    implementation("io.github.authxkit:authx-spicedb-sdk-redisson:2.0.1")
 }
 ```
 

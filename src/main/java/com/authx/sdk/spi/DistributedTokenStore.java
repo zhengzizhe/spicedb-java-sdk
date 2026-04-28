@@ -3,7 +3,7 @@ package com.authx.sdk.spi;
 import org.jspecify.annotations.Nullable;
 
 /**
- * SPI for sharing ZedTokens across SDK instances (e.g., via Redis).
+ * SPI for sharing ZedTokens across SDK instances.
  *
  * <p>Used by {@link com.authx.sdk.transport.TokenTracker} to enable
  * cross-instance SESSION consistency. Without this, SESSION consistency
@@ -17,13 +17,13 @@ import org.jspecify.annotations.Nullable;
  * </ul>
  *
  * <pre>
- * // Redis example
+ * // Shared-storage example. The SDK does not provide a concrete implementation.
  * DistributedTokenStore store = new DistributedTokenStore() {
  *     public void set(String key, String token) {
- *         redis.setex("authx:token:" + key, 60, token);
+ *         sharedStorage.setWithTtl("authx:token:" + key, token, Duration.ofSeconds(60));
  *     }
  *     public String get(String key) {
- *         return redis.get("authx:token:" + key);
+ *         return sharedStorage.get("authx:token:" + key);
  *     }
  * };
  * </pre>

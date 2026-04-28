@@ -17,7 +17,7 @@ import com.authx.sdk.AuthxClientBuilder;
  * <ul>
  *   <li>Register a custom {@code SdkInterceptor} for cross-cutting
  *       audit logging
- *   <li>Inject a Redis-backed {@code DistributedTokenStore} via
+ *   <li>Inject a user-managed {@code DistributedTokenStore} via
  *       {@code extend(e -> e.components(...))} to get SESSION
  *       consistency across multiple JVMs
  *   <li>Register a custom {@code HealthProbe} that wraps the SDK's

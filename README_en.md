@@ -27,7 +27,7 @@ A high-performance Java client that connects directly to SpiceDB. No platform de
 - **Resilience4j**: CircuitBreaker + Retry + RateLimiter + Bulkhead — out of the box.
 - **HdrHistogram metrics**: Lock-free p50/p99/p999 latency tracking with microsecond precision.
 - **Request coalescing**: Concurrent identical requests are merged to reduce SpiceDB load.
-- **Cross-JVM SESSION consistency**: optional `sdk-redisson` module for shared zedToken store.
+- **Cross-JVM SESSION consistency SPI**: `DistributedTokenStore` extension point; applications provide and operate their own token storage.
 
 ## Quick Start
 
@@ -197,7 +197,7 @@ AuthxClient client = AuthxClient.builder()
     .connection(c -> c.target("localhost:50051").presharedKey("my-key"))
     .extend(e -> e.components(SdkComponents.builder()
         .healthProbe(myProbe)
-        .tokenStore(myRedisTokenStore)
+        .tokenStore(myTokenStore)
         .build()))
     .build();
 ```
@@ -243,7 +243,7 @@ SdkComponents.builder()
 
 ## Multi-Instance Deployment Guide
 
-If you run multiple service instances (K8s deployment with replicas > 1): SESSION consistency requires a shared `DistributedTokenStore`. Without it, SESSION only works within a single JVM (startup log warns). For multi-JVM deployments use the [`sdk-redisson`](sdk-redisson/README.md) module.
+If you run multiple service instances (K8s deployment with replicas > 1): SESSION consistency requires a shared `DistributedTokenStore`. Without it, SESSION only works within a single JVM (startup log warns). The SDK only provides the SPI; it no longer ships or publishes a concrete token-store implementation. For multi-JVM deployments, provide and operate your own Redis, database, or other shared-storage implementation.
 
 ---
 
@@ -270,7 +270,7 @@ If you run multiple service instances (K8s deployment with replicas > 1): SESSIO
 |---|---|---|
 | `telemetrySink` | NOOP | Custom telemetry export (Kafka/OTLP/file) |
 | `clock` | SYSTEM | Clock (for testing) |
-| `tokenStore` | null | Cross-instance SESSION consistency zedtoken store (Redis, etc.) |
+| `tokenStore` | null | User-provided zedToken store for cross-instance SESSION consistency |
 | `healthProbe` | `all(ChannelState, SchemaRead)` | Custom health probe |
 
 ---

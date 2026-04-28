@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
  *     .healthProbe(HealthProbe.all(                   // composite health check
  *         new ChannelStateHealthProbe(channel),
  *         new SchemaReadHealthProbe(channel, psk)))
- *     .tokenStore(redisStore)                         // cross-JVM SESSION consistency
+ *     .tokenStore(sharedStore)                        // cross-JVM SESSION consistency
  *     .build())
  * </pre>
  *
@@ -48,7 +48,7 @@ public record SdkComponents(
         /** Custom clock (for testing). Default: system clock. */
         public Builder clock(SdkClock clock) { this.clock = clock; return this; }
 
-        /** Distributed token store (Redis) for cross-instance SESSION consistency. null = local only. */
+        /** User-provided distributed token store for cross-instance SESSION consistency. null = local only. */
         public Builder tokenStore(DistributedTokenStore store) { this.tokenStore = store; return this; }
 
         /**

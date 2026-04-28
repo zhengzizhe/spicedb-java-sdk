@@ -24,7 +24,7 @@
 - **Resilience4j 弹性**：CircuitBreaker + Retry + RateLimiter + Bulkhead，开箱即用
 - **HdrHistogram 指标**：无锁延迟百分位追踪（p50/p99/p999），微秒级精度
 - **请求合并（Coalescing）**：并发相同请求自动合并，减少 SpiceDB 负载
-- **跨 JVM SESSION 一致性**：可选 [`sdk-redisson`](sdk-redisson/README.md) 模块提供共享 zedToken 存储
+- **跨 JVM SESSION 一致性 SPI**：提供 `DistributedTokenStore` 扩展点，存储实现由业务方自行接入和运维
 
 ### 2026-04 新特性 — 扁平描述符（Schema flat descriptors）
 
@@ -270,12 +270,20 @@ SdkComponents.builder()
 
 ### SESSION 一致性需要共享 tokenStore
 
-跨实例 SESSION 一致性要求 zedtoken 在 pod 之间共享。默认 `tokenStore=null` 时只在单 JVM 内有效（启动会有警告日志）。多实例部署接入 [`sdk-redisson`](sdk-redisson/README.md) 模块即可：
+跨实例 SESSION 一致性要求 zedtoken 在 pod 之间共享。默认 `tokenStore=null` 时只在单 JVM 内有效（启动会有警告日志）。SDK 只提供 `DistributedTokenStore` SPI，不再内置或发布具体 token-store 实现；多实例部署时需要业务方用自己的 Redis、数据库或其他共享存储实现并运维该接口：
 
 ```java
-RedissonClient redis = Redisson.create(redissonConfig);
-DistributedTokenStore store = new RedissonTokenStore(
-        redis, Duration.ofSeconds(60), "authx:token:");
+DistributedTokenStore store = new DistributedTokenStore() {
+    @Override
+    public void set(String key, String token) {
+        mySharedStorage.setWithTtl("authx:token:" + key, token, Duration.ofSeconds(60));
+    }
+
+    @Override
+    public String get(String key) {
+        return mySharedStorage.get("authx:token:" + key);
+    }
+};
 
 AuthxClient client = AuthxClient.builder()
     .extend(e -> e.components(SdkComponents.builder().tokenStore(store).build()))
@@ -307,7 +315,7 @@ AuthxClient client = AuthxClient.builder()
 |---|---|---|
 | `telemetrySink` | NOOP | 自定义 telemetry 上报（Kafka/OTLP/file） |
 | `clock` | SYSTEM | 时钟（测试用） |
-| `tokenStore` | null | 跨实例 SESSION 一致性的 zedtoken 存储（开箱即用：[`sdk-redisson`](sdk-redisson/README.md)） |
+| `tokenStore` | null | 跨实例 SESSION 一致性的 zedtoken 存储；SDK 只提供 SPI，具体存储由业务方自行提供 |
 | `healthProbe` | `all(ChannelState, SchemaRead)` | 自定义健康探针 |
 
 ---
