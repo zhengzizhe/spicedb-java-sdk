@@ -28,6 +28,8 @@ Beads already provides a local task database and command model:
 
 The UI should avoid replacing Beads storage. It should be a thin, reliable web layer over Beads commands or a dedicated local API that preserves Beads as the source of truth.
 
+The implementation should be a sibling workspace project at `/Users/cses-38/workspace/beads-web-ui`. The current `authcses-sdk` directory is only being used to track this planning work through Beads/Trellis tasks.
+
 ## Product direction
 
 The best first version is not a full Vibe Kanban clone. It should be a Beads-native operations cockpit:
@@ -41,8 +43,8 @@ The best first version is not a full Vibe Kanban clone. It should be a Beads-nat
 
 Recommended sequence:
 
-1. Read-only explorer UI over `bd --json` commands.
-2. Controlled mutations through a small local API wrapper around Beads.
-3. Agent/worktree orchestration using `bd worktree` and Trellis task folders.
-4. Review/preview surfaces only after the execution model is stable.
-
+1. Scaffold `/Users/cses-38/workspace/beads-web-ui` as the product project.
+2. Read-only explorer UI over `bd --json` commands.
+3. Controlled mutations through a small local API wrapper around Beads.
+4. Agent/worktree orchestration using `bd worktree` and Trellis task folders.
+5. Review/preview surfaces only after the execution model is stable.

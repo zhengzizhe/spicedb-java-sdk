@@ -10,6 +10,8 @@ The UI should keep Beads as the source of truth and use Trellis task folders as 
 
 * The user wants a complete Web UI page/app for Beads, similar to Vibe Kanban.
 * This repo currently has no frontend framework configuration at the root.
+* The Web UI implementation must not be added under this `authcses-sdk` folder. The target implementation root is `/Users/cses-38/workspace/beads-web-ui`.
+* This `authcses-sdk` repo is only the current Beads/Trellis planning and tracking context for the work.
 * Trellis now uses Beads-first tasks through `.bead` markers and Beads `metadata.trellis_task`.
 * Existing Beads integration lives in `.trellis/scripts/task.py`, `.trellis/scripts/common/beads_cli.py`, `.trellis/scripts/common/task_store.py`, and `.trellis/scripts/common/tasks.py`.
 * Beads supports task lifecycle, ready/blocked views, parent/child relations, dependencies, graph, comments, labels, worktrees, JSON output, JSONL export/import, and Dolt-backed history.
@@ -21,6 +23,7 @@ The UI should keep Beads as the source of truth and use Trellis task folders as 
 * Beads remains the task database; the UI must not create a parallel task store.
 * Trellis folders remain the AI execution context for PRD, implement/check context, archives, and `.bead` links.
 * MVP should optimize for AI-assisted long-flow work: many tasks, parent/child graphs, ready queues, and current work visibility.
+* Implementation, package management, frontend/backend source, tests, and docs for the Web UI live in `/Users/cses-38/workspace/beads-web-ui`, not inside `/Users/cses-38/workspace/authcses-sdk`.
 
 ## Requirements
 
@@ -62,13 +65,14 @@ The UI should keep Beads as the source of truth and use Trellis task folders as 
 
 ### Option A: Local Web App + Beads API Wrapper (Recommended)
 
+* Create a sibling workspace project at `/Users/cses-38/workspace/beads-web-ui`.
 * Add a small local backend process that exposes typed HTTP endpoints and internally calls Beads through the existing `bd --json` command model.
 * Add a frontend app for board/list/detail/graph views.
 * Keep mutation logic centralized in the backend so the UI never shells out directly.
 
 Pros:
 
-* Smallest reliable path from current repo.
+* Smallest reliable path while keeping product code out of `authcses-sdk`.
 * Keeps Beads source-of-truth clean.
 * Easy to test by mocking the backend command adapter.
 * Can later support worktrees, agents, diffs, and previews.
@@ -131,7 +135,7 @@ surface:
 
 ### Milestone 1: Read-Only UI
 
-* Scaffold local backend and frontend.
+* Scaffold local backend and frontend in `/Users/cses-38/workspace/beads-web-ui`.
 * Implement issue loading from `bd --json list`, `bd ready`, `bd statuses`, `bd show`.
 * Build board, list, and detail panes.
 * Render Trellis metadata and task folder links.
@@ -175,6 +179,7 @@ surface:
 ## Acceptance Criteria
 
 * [ ] A developer can run one local command and open the Beads Web UI.
+* [ ] Web UI product code is located under `/Users/cses-38/workspace/beads-web-ui`, not under `/Users/cses-38/workspace/authcses-sdk`.
 * [ ] The UI lists Beads issues with status, priority, assignee, labels, and blocked/ready state.
 * [ ] The UI renders parent/child and dependency relationships.
 * [ ] The UI shows Trellis metadata and links a Beads issue to its task folder when present.
@@ -198,4 +203,3 @@ surface:
 ## Open Questions
 
 * Resolved working assumption: MVP starts read-only plus strong navigation and detail views. Write operations move to the next task after the MVP acceptance gate.
-
