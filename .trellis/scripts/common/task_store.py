@@ -375,6 +375,49 @@ def _update_beads_trellis_task(
     )
 
 
+def _beads_task_children(issue: Mapping[str, Any]) -> list[str]:
+    """Return Trellis child directory names from a Beads issue snapshot."""
+    metadata = issue_metadata(issue)
+    task_snapshot = metadata.get("trellis_task")
+    if not isinstance(task_snapshot, dict):
+        return []
+    children = task_snapshot.get("children")
+    if not isinstance(children, list):
+        return []
+    names: list[str] = []
+    for child in children:
+        if not isinstance(child, str):
+            continue
+        name = child.strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def _append_beads_child_metadata(parent_dir: Path, child_dir: Path, repo_root: Path) -> None:
+    """Ensure parent metadata lists the child Trellis folder name."""
+    parent_beads_id = read_bead_marker(parent_dir)
+    if not parent_beads_id:
+        return
+
+    parent_issue = _load_beads_issue(parent_beads_id, repo_root)
+    children = _beads_task_children(parent_issue)
+    if child_dir.name not in children:
+        children.append(child_dir.name)
+    _update_beads_trellis_task(parent_dir, {"children": children}, repo_root)
+
+
+def _remove_beads_child_metadata(parent_dir: Path, child_dir: Path, repo_root: Path) -> None:
+    """Ensure parent metadata no longer lists the child Trellis folder name."""
+    parent_beads_id = read_bead_marker(parent_dir)
+    if not parent_beads_id:
+        return
+
+    parent_issue = _load_beads_issue(parent_beads_id, repo_root)
+    children = [child for child in _beads_task_children(parent_issue) if child != child_dir.name]
+    _update_beads_trellis_task(parent_dir, {"children": children}, repo_root)
+
+
 # =============================================================================
 # Sub-agent platform detection + JSONL seeding
 # =============================================================================
@@ -486,6 +529,7 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     use_beads = not bool(getattr(args, "legacy_local_state", False))
     beads_id = getattr(args, "beads_id", None)
+    created_beads_issue = False
 
     parent_dir = resolve_task_dir(args.parent, repo_root) if args.parent else None
 
@@ -506,6 +550,7 @@ def cmd_create(args: argparse.Namespace) -> int:
                 repo_root=repo_root,
                 parent_dir=parent_dir,
             )
+            created_beads_issue = True
             print(colored(f"Created Beads issue: {beads_id}", Colors.GREEN), file=sys.stderr)
         except BeadsCliError as exc:
             print(colored(f"Error: {exc}", Colors.RED), file=sys.stderr)
@@ -564,9 +609,19 @@ def cmd_create(args: argparse.Namespace) -> int:
     if beads_id:
         try:
             link_task_to_bead(task_dir, beads_id, repo_root)
+            if use_beads and parent_dir:
+                parent_beads_id = read_bead_marker(parent_dir)
+                if parent_beads_id:
+                    if not created_beads_issue:
+                        run_bd_json(["update", beads_id, "--parent", parent_beads_id], repo_root)
+                        _update_beads_trellis_task(task_dir, {"parent": parent_dir.name}, repo_root)
+                    _append_beads_child_metadata(parent_dir, task_dir, repo_root)
             print(colored(f"Linked Beads issue: {beads_id}", Colors.GREEN), file=sys.stderr)
         except BeadsLinkError as exc:
             print(colored(f"Error: {exc}", Colors.RED), file=sys.stderr)
+            return 1
+        except BeadsCliError as exc:
+            print(colored(f"Error: failed to link Beads parent: {exc}", Colors.RED), file=sys.stderr)
             return 1
 
     print(colored(f"Created task: {dir_name}", Colors.GREEN), file=sys.stderr)
@@ -746,16 +801,7 @@ def cmd_add_subtask(args: argparse.Namespace) -> int:
         try:
             run_bd_json(["update", child_beads_id, "--parent", parent_beads_id], repo_root)
             _update_beads_trellis_task(child_dir, {"parent": parent_dir.name}, repo_root)
-
-            parent_issue = _load_beads_issue(parent_beads_id, repo_root)
-            parent_meta = issue_metadata(parent_issue)
-            parent_task = parent_meta.get("trellis_task")
-            existing_children = []
-            if isinstance(parent_task, dict) and isinstance(parent_task.get("children"), list):
-                existing_children = [str(child) for child in parent_task["children"]]
-            if child_dir.name not in existing_children:
-                existing_children.append(child_dir.name)
-            _update_beads_trellis_task(parent_dir, {"children": existing_children}, repo_root)
+            _append_beads_child_metadata(parent_dir, child_dir, repo_root)
         except (BeadsCliError, BeadsLinkError) as exc:
             print(colored(f"Error: failed to link Beads tasks: {exc}", Colors.RED), file=sys.stderr)
             return 1
@@ -822,15 +868,7 @@ def cmd_remove_subtask(args: argparse.Namespace) -> int:
         try:
             run_bd_json(["update", child_beads_id, "--parent", ""], repo_root)
             _update_beads_trellis_task(child_dir, {"parent": None}, repo_root)
-
-            parent_issue = _load_beads_issue(parent_beads_id, repo_root)
-            parent_meta = issue_metadata(parent_issue)
-            parent_task = parent_meta.get("trellis_task")
-            existing_children = []
-            if isinstance(parent_task, dict) and isinstance(parent_task.get("children"), list):
-                existing_children = [str(child) for child in parent_task["children"]]
-            existing_children = [child for child in existing_children if child != child_dir.name]
-            _update_beads_trellis_task(parent_dir, {"children": existing_children}, repo_root)
+            _remove_beads_child_metadata(parent_dir, child_dir, repo_root)
         except (BeadsCliError, BeadsLinkError) as exc:
             print(colored(f"Error: failed to unlink Beads tasks: {exc}", Colors.RED), file=sys.stderr)
             return 1

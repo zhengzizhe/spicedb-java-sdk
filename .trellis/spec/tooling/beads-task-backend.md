@@ -23,6 +23,7 @@
 - New task creation is Beads-first by default. It creates a Beads issue, then materializes a Trellis folder with `.bead`, `prd.md`, and context JSONL files.
 - `.bead` contains exactly one Beads issue id plus a trailing newline.
 - Beads issue `metadata.trellis_task` stores the Trellis execution snapshot: package, branch, base branch, scope, dev type, related files, worktree path, commit, PR URL, parent/children, notes, and compatibility fields.
+- Creating a Beads-backed child with `--parent` must update both the native Beads parent-child relation and the parent issue's `metadata.trellis_task.children` snapshot so Trellis list output can render the hierarchy.
 - `common.tasks.load_task(task_dir)` is the only supported runtime loader for task data. It loads Beads via `.bead` first, then falls back to legacy local state when no Beads marker exists.
 - Lifecycle hooks receive `TASK_DIR` and `BEADS_ISSUE_ID`. Legacy-only folders may also receive `LEGACY_TASK_STATE_PATH`.
 - Codex hooks must import `common.tasks.load_task` / `iter_active_tasks`; they must not parse task state files directly.
@@ -45,6 +46,7 @@
 
 - Default create calls `bd create`, sends `metadata.trellis_task`, writes `.bead`, and does not write legacy local state.
 - `.bead`-only folders are listed and expose package/base branch/related files through `TaskInfo.raw`.
+- Beads-backed `create --parent` writes the child `parent` snapshot and the parent `children` snapshot.
 - Codex statusline, prompt injection, and session-start hooks render a `.bead`-only current task.
 - Beads-backed start claims via `bd update --claim --status in_progress` and updates `metadata.trellis_task.status`.
 - Beads-backed archive updates metadata and closes via `bd close`.

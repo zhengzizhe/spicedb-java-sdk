@@ -221,6 +221,61 @@ class BeadsBackendTest(unittest.TestCase):
             self.assertIn("in_progress", entries[0]["argv"])
             self.assertFalse((task_dir / LEGACY_TASK_FILE).exists())
 
+    def test_create_beads_child_updates_parent_metadata_children(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = self._make_trellis_repo(tmp)
+            fake_bd, log_path = self._make_fake_bd(repo_root)
+
+            parent = subprocess.run(
+                [
+                    sys.executable,
+                    str(TASK_PY),
+                    "create",
+                    "Hierarchy Parent",
+                    "--slug",
+                    "hierarchy-parent",
+                ],
+                cwd=repo_root,
+                env=self._env(fake_bd, log_path),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertEqual(parent.returncode, 0, parent.stderr)
+
+            child = subprocess.run(
+                [
+                    sys.executable,
+                    str(TASK_PY),
+                    "create",
+                    "Hierarchy Child",
+                    "--slug",
+                    "hierarchy-child",
+                    "--parent",
+                    ".trellis/tasks/04-28-hierarchy-parent",
+                ],
+                cwd=repo_root,
+                env=self._env(fake_bd, log_path),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertEqual(child.returncode, 0, child.stderr)
+
+            entries = self._read_log(log_path)
+            create_child = entries[1]
+            self.assertEqual(create_child["command"], "create")
+            self.assertIn("--parent", create_child["argv"])
+            self.assertIn("bd-hierarchy-parent", create_child["argv"])
+
+            update_entries = [entry for entry in entries if entry["command"] == "update"]
+            self.assertEqual(len(update_entries), 1)
+            parent_metadata = update_entries[0]["metadata"]
+            self.assertEqual(
+                parent_metadata["trellis_task"]["children"],
+                ["04-28-hierarchy-child"],
+            )
+
     def test_task_archive_closes_beads_only_task(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = self._make_trellis_repo(tmp)
@@ -377,12 +432,14 @@ entry = {"argv": argv, "command": command}
 
 if command == "create":
     metadata = json.loads(flag_value("--metadata") or "{}")
+    slug = metadata.get("trellis_task_id", "created-1")
+    issue_id = "bd-created-1" if slug == "beads-first" else f"bd-{slug}"
     folder = Path.cwd() / metadata.get("trellis_task_dir", "")
     entry["metadata"] = metadata
     entry["folder_exists_at_create"] = folder.exists()
     log_path.open("a", encoding="utf-8").write(json.dumps(entry) + "\\n")
     print(json.dumps({
-        "id": "bd-created-1",
+        "id": issue_id,
         "title": argv[argv.index("create") + 1],
         "description": flag_value("--description"),
         "status": "open",
@@ -398,6 +455,8 @@ elif command == "ready":
 elif command == "update":
     issue_id = argv[argv.index("update") + 1]
     entry["issue_id"] = issue_id
+    if flag_value("--metadata"):
+        entry["metadata"] = json.loads(flag_value("--metadata"))
     log_path.open("a", encoding="utf-8").write(json.dumps(entry) + "\\n")
     title = "Materialized Bead" if issue_id == "bd-claim-new" else "Claim Existing"
     print(json.dumps([issue(issue_id, title)]))
