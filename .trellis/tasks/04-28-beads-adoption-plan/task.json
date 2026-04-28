@@ -1,0 +1,42 @@
+{
+  "id": "beads-adoption-plan",
+  "name": "beads-adoption-plan",
+  "title": "Analyze how to use Beads in this project",
+  "description": "Analyze how this project should use Beads as the AI-agent task backend while keeping Trellis as the PRD/research/context workspace.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cses-38",
+  "assignee": "cses-38",
+  "createdAt": "2026-04-28",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "04-28-beads-graph-dry-run-exporter"
+  ],
+  "parent": null,
+  "relatedFiles": [
+    ".trellis/tasks/04-28-beads-adoption-plan/prd.md",
+    ".trellis/tasks/04-28-beads-adoption-plan/research/beads-adoption-plan.md",
+    ".trellis/tasks/04-28-beads-task-json-handoff-research/research/beads-first-task-creation.md",
+    ".trellis/tasks/04-28-beads-task-json-handoff-research/research/beads-task-json-handoff.md"
+  ],
+  "notes": "Decision direction: use Beads for AI-agent task graph/ready queue/claiming, keep Trellis task directories for PRD, research, and agent context files. Isolated trial succeeded with /tmp/beads/bd and BEADS_DIR under /tmp. Do not initialize .beads in this repo yet.",
+  "meta": {
+    "external_repo": "https://github.com/gastownhall/beads",
+    "external_clone": "/tmp/beads",
+    "recommended_first_step": "install bd and run an isolated stealth pilot with BEADS_DIR under /tmp",
+    "bd_installed_locally": false,
+    "bd_trial_binary": "/tmp/beads/bd",
+    "repo_has_beads_dir": false,
+    "trial_beads_dir": "/tmp/authcses-sdk-beads-trial2/.beads",
+    "trial_result": "ready/claim/dependency/metadata behavior validated"
+  }
+}

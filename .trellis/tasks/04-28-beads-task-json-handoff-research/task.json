@@ -1,0 +1,37 @@
+{
+  "id": "beads-task-json-handoff-research",
+  "name": "beads-task-json-handoff-research",
+  "title": "Research Beads handoff for Trellis task.json",
+  "description": "Research whether Trellis task.json files can be handed off to Beads as a task graph or issue backend, and recommend an integration approach.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cses-38",
+  "assignee": "cses-38",
+  "createdAt": "2026-04-28",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    ".trellis/tasks/04-28-beads-task-json-handoff-research/prd.md",
+    ".trellis/tasks/04-28-beads-task-json-handoff-research/research/beads-task-json-handoff.md",
+    ".trellis/tasks/04-28-beads-task-json-handoff-research/research/beads-first-task-creation.md",
+    ".trellis/scripts/task.py",
+    ".trellis/scripts/common/task_store.py",
+    ".trellis/scripts/common/tasks.py"
+  ],
+  "notes": "Research conclusion: raw Trellis task.json cannot be consumed directly by Beads; a conversion/export layer is needed. If Beads becomes the backend, generate the Beads issue first and materialize the Trellis task directory as a working copy.",
+  "meta": {
+    "external_repo": "https://github.com/gastownhall/beads",
+    "external_clone": "/tmp/beads",
+    "recommended_option": "opt-in beads-first backend with trellis workspace materialization"
+  }
+}

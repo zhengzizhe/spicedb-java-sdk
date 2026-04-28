@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/04-28-beads-graph-dry-run-exporter/prd.md", "reason": "Check implementation against exporter requirements"}
+{"file": ".trellis/tasks/04-28-beads-adoption-plan/research/beads-adoption-plan.md", "reason": "Verify dry-run exporter follows adoption plan"}
+{"file": ".trellis/tasks/04-28-beads-task-json-handoff-research/research/beads-first-task-creation.md", "reason": "Check Beads graph format and metadata mapping"}
+{"file": ".trellis/spec/tooling/index.md", "reason": "Check against tooling conventions"}

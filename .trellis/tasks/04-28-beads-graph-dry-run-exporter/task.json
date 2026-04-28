@@ -1,0 +1,40 @@
+{
+  "id": "beads-graph-dry-run-exporter",
+  "name": "beads-graph-dry-run-exporter",
+  "title": "Implement Beads graph dry-run exporter",
+  "description": "Implement a dry-run exporter that converts active Trellis tasks into a Beads bd create --graph JSON plan without calling bd or initializing .beads.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cses-38",
+  "assignee": "cses-38",
+  "createdAt": "2026-04-28",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "04-28-beads-adoption-plan",
+  "relatedFiles": [
+    ".trellis/tasks/04-28-beads-graph-dry-run-exporter/prd.md",
+    ".trellis/tasks/04-28-beads-adoption-plan/research/beads-adoption-plan.md",
+    ".trellis/tasks/04-28-beads-task-json-handoff-research/research/beads-first-task-creation.md",
+    ".trellis/spec/tooling/index.md",
+    ".trellis/scripts/beads_graph_export.py",
+    ".trellis/scripts/test_beads_graph_export.py",
+    ".trellis/scripts/common/tasks.py",
+    ".trellis/scripts/common/io.py",
+    ".trellis/scripts/task.py"
+  ],
+  "notes": "Implemented dry-run exporter at .trellis/scripts/beads_graph_export.py with focused tests. It generates reviewable Beads graph JSON only, prints manual bd create --graph command when writing a file, does not call bd, and did not create .beads.",
+  "meta": {
+    "parent_decision_task": "04-28-beads-adoption-plan",
+    "external_repo": "https://github.com/gastownhall/beads",
+    "target_beads_command": "bd create --graph <plan-file>"
+  }
+}
