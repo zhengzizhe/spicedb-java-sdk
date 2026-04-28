@@ -62,6 +62,31 @@ def read_bead_marker(task_dir: Path) -> str | None:
     return value or None
 
 
+def find_task_by_bead_id(tasks_dir: Path, beads_issue_id: str) -> Path | None:
+    """Find an active task folder linked to a Beads issue ID."""
+    issue_id = normalize_beads_issue_id(beads_issue_id)
+    if not tasks_dir.is_dir():
+        return None
+
+    for task_dir in sorted(tasks_dir.iterdir()):
+        if not task_dir.is_dir() or task_dir.name == "archive":
+            continue
+
+        if read_bead_marker(task_dir) == issue_id:
+            return task_dir
+
+        task_json_path = task_dir / FILE_TASK_JSON
+        if not task_json_path.is_file():
+            continue
+
+        task_data = read_json(task_json_path)
+        meta = task_data.get("meta") if isinstance(task_data, dict) else None
+        if isinstance(meta, dict) and meta.get("beads_issue_id") == issue_id:
+            return task_dir
+
+    return None
+
+
 def link_task_to_bead(task_dir: Path, beads_issue_id: str, repo_root: Path) -> dict:
     """Link a Trellis task folder to a Beads issue ID.
 

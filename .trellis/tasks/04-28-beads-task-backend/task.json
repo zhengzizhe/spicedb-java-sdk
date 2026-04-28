@@ -1,0 +1,39 @@
+{
+  "id": "beads-task-backend",
+  "name": "beads-task-backend",
+  "title": "Use Beads as Trellis task backend",
+  "description": "Make Beads the primary CLI task backend for new Trellis work: create Beads issues first, materialize Trellis folders, expose ready/claim commands.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cses-38",
+  "assignee": "cses-38",
+  "createdAt": "2026-04-28",
+  "completedAt": "2026-04-28",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "04-28-beads-adoption-plan",
+  "relatedFiles": [
+    ".trellis/tasks/04-28-beads-task-backend/prd.md",
+    ".trellis/tasks/04-28-beads-adoption-plan/research/beads-adoption-plan.md",
+    ".trellis/tasks/04-28-beads-task-json-handoff-research/research/beads-first-task-creation.md",
+    ".trellis/scripts/common/beads_cli.py",
+    ".trellis/scripts/common/beads_link.py",
+    ".trellis/scripts/common/task_store.py",
+    ".trellis/scripts/task.py",
+    ".trellis/scripts/test_beads_backend.py",
+    ".trellis/scripts/beads_graph_export.py"
+  ],
+  "notes": "Full-use phase scope: Beads becomes the primary CLI backend for new task creation, ready queue, and claim. Existing hooks/statusline keep task.json compatibility for now.",
+  "meta": {
+    "parent_decision_task": "04-28-beads-adoption-plan",
+    "upgrade_phase": "beads-cli-task-backend"
+  }
+}

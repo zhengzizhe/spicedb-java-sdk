@@ -21,6 +21,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Mapping
 
 from .config import (
     get_packages,
@@ -28,8 +29,21 @@ from .config import (
     resolve_package,
     validate_package,
 )
+from .beads_cli import (
+    BeadsCliError,
+    issue_from_payload,
+    issue_id_from_payload,
+    issue_metadata,
+    run_bd_json,
+)
 from .git import run_git
-from .beads_link import BeadsLinkError, link_task_to_bead
+from .beads_link import (
+    BeadsLinkError,
+    find_task_by_bead_id,
+    link_task_to_bead,
+    read_bead_marker,
+    task_external_ref,
+)
 from .io import read_json, write_json
 from .log import Colors, colored
 from .paths import (
@@ -43,6 +57,7 @@ from .paths import (
     get_developer,
     get_repo_root,
     get_tasks_dir,
+    set_current_task,
 )
 from .task_utils import (
     archive_task_complete,
@@ -78,6 +93,251 @@ def ensure_tasks_dir(repo_root: Path) -> Path:
         archive_dir.mkdir(parents=True)
 
     return tasks_dir
+
+
+def _repo_relative_path(path: Path, repo_root: Path) -> str:
+    """Return a repo-relative POSIX path when possible."""
+    try:
+        return path.relative_to(repo_root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _current_branch(repo_root: Path) -> str:
+    """Return the current git branch, falling back to main."""
+    _, branch_out, _ = run_git(["branch", "--show-current"], cwd=repo_root)
+    return branch_out.strip() or "main"
+
+
+def _build_task_data(
+    *,
+    slug: str,
+    title: str,
+    description: str,
+    status: str,
+    package: str | None,
+    priority: str,
+    creator: str,
+    assignee: str,
+    today: str,
+    base_branch: str,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the compatibility ``task.json`` payload."""
+    return {
+        "id": slug,
+        "name": slug,
+        "title": title,
+        "description": description,
+        "status": status,
+        "dev_type": None,
+        "scope": None,
+        "package": package,
+        "priority": priority,
+        "creator": creator,
+        "assignee": assignee,
+        "createdAt": today,
+        "completedAt": None,
+        "branch": None,
+        "base_branch": base_branch,
+        "worktree_path": None,
+        "commit": None,
+        "pr_url": None,
+        "subtasks": [],
+        "children": [],
+        "parent": None,
+        "relatedFiles": [],
+        "notes": "",
+        "meta": meta or {},
+    }
+
+
+def _seed_context_files(task_dir: Path, repo_root: Path) -> bool:
+    """Seed implement/check JSONL files when this platform consumes them."""
+    if not _has_subagent_platform(repo_root):
+        return False
+
+    seeded = False
+    for jsonl_name in ("implement.jsonl", "check.jsonl"):
+        jsonl_path = task_dir / jsonl_name
+        if not jsonl_path.exists():
+            _write_seed_jsonl(jsonl_path)
+            seeded = True
+    return seeded
+
+
+def _beads_create_metadata(
+    *,
+    task_dir: Path,
+    repo_root: Path,
+    slug: str,
+    package: str | None,
+) -> dict[str, str]:
+    """Build metadata stored on a Beads issue for Trellis re-materialization."""
+    metadata = {
+        "source": "trellis",
+        "trellis_task_dir": _repo_relative_path(task_dir, repo_root),
+        "trellis_task_id": slug,
+    }
+    if package:
+        metadata["package"] = package
+    return metadata
+
+
+def _create_beads_issue_for_task(
+    *,
+    title: str,
+    description: str,
+    priority: str,
+    assignee: str,
+    task_dir: Path,
+    slug: str,
+    package: str | None,
+    repo_root: Path,
+    parent_dir: Path | None = None,
+) -> str:
+    """Create the Beads issue that will be the source of truth for a task."""
+    metadata = _beads_create_metadata(
+        task_dir=task_dir,
+        repo_root=repo_root,
+        slug=slug,
+        package=package,
+    )
+
+    bd_args = [
+        "create",
+        title,
+        "--type",
+        "task",
+        "--priority",
+        priority,
+        "--assignee",
+        assignee,
+        "--external-ref",
+        task_external_ref(task_dir, repo_root),
+        "--metadata",
+        json.dumps(metadata, ensure_ascii=False, separators=(",", ":")),
+    ]
+    if description:
+        bd_args.extend(["--description", description])
+
+    if parent_dir:
+        parent_beads_id = read_bead_marker(parent_dir)
+        if parent_beads_id:
+            bd_args.extend(["--parent", parent_beads_id])
+
+    result = run_bd_json(bd_args, repo_root)
+    return issue_id_from_payload(result.payload)
+
+
+def _priority_from_beads(priority: Any) -> str:
+    """Convert Beads numeric priority into Trellis priority strings."""
+    if isinstance(priority, int):
+        return f"P{priority}"
+    normalized = str(priority or "P2").strip().upper()
+    if normalized.startswith("P"):
+        return normalized
+    if normalized.isdigit():
+        return f"P{normalized}"
+    return "P2"
+
+
+def _status_from_beads(status: Any) -> str:
+    """Map Beads statuses into Trellis compatibility statuses."""
+    normalized = str(status or "planning").strip()
+    if normalized == "open":
+        return "planning"
+    return normalized or "planning"
+
+
+def _metadata_task_dir(value: Any, repo_root: Path) -> Path | None:
+    """Resolve trusted Trellis task directory metadata under .trellis/tasks."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+
+    normalized = value.strip()
+    if normalized.startswith("trellis:"):
+        normalized = normalized.removeprefix("trellis:")
+    normalized = normalized.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+
+    path_value = Path(normalized)
+    if path_value.is_absolute():
+        return None
+
+    tasks_dir = get_tasks_dir(repo_root).resolve()
+    if normalized.startswith(f"{DIR_WORKFLOW}/{DIR_TASKS}/"):
+        candidate = (repo_root / path_value).resolve()
+    elif "/" not in normalized:
+        candidate = (tasks_dir / normalized).resolve()
+    else:
+        return None
+
+    if candidate == tasks_dir or tasks_dir not in candidate.parents:
+        return None
+    return candidate
+
+
+def _task_dir_from_beads_issue(issue: Mapping[str, Any], repo_root: Path) -> Path:
+    """Resolve or derive the Trellis folder for a Beads issue."""
+    metadata = issue_metadata(issue)
+    metadata_dir = _metadata_task_dir(metadata.get("trellis_task_dir"), repo_root)
+    if metadata_dir:
+        return metadata_dir
+
+    external_ref = issue.get("external_ref")
+    external_dir = _metadata_task_dir(external_ref, repo_root)
+    if external_dir:
+        return external_dir
+
+    issue_title = str(issue.get("title") or issue.get("id") or "beads-task")
+    slug = _slugify(issue_title) or str(issue.get("id") or "beads-task")
+    return get_tasks_dir(repo_root) / f"{generate_task_date_prefix()}-{slug}"
+
+
+def _materialize_beads_issue(issue: Mapping[str, Any], repo_root: Path) -> Path:
+    """Create or update a Trellis folder for a Beads issue."""
+    issue_id = str(issue.get("id") or "").strip()
+    if not issue_id:
+        raise BeadsLinkError("bd output did not include an issue id")
+
+    existing = find_task_by_bead_id(get_tasks_dir(repo_root), issue_id)
+    if existing:
+        return existing
+
+    task_dir = _task_dir_from_beads_issue(issue, repo_root)
+    task_dir.mkdir(parents=True, exist_ok=True)
+
+    task_json_path = task_dir / FILE_TASK_JSON
+    if not task_json_path.exists():
+        metadata = issue_metadata(issue)
+        slug = str(metadata.get("trellis_task_id") or _slugify(str(issue.get("title") or "")) or issue_id)
+        assignee = str(issue.get("assignee") or get_developer(repo_root) or "")
+        creator = str(issue.get("created_by") or get_developer(repo_root) or assignee)
+        package = metadata.get("package")
+        if not isinstance(package, str):
+            package = None
+        created_at = str(issue.get("created_at") or datetime.now().strftime("%Y-%m-%d"))[:10]
+
+        task_data = _build_task_data(
+            slug=slug,
+            title=str(issue.get("title") or issue_id),
+            description=str(issue.get("description") or ""),
+            status=_status_from_beads(issue.get("status")),
+            package=package,
+            priority=_priority_from_beads(issue.get("priority")),
+            creator=creator,
+            assignee=assignee,
+            today=created_at,
+            base_branch=_current_branch(repo_root),
+        )
+        if not write_json(task_json_path, task_data):
+            raise BeadsLinkError(f"Failed to write task.json: {task_json_path}")
+        _seed_context_files(task_dir, repo_root)
+
+    link_task_to_bead(task_dir, issue_id, repo_root)
+    return task_dir
 
 
 # =============================================================================
@@ -189,43 +449,54 @@ def cmd_create(args: argparse.Namespace) -> int:
     task_dir = tasks_dir / dir_name
     task_json_path = task_dir / FILE_TASK_JSON
 
+    use_beads = bool(getattr(args, "beads", False))
+    beads_id = getattr(args, "beads_id", None)
+    if use_beads and beads_id:
+        print(colored("Error: use either --beads or --beads-id, not both", Colors.RED), file=sys.stderr)
+        return 1
+
+    parent_dir = resolve_task_dir(args.parent, repo_root) if args.parent else None
+
+    if use_beads and task_dir.exists():
+        print(colored(f"Error: Task directory already exists: {dir_name}", Colors.RED), file=sys.stderr)
+        return 1
+
+    if use_beads:
+        try:
+            beads_id = _create_beads_issue_for_task(
+                title=args.title,
+                description=args.description or "",
+                priority=args.priority,
+                assignee=assignee,
+                task_dir=task_dir,
+                slug=slug,
+                package=package,
+                repo_root=repo_root,
+                parent_dir=parent_dir,
+            )
+            print(colored(f"Created Beads issue: {beads_id}", Colors.GREEN), file=sys.stderr)
+        except BeadsCliError as exc:
+            print(colored(f"Error: {exc}", Colors.RED), file=sys.stderr)
+            return 1
+
     if task_dir.exists():
         print(colored(f"Warning: Task directory already exists: {dir_name}", Colors.YELLOW), file=sys.stderr)
     else:
         task_dir.mkdir(parents=True)
 
     today = datetime.now().strftime("%Y-%m-%d")
-
-    # Record current branch as base_branch (PR target)
-    _, branch_out, _ = run_git(["branch", "--show-current"], cwd=repo_root)
-    current_branch = branch_out.strip() or "main"
-
-    task_data = {
-        "id": slug,
-        "name": slug,
-        "title": args.title,
-        "description": args.description or "",
-        "status": "planning",
-        "dev_type": None,
-        "scope": None,
-        "package": package,
-        "priority": args.priority,
-        "creator": creator,
-        "assignee": assignee,
-        "createdAt": today,
-        "completedAt": None,
-        "branch": None,
-        "base_branch": current_branch,
-        "worktree_path": None,
-        "commit": None,
-        "pr_url": None,
-        "subtasks": [],
-        "children": [],
-        "parent": None,
-        "relatedFiles": [],
-        "notes": "",
-        "meta": {},
-    }
+    task_data = _build_task_data(
+        slug=slug,
+        title=args.title,
+        description=args.description or "",
+        status="planning",
+        package=package,
+        priority=args.priority,
+        creator=creator,
+        assignee=assignee,
+        today=today,
+        base_branch=_current_branch(repo_root),
+    )
 
     write_json(task_json_path, task_data)
 
@@ -233,17 +504,10 @@ def cmd_create(args: argparse.Namespace) -> int:
     # Agent curates real entries in Phase 1.3 (see .trellis/workflow.md).
     # Agent-less platforms (Kilo / Antigravity / Windsurf) skip this — they
     # load specs via the trellis-before-dev skill instead of JSONL.
-    seeded_jsonl = False
-    if _has_subagent_platform(repo_root):
-        for jsonl_name in ("implement.jsonl", "check.jsonl"):
-            jsonl_path = task_dir / jsonl_name
-            if not jsonl_path.exists():
-                _write_seed_jsonl(jsonl_path)
-        seeded_jsonl = True
+    seeded_jsonl = _seed_context_files(task_dir, repo_root)
 
     # Handle --parent: establish bidirectional link
-    if args.parent:
-        parent_dir = resolve_task_dir(args.parent, repo_root)
+    if args.parent and parent_dir:
         parent_json_path = parent_dir / FILE_TASK_JSON
         if not parent_json_path.is_file():
             print(colored(f"Warning: Parent task.json not found: {args.parent}", Colors.YELLOW), file=sys.stderr)
@@ -263,7 +527,6 @@ def cmd_create(args: argparse.Namespace) -> int:
 
                 print(colored(f"Linked as child of: {parent_dir.name}", Colors.GREEN), file=sys.stderr)
 
-    beads_id = getattr(args, "beads_id", None)
     if beads_id:
         try:
             link_task_to_bead(task_dir, beads_id, repo_root)
@@ -529,6 +792,59 @@ def cmd_link_bead(args: argparse.Namespace) -> int:
     print(colored(f"✓ Linked Beads issue: {args.beads_id}", Colors.GREEN))
     print(f"  Task: {target_dir}")
     print(f"  Marker: {target_dir / '.bead'}")
+    return 0
+
+
+# =============================================================================
+# Commands: Beads backend
+# =============================================================================
+
+def cmd_beads_ready(args: argparse.Namespace) -> int:
+    """List ready Beads issues as JSON without mutating Trellis folders."""
+    _ = args
+    repo_root = get_repo_root()
+
+    try:
+        result = run_bd_json(["ready"], repo_root)
+    except BeadsCliError as exc:
+        print(colored(f"Error: {exc}", Colors.RED), file=sys.stderr)
+        return 1
+
+    print(json.dumps(result.payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_beads_claim(args: argparse.Namespace) -> int:
+    """Claim a Beads issue, materialize/link its Trellis folder, and start it."""
+    repo_root = get_repo_root()
+    beads_id = str(args.beads_id or "").strip()
+    if not beads_id:
+        print(colored("Error: Beads issue ID is required", Colors.RED), file=sys.stderr)
+        return 1
+
+    try:
+        result = run_bd_json(["update", beads_id, "--claim"], repo_root)
+        issue = issue_from_payload(result.payload)
+        task_dir = _materialize_beads_issue(issue, repo_root)
+    except (BeadsCliError, BeadsLinkError) as exc:
+        print(colored(f"Error: {exc}", Colors.RED), file=sys.stderr)
+        return 1
+
+    task_ref = _repo_relative_path(task_dir, repo_root)
+    if not set_current_task(task_ref, repo_root):
+        print(colored(f"Error: Failed to set current task: {task_ref}", Colors.RED), file=sys.stderr)
+        return 1
+
+    task_json_path = task_dir / FILE_TASK_JSON
+    if task_json_path.is_file():
+        task_data = read_json(task_json_path)
+        if task_data and task_data.get("status") == "planning":
+            task_data["status"] = "in_progress"
+            write_json(task_json_path, task_data)
+
+    print(colored(f"✓ Claimed Beads issue: {beads_id}", Colors.GREEN), file=sys.stderr)
+    print(colored(f"✓ Current task set to: {task_ref}", Colors.GREEN), file=sys.stderr)
+    print(task_ref)
     return 0
 
 

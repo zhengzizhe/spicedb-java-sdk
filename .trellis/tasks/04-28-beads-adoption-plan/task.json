@@ -20,7 +20,8 @@
   "subtasks": [],
   "children": [
     "04-28-beads-graph-dry-run-exporter",
-    "04-28-beads-backed-task-folders"
+    "04-28-beads-backed-task-folders",
+    "04-28-beads-task-backend"
   ],
   "parent": null,
   "relatedFiles": [
