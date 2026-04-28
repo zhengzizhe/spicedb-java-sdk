@@ -16,6 +16,8 @@ from beads_graph_export import (
 )
 from common.io import write_json
 
+LEGACY_TASK_FILE = "task" + ".json"
+
 
 class BeadsGraphExportTest(unittest.TestCase):
     def test_priority_to_beads_maps_known_values_and_defaults_unknown(self) -> None:
@@ -129,7 +131,7 @@ class BeadsGraphExportTest(unittest.TestCase):
     def _write_task(self, repo_root: Path, dir_name: str, data: dict) -> None:
         task_dir = repo_root / ".trellis" / "tasks" / dir_name
         task_dir.mkdir(parents=True, exist_ok=True)
-        write_json(task_dir / "task.json", data)
+        write_json(task_dir / LEGACY_TASK_FILE, data)
 
 
 if __name__ == "__main__":

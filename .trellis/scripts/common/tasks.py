@@ -2,7 +2,7 @@
 Task data access layer.
 
 Single source of truth for loading and iterating task directories.
-Replaces scattered task.json parsing across 9+ files.
+Loads Beads-backed folders first and keeps legacy local task files as fallback.
 
 Provides:
     load_task          — Load a single task by directory path
@@ -30,7 +30,7 @@ from .types import TaskInfo
 
 
 def load_task(task_dir: Path) -> TaskInfo | None:
-    """Load task from a directory containing task.json or a .bead marker.
+    """Load task from a directory containing a .bead marker or legacy task file.
 
     Args:
         task_dir: Absolute path to the task directory.
@@ -38,36 +38,50 @@ def load_task(task_dir: Path) -> TaskInfo | None:
     Returns:
         TaskInfo if task data exists and is valid, None otherwise.
     """
-    task_json = task_dir / FILE_TASK_JSON
-    if not task_json.is_file():
-        return _load_beads_task(task_dir)
+    legacy_task_file = task_dir / FILE_TASK_JSON
+    legacy_data = read_json(legacy_task_file) if legacy_task_file.is_file() else None
 
-    data = read_json(task_json)
-    if not data:
+    beads_task = _load_beads_task(task_dir, legacy_data if isinstance(legacy_data, dict) else None)
+    if beads_task is not None:
+        return beads_task
+
+    if not legacy_data:
         return None
 
     return TaskInfo(
         dir_name=task_dir.name,
         directory=task_dir,
-        title=data.get("title") or data.get("name") or "unknown",
-        status=data.get("status", "unknown"),
-        assignee=data.get("assignee", ""),
-        priority=data.get("priority", "P2"),
-        children=tuple(data.get("children", [])),
-        parent=data.get("parent"),
-        package=data.get("package"),
-        raw=data,
+        title=legacy_data.get("title") or legacy_data.get("name") or "unknown",
+        status=legacy_data.get("status", "unknown"),
+        assignee=legacy_data.get("assignee", ""),
+        priority=legacy_data.get("priority", "P2"),
+        children=tuple(legacy_data.get("children", [])),
+        parent=legacy_data.get("parent"),
+        package=legacy_data.get("package"),
+        raw=legacy_data,
     )
 
 
-def _load_beads_task(task_dir: Path) -> TaskInfo | None:
-    """Load a Beads-backed task folder that no longer has task.json."""
+def _load_beads_task(task_dir: Path, legacy_data: dict | None = None) -> TaskInfo | None:
+    """Load a Beads-backed task folder from `.bead` plus Beads metadata."""
     beads_id = read_bead_marker(task_dir)
     if not beads_id:
         return None
 
     repo_root = get_repo_root(task_dir)
-    raw = _fallback_beads_raw(task_dir, repo_root, beads_id)
+    raw = dict(legacy_data) if legacy_data else _fallback_beads_raw(task_dir, repo_root, beads_id)
+    meta = raw.get("meta")
+    if not isinstance(meta, dict):
+        meta = {}
+    meta.update(
+        {
+            "source_of_truth": "beads",
+            "beads_issue_id": beads_id,
+            "beads_external_ref": task_external_ref(task_dir, repo_root),
+            "task_storage": "beads" if legacy_data is None else "legacy_file_fallback",
+        }
+    )
+    raw["meta"] = meta
 
     try:
         result = run_bd_json(["show", beads_id], repo_root, timeout=15)
@@ -77,19 +91,37 @@ def _load_beads_task(task_dir: Path) -> TaskInfo | None:
 
     if issue:
         metadata = issue_metadata(issue)
-        package = metadata.get("package")
+        task_snapshot = metadata.get("trellis_task")
+        if isinstance(task_snapshot, dict):
+            raw.update(task_snapshot)
+
+        package = raw.get("package") or metadata.get("package")
         if not isinstance(package, str):
             package = None
+
+        meta = raw.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+        meta.update(
+            {
+                "source_of_truth": "beads",
+                "beads_issue_id": str(issue.get("id") or beads_id),
+                "beads_external_ref": task_external_ref(task_dir, repo_root),
+                "task_storage": "beads",
+            }
+        )
+
         raw.update(
             {
                 "id": str(metadata.get("trellis_task_id") or issue.get("id") or beads_id),
-                "name": task_dir.name,
+                "name": str(metadata.get("trellis_task_name") or raw.get("name") or task_dir.name),
                 "title": str(issue.get("title") or task_dir.name),
                 "description": str(issue.get("description") or ""),
                 "status": status_to_trellis(issue.get("status")),
                 "priority": priority_to_trellis(issue.get("priority")),
                 "assignee": str(issue.get("assignee") or ""),
                 "package": package,
+                "meta": meta,
             }
         )
 
@@ -124,7 +156,7 @@ def _fallback_beads_raw(task_dir: Path, repo_root: Path, beads_id: str) -> dict:
             "source_of_truth": "beads",
             "beads_issue_id": beads_id,
             "beads_external_ref": task_external_ref(task_dir, repo_root),
-            "task_json": "absent",
+            "task_storage": "beads",
         },
     }
 
@@ -132,7 +164,7 @@ def _fallback_beads_raw(task_dir: Path, repo_root: Path, beads_id: str) -> dict:
 def iter_active_tasks(tasks_dir: Path) -> Iterator[TaskInfo]:
     """Iterate all active (non-archived) tasks, sorted by directory name.
 
-    Skips the "archive" directory and directories without valid task.json.
+    Skips the "archive" directory and directories without Beads or legacy task data.
 
     Args:
         tasks_dir: Path to the tasks directory.

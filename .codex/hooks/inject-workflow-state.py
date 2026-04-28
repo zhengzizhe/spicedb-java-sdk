@@ -16,7 +16,7 @@ writeSharedHooks() at init time.
 Silent exit 0 cases (no output):
   - No .trellis/ directory found (not a Trellis project)
   - No .current-task file, or it's empty
-  - task.json malformed or missing status
+  - active task cannot be loaded from Beads-backed task data
 
 Unknown status (no tag + no hardcoded fallback) emits a generic
 breadcrumb rather than silent-exiting, so custom statuses surface in
@@ -80,7 +80,7 @@ def get_active_task(root: Path) -> Optional[Tuple[str, str]]:
     """Return (task_id, status) from the current active task, else None.
 
     Reads .trellis/.current-task (a path relative to root, e.g.
-    ".trellis/tasks/04-17-foo") then that task's task.json.
+    ".trellis/tasks/04-17-foo") then loads Beads or legacy task data.
     Normalizes backslashes so Windows paths work on Unix and vice versa.
     """
     ref_file = root / ".trellis" / ".current-task"
@@ -96,16 +96,21 @@ def get_active_task(root: Path) -> Optional[Tuple[str, str]]:
 
     path_obj = Path(task_ref)
     task_dir = path_obj if path_obj.is_absolute() else root / path_obj
-    task_json = task_dir / "task.json"
-    if not task_json.is_file():
-        return None
+
+    scripts_dir = root / ".trellis" / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
     try:
-        data = json.loads(task_json.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+        from common.tasks import load_task  # type: ignore[import-not-found]
+    except Exception:
         return None
 
-    task_id = data.get("id") or task_dir.name
-    status = data.get("status", "")
+    task = load_task(task_dir)
+    if task is None:
+        return None
+
+    task_id = task.raw.get("id") or task.name or task_dir.name
+    status = task.status
     if not isinstance(status, str) or not status:
         return None
     return task_id, status

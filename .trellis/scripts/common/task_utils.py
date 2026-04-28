@@ -17,7 +17,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from .paths import get_repo_root, get_tasks_dir
+from .paths import FILE_TASK_JSON, get_repo_root, get_tasks_dir
 
 
 # =============================================================================
@@ -215,17 +215,19 @@ def resolve_task_dir(target_dir: str, repo_root: Path) -> Path:
 # Lifecycle Hooks
 # =============================================================================
 
-def run_task_hooks(event: str, task_json_path: Path, repo_root: Path) -> None:
+def run_task_hooks(event: str, task_ref_path: Path, repo_root: Path) -> None:
     """Run lifecycle hooks for a task event.
 
     Args:
         event: Event name (e.g. "after_create").
-        task_json_path: Absolute path to the task's task.json.
+        task_ref_path: Absolute path inside the task directory; usually
+            `.bead` for Beads-backed folders or the legacy local state file.
         repo_root: Repository root for cwd and config lookup.
     """
     import os
     import subprocess
 
+    from .beads_link import read_bead_marker
     from .config import get_hooks
     from .log import Colors, colored
 
@@ -233,7 +235,15 @@ def run_task_hooks(event: str, task_json_path: Path, repo_root: Path) -> None:
     if not commands:
         return
 
-    env = {**os.environ, "TASK_JSON_PATH": str(task_json_path)}
+    task_dir = task_ref_path.parent
+    beads_issue_id = read_bead_marker(task_dir) or ""
+    env = {
+        **os.environ,
+        "TASK_DIR": str(task_dir),
+        "BEADS_ISSUE_ID": beads_issue_id,
+    }
+    if task_ref_path.is_file() and task_ref_path.name == FILE_TASK_JSON:
+        env["LEGACY_TASK_STATE_PATH"] = str(task_ref_path)
 
     for cmd in commands:
         try:

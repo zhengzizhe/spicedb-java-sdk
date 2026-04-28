@@ -39,7 +39,7 @@ python3 ./.trellis/scripts/get_context.py --mode packages   # list packages / la
 
 ### Task System
 
-Every task has its own directory under `.trellis/tasks/{MM-DD-name}/` holding `prd.md`, `implement.jsonl`, `check.jsonl`, `task.json`, optional `research/`, `info.md`.
+Every task has its own directory under `.trellis/tasks/{MM-DD-name}/` holding `prd.md`, `implement.jsonl`, `check.jsonl`, optional `research/`, and `info.md`. Beads-backed tasks store identity/status in Beads and bind the folder with `.bead`; older folders may still have a legacy local state file.
 
 ```bash
 # Task lifecycle
@@ -451,7 +451,7 @@ After the above, remind the user they can run `/finish-work` to wrap up (archive
      block to customize per-task-status flow reminders. Users who fork the
      Trellis workflow only need to edit this file, not the hook script.
 
-     Tag STATUS matches task.json.status. Default statuses: planning /
+     Tag STATUS matches the Beads/Trellis task status. Default statuses: planning /
      in_progress / completed. Add custom status blocks as needed (hyphens
      and underscores allowed). Hook falls back to built-in defaults when
      a status has no tag block. -->

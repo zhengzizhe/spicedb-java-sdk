@@ -29,6 +29,8 @@ import argparse
 import sys
 
 from common.log import Colors, colored
+from common.beads_cli import BeadsCliError, run_bd_json
+from common.beads_link import read_bead_marker
 from common.paths import (
     DIR_WORKFLOW,
     DIR_TASKS,
@@ -94,18 +96,26 @@ def cmd_start(args: argparse.Namespace) -> int:
     if set_current_task(task_dir, repo_root):
         print(colored(f"✓ Current task set to: {task_dir}", Colors.GREEN))
 
-        task_json_path = full_path / FILE_TASK_JSON
-        if task_json_path.is_file():
-            data = read_json(task_json_path)
+        legacy_task_file = full_path / FILE_TASK_JSON
+        beads_issue_id = read_bead_marker(full_path)
+        if beads_issue_id:
+            try:
+                run_bd_json(["update", beads_issue_id, "--claim"], repo_root)
+                print(colored(f"✓ Beads claimed: {beads_issue_id}", Colors.GREEN))
+            except BeadsCliError as exc:
+                print(colored(f"Warning: Beads claim failed: {exc}", Colors.YELLOW))
+        elif legacy_task_file.is_file():
+            data = read_json(legacy_task_file)
             if data and data.get("status") == "planning":
                 data["status"] = "in_progress"
-                if write_json(task_json_path, data):
+                if write_json(legacy_task_file, data):
                     print(colored("✓ Status: planning → in_progress", Colors.GREEN))
 
         print()
         print(colored("The hook will now inject context from this task's jsonl files.", Colors.BLUE))
 
-        run_task_hooks("after_start", task_json_path, repo_root)
+        hook_path = legacy_task_file if legacy_task_file.is_file() else full_path / ".bead"
+        run_task_hooks("after_start", hook_path, repo_root)
         return 0
     else:
         print(colored("Error: Failed to set current task", Colors.RED))
@@ -122,14 +132,16 @@ def cmd_finish(args: argparse.Namespace) -> int:
         print(colored("No current task set", Colors.YELLOW))
         return 0
 
-    # Resolve task.json path before clearing
-    task_json_path = repo_root / current / FILE_TASK_JSON
+    # Resolve task directory before clearing
+    task_dir = repo_root / current
+    legacy_task_file = task_dir / FILE_TASK_JSON
 
     clear_current_task(repo_root)
     print(colored(f"✓ Cleared current task (was: {current})", Colors.GREEN))
 
-    if task_json_path.is_file():
-        run_task_hooks("after_finish", task_json_path, repo_root)
+    hook_path = legacy_task_file if legacy_task_file.is_file() else task_dir / ".bead"
+    if hook_path.exists():
+        run_task_hooks("after_finish", hook_path, repo_root)
     return 0
 
 
@@ -257,8 +269,8 @@ def show_usage() -> None:
     print("""Task Management Script
 
 Usage:
-  python3 task.py create <title>                     Create new task directory
-  python3 task.py create <title> --package <pkg>     Create task for a specific package
+  python3 task.py create <title>                     Create new Beads-backed task folder
+  python3 task.py create <title> --package <pkg>     Create Beads task for a specific package
   python3 task.py create <title> --parent <dir>      Create task as child of parent
   python3 task.py add-context <dir> <jsonl> <path> [reason]  Add entry to jsonl
   python3 task.py validate <dir>                     Validate jsonl files
@@ -286,7 +298,6 @@ List options:
 
 Examples:
   python3 task.py create "Add login feature" --slug add-login
-  python3 task.py create "Add login feature" --beads
   python3 task.py create "Add login feature" --slug add-login --package cli
   python3 task.py create "Child task" --slug child --parent .trellis/tasks/01-21-parent
   python3 task.py add-context <dir> implement .trellis/spec/cli/backend/auth.md "Auth guidelines"
@@ -353,8 +364,13 @@ def main() -> int:
     p_create.add_argument("--description", "-d", help="Task description")
     p_create.add_argument("--parent", help="Parent task directory (establishes subtask link)")
     p_create.add_argument("--package", help="Package name for monorepo projects")
-    p_create.add_argument("--beads", action="store_true", help="Create a Beads issue first, then materialize a task folder")
+    p_create.add_argument("--beads", action="store_true", help=argparse.SUPPRESS)
     p_create.add_argument("--beads-id", help="Existing Beads issue ID to link to this task folder")
+    p_create.add_argument(
+        "--legacy-local-state",
+        action="store_true",
+        help="Create only the legacy local task state instead of a Beads issue",
+    )
 
     # add-context
     p_add = subparsers.add_parser("add-context", help="Add context entry")

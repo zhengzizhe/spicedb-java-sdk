@@ -123,7 +123,7 @@ def _build_task_data(
     base_branch: str,
     meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the compatibility ``task.json`` payload."""
+    """Build the Trellis task snapshot used in Beads metadata or legacy state."""
     return {
         "id": slug,
         "name": slug,
@@ -171,13 +171,43 @@ def _beads_create_metadata(
     task_dir: Path,
     repo_root: Path,
     slug: str,
+    title: str,
+    description: str,
+    priority: str,
+    creator: str,
+    assignee: str,
     package: str | None,
-) -> dict[str, str]:
+    base_branch: str,
+    parent_dir: Path | None = None,
+) -> dict[str, Any]:
     """Build metadata stored on a Beads issue for Trellis re-materialization."""
+    task_data = _build_task_data(
+        slug=slug,
+        title=title,
+        description=description,
+        status="planning",
+        package=package,
+        priority=priority,
+        creator=creator,
+        assignee=assignee,
+        today=datetime.now().strftime("%Y-%m-%d"),
+        base_branch=base_branch,
+        meta={
+            "source_of_truth": "beads",
+            "beads_external_ref": task_external_ref(task_dir, repo_root),
+            "task_storage": "beads_metadata",
+        },
+    )
+    if parent_dir:
+        task_data["parent"] = parent_dir.name
+
     metadata = {
         "source": "trellis",
+        "trellis_schema_version": 1,
         "trellis_task_dir": _repo_relative_path(task_dir, repo_root),
         "trellis_task_id": slug,
+        "trellis_task_name": slug,
+        "trellis_task": task_data,
     }
     if package:
         metadata["package"] = package
@@ -201,7 +231,14 @@ def _create_beads_issue_for_task(
         task_dir=task_dir,
         repo_root=repo_root,
         slug=slug,
+        title=title,
+        description=description,
+        priority=priority,
+        creator=get_developer(repo_root) or assignee,
+        assignee=assignee,
         package=package,
+        base_branch=_current_branch(repo_root),
+        parent_dir=parent_dir,
     )
 
     bd_args = [
@@ -293,6 +330,51 @@ def _materialize_beads_issue(issue: Mapping[str, Any], repo_root: Path) -> Path:
     return task_dir
 
 
+def _load_beads_issue(beads_issue_id: str, repo_root: Path) -> dict[str, Any]:
+    """Load one Beads issue as a dict."""
+    result = run_bd_json(["show", beads_issue_id], repo_root)
+    return issue_from_payload(result.payload)
+
+
+def _update_beads_trellis_task(
+    task_dir: Path,
+    updates: dict[str, Any],
+    repo_root: Path,
+) -> None:
+    """Patch the nested Trellis task snapshot stored in Beads metadata."""
+    beads_issue_id = read_bead_marker(task_dir)
+    if not beads_issue_id:
+        raise BeadsLinkError(f"Task folder is not linked to Beads: {task_dir}")
+
+    issue = _load_beads_issue(beads_issue_id, repo_root)
+    metadata = issue_metadata(issue)
+    task_snapshot = metadata.get("trellis_task")
+    if not isinstance(task_snapshot, dict):
+        task_snapshot = {}
+
+    task_snapshot.update(updates)
+    metadata.update(
+        {
+            "source": "trellis",
+            "trellis_schema_version": metadata.get("trellis_schema_version") or 1,
+            "trellis_task_dir": _repo_relative_path(task_dir, repo_root),
+            "trellis_task_id": str(task_snapshot.get("id") or metadata.get("trellis_task_id") or task_dir.name),
+            "trellis_task_name": str(task_snapshot.get("name") or metadata.get("trellis_task_name") or task_dir.name),
+            "trellis_task": task_snapshot,
+        }
+    )
+
+    run_bd_json(
+        [
+            "update",
+            beads_issue_id,
+            "--metadata",
+            json.dumps(metadata, ensure_ascii=False, separators=(",", ":")),
+        ],
+        repo_root,
+    )
+
+
 # =============================================================================
 # Sub-agent platform detection + JSONL seeding
 # =============================================================================
@@ -373,7 +455,7 @@ def cmd_create(args: argparse.Namespace) -> int:
             print(colored(f"Error: unknown package '{package}'. Available: {available}", Colors.RED), file=sys.stderr)
             return 1
     else:
-        # Inferred: default_package → None (no task.json yet for create)
+        # Inferred package for the task snapshot created during Beads create.
         package = resolve_package(repo_root=repo_root)
 
     # Default assignee to current developer
@@ -400,13 +482,10 @@ def cmd_create(args: argparse.Namespace) -> int:
     date_prefix = generate_task_date_prefix()
     dir_name = f"{date_prefix}-{slug}"
     task_dir = tasks_dir / dir_name
-    task_json_path = task_dir / FILE_TASK_JSON
+    legacy_task_file = task_dir / FILE_TASK_JSON
 
-    use_beads = bool(getattr(args, "beads", False))
+    use_beads = not bool(getattr(args, "legacy_local_state", False))
     beads_id = getattr(args, "beads_id", None)
-    if use_beads and beads_id:
-        print(colored("Error: use either --beads or --beads-id, not both", Colors.RED), file=sys.stderr)
-        return 1
 
     parent_dir = resolve_task_dir(args.parent, repo_root) if args.parent else None
 
@@ -414,7 +493,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         print(colored(f"Error: Task directory already exists: {dir_name}", Colors.RED), file=sys.stderr)
         return 1
 
-    if use_beads:
+    if use_beads and not beads_id:
         try:
             beads_id = _create_beads_issue_for_task(
                 title=args.title,
@@ -453,7 +532,7 @@ def cmd_create(args: argparse.Namespace) -> int:
             today=today,
             base_branch=_current_branch(repo_root),
         )
-        write_json(task_json_path, task_data)
+        write_json(legacy_task_file, task_data)
 
     # Seed implement.jsonl / check.jsonl for sub-agent-capable platforms.
     # Agent curates real entries in Phase 1.3 (see .trellis/workflow.md).
@@ -465,7 +544,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     if args.parent and parent_dir and not use_beads and task_data is not None:
         parent_json_path = parent_dir / FILE_TASK_JSON
         if not parent_json_path.is_file():
-            print(colored(f"Warning: Parent task.json not found: {args.parent}", Colors.YELLOW), file=sys.stderr)
+            print(colored(f"Warning: legacy parent state not found: {args.parent}", Colors.YELLOW), file=sys.stderr)
         else:
             parent_data = read_json(parent_json_path)
             if parent_data:
@@ -476,9 +555,9 @@ def cmd_create(args: argparse.Namespace) -> int:
                     parent_data["children"] = parent_children
                     write_json(parent_json_path, parent_data)
 
-                # Set parent in child's task.json
+                # Set parent in child's legacy state.
                 task_data["parent"] = parent_dir.name
-                write_json(task_json_path, task_data)
+                write_json(legacy_task_file, task_data)
 
                 print(colored(f"Linked as child of: {parent_dir.name}", Colors.GREEN), file=sys.stderr)
 
@@ -508,8 +587,9 @@ def cmd_create(args: argparse.Namespace) -> int:
     # Output relative path for script chaining
     print(f"{DIR_WORKFLOW}/{DIR_TASKS}/{dir_name}")
 
-    if task_json_path.is_file():
-        run_task_hooks("after_create", task_json_path, repo_root)
+    hook_path = legacy_task_file if legacy_task_file.is_file() else task_dir / ".bead"
+    if hook_path.is_file():
+        run_task_hooks("after_create", hook_path, repo_root)
     return 0
 
 
@@ -541,16 +621,31 @@ def cmd_archive(args: argparse.Namespace) -> int:
         return 1
 
     dir_name = task_dir.name
-    task_json_path = task_dir / FILE_TASK_JSON
+    legacy_task_file = task_dir / FILE_TASK_JSON
+    beads_issue_id = read_bead_marker(task_dir)
 
     # Update status before archiving
     today = datetime.now().strftime("%Y-%m-%d")
-    if task_json_path.is_file():
-        data = read_json(task_json_path)
+    if beads_issue_id:
+        try:
+            _update_beads_trellis_task(
+                task_dir,
+                {"status": "completed", "completedAt": today},
+                repo_root,
+            )
+            run_bd_json(
+                ["close", beads_issue_id, "--reason", f"Archived Trellis task {dir_name}"],
+                repo_root,
+            )
+        except (BeadsCliError, BeadsLinkError) as exc:
+            print(colored(f"Error: failed to archive Beads issue {beads_issue_id}: {exc}", Colors.RED), file=sys.stderr)
+            return 1
+    elif legacy_task_file.is_file():
+        data = read_json(legacy_task_file)
         if data:
             data["status"] = "completed"
             data["completedAt"] = today
-            write_json(task_json_path, data)
+            write_json(legacy_task_file, data)
 
             # Handle subtask relationships on archive
             task_parent = data.get("parent")
@@ -603,7 +698,8 @@ def cmd_archive(args: argparse.Namespace) -> int:
 
         # Run hooks with the archived path
         archived_json = archive_dest / FILE_TASK_JSON
-        run_task_hooks("after_archive", archived_json, repo_root)
+        archived_bead = archive_dest / ".bead"
+        run_task_hooks("after_archive", archived_json if archived_json.is_file() else archived_bead, repo_root)
         return 0
 
     return 1
@@ -643,20 +739,43 @@ def cmd_add_subtask(args: argparse.Namespace) -> int:
 
     parent_json_path = parent_dir / FILE_TASK_JSON
     child_json_path = child_dir / FILE_TASK_JSON
+    parent_beads_id = read_bead_marker(parent_dir)
+    child_beads_id = read_bead_marker(child_dir)
+
+    if parent_beads_id and child_beads_id:
+        try:
+            run_bd_json(["update", child_beads_id, "--parent", parent_beads_id], repo_root)
+            _update_beads_trellis_task(child_dir, {"parent": parent_dir.name}, repo_root)
+
+            parent_issue = _load_beads_issue(parent_beads_id, repo_root)
+            parent_meta = issue_metadata(parent_issue)
+            parent_task = parent_meta.get("trellis_task")
+            existing_children = []
+            if isinstance(parent_task, dict) and isinstance(parent_task.get("children"), list):
+                existing_children = [str(child) for child in parent_task["children"]]
+            if child_dir.name not in existing_children:
+                existing_children.append(child_dir.name)
+            _update_beads_trellis_task(parent_dir, {"children": existing_children}, repo_root)
+        except (BeadsCliError, BeadsLinkError) as exc:
+            print(colored(f"Error: failed to link Beads tasks: {exc}", Colors.RED), file=sys.stderr)
+            return 1
+
+        print(colored(f"Linked Beads: {child_beads_id} -> {parent_beads_id}", Colors.GREEN), file=sys.stderr)
+        return 0
 
     if not parent_json_path.is_file():
-        print(colored(f"Error: Parent task.json not found: {args.parent_dir}", Colors.RED), file=sys.stderr)
+        print(colored(f"Error: legacy parent state not found: {args.parent_dir}", Colors.RED), file=sys.stderr)
         return 1
 
     if not child_json_path.is_file():
-        print(colored(f"Error: Child task.json not found: {args.child_dir}", Colors.RED), file=sys.stderr)
+        print(colored(f"Error: legacy child state not found: {args.child_dir}", Colors.RED), file=sys.stderr)
         return 1
 
     parent_data = read_json(parent_json_path)
     child_data = read_json(child_json_path)
 
     if not parent_data or not child_data:
-        print(colored("Error: Failed to read task.json", Colors.RED), file=sys.stderr)
+        print(colored("Error: failed to read legacy task state", Colors.RED), file=sys.stderr)
         return 1
 
     # Check if child already has a parent
@@ -672,7 +791,7 @@ def cmd_add_subtask(args: argparse.Namespace) -> int:
         parent_children.append(child_dir_name)
         parent_data["children"] = parent_children
 
-    # Set parent in child's task.json
+    # Set parent in child's legacy state.
     child_data["parent"] = parent_dir.name
 
     # Write both
@@ -696,20 +815,42 @@ def cmd_remove_subtask(args: argparse.Namespace) -> int:
 
     parent_json_path = parent_dir / FILE_TASK_JSON
     child_json_path = child_dir / FILE_TASK_JSON
+    parent_beads_id = read_bead_marker(parent_dir)
+    child_beads_id = read_bead_marker(child_dir)
+
+    if parent_beads_id and child_beads_id:
+        try:
+            run_bd_json(["update", child_beads_id, "--parent", ""], repo_root)
+            _update_beads_trellis_task(child_dir, {"parent": None}, repo_root)
+
+            parent_issue = _load_beads_issue(parent_beads_id, repo_root)
+            parent_meta = issue_metadata(parent_issue)
+            parent_task = parent_meta.get("trellis_task")
+            existing_children = []
+            if isinstance(parent_task, dict) and isinstance(parent_task.get("children"), list):
+                existing_children = [str(child) for child in parent_task["children"]]
+            existing_children = [child for child in existing_children if child != child_dir.name]
+            _update_beads_trellis_task(parent_dir, {"children": existing_children}, repo_root)
+        except (BeadsCliError, BeadsLinkError) as exc:
+            print(colored(f"Error: failed to unlink Beads tasks: {exc}", Colors.RED), file=sys.stderr)
+            return 1
+
+        print(colored(f"Unlinked Beads: {child_beads_id} from {parent_beads_id}", Colors.GREEN), file=sys.stderr)
+        return 0
 
     if not parent_json_path.is_file():
-        print(colored(f"Error: Parent task.json not found: {args.parent_dir}", Colors.RED), file=sys.stderr)
+        print(colored(f"Error: legacy parent state not found: {args.parent_dir}", Colors.RED), file=sys.stderr)
         return 1
 
     if not child_json_path.is_file():
-        print(colored(f"Error: Child task.json not found: {args.child_dir}", Colors.RED), file=sys.stderr)
+        print(colored(f"Error: legacy child state not found: {args.child_dir}", Colors.RED), file=sys.stderr)
         return 1
 
     parent_data = read_json(parent_json_path)
     child_data = read_json(child_json_path)
 
     if not parent_data or not child_data:
-        print(colored("Error: Failed to read task.json", Colors.RED), file=sys.stderr)
+        print(colored("Error: failed to read legacy task state", Colors.RED), file=sys.stderr)
         return 1
 
     # Remove child from parent's children list
@@ -719,7 +860,7 @@ def cmd_remove_subtask(args: argparse.Namespace) -> int:
         parent_children.remove(child_dir_name)
         parent_data["children"] = parent_children
 
-    # Clear parent in child's task.json
+    # Clear parent in child's legacy state.
     child_data["parent"] = None
 
     # Write both
@@ -791,12 +932,12 @@ def cmd_beads_claim(args: argparse.Namespace) -> int:
         print(colored(f"Error: Failed to set current task: {task_ref}", Colors.RED), file=sys.stderr)
         return 1
 
-    task_json_path = task_dir / FILE_TASK_JSON
-    if task_json_path.is_file():
-        task_data = read_json(task_json_path)
+    legacy_task_file = task_dir / FILE_TASK_JSON
+    if legacy_task_file.is_file():
+        task_data = read_json(legacy_task_file)
         if task_data and task_data.get("status") == "planning":
             task_data["status"] = "in_progress"
-            write_json(task_json_path, task_data)
+            write_json(legacy_task_file, task_data)
 
     print(colored(f"✓ Claimed Beads issue: {beads_id}", Colors.GREEN), file=sys.stderr)
     print(colored(f"✓ Current task set to: {task_ref}", Colors.GREEN), file=sys.stderr)
@@ -819,17 +960,27 @@ def cmd_set_branch(args: argparse.Namespace) -> int:
         print("Usage: python3 task.py set-branch <task-dir> <branch-name>")
         return 1
 
-    task_json = target_dir / FILE_TASK_JSON
-    if not task_json.is_file():
-        print(colored(f"Error: task.json not found at {target_dir}", Colors.RED))
+    legacy_task_file = target_dir / FILE_TASK_JSON
+    beads_issue_id = read_bead_marker(target_dir)
+    if beads_issue_id:
+        try:
+            _update_beads_trellis_task(target_dir, {"branch": branch}, repo_root)
+        except (BeadsCliError, BeadsLinkError) as exc:
+            print(colored(f"Error: failed to update Beads metadata: {exc}", Colors.RED))
+            return 1
+        print(colored(f"✓ Beads branch set to: {branch}", Colors.GREEN))
+        return 0
+
+    if not legacy_task_file.is_file():
+        print(colored(f"Error: legacy task state not found at {target_dir}", Colors.RED))
         return 1
 
-    data = read_json(task_json)
+    data = read_json(legacy_task_file)
     if not data:
         return 1
 
     data["branch"] = branch
-    write_json(task_json, data)
+    write_json(legacy_task_file, data)
 
     print(colored(f"✓ Branch set to: {branch}", Colors.GREEN))
     return 0
@@ -853,17 +1004,28 @@ def cmd_set_base_branch(args: argparse.Namespace) -> int:
         print("This sets the target branch for PR (the branch your feature will merge into).")
         return 1
 
-    task_json = target_dir / FILE_TASK_JSON
-    if not task_json.is_file():
-        print(colored(f"Error: task.json not found at {target_dir}", Colors.RED))
+    legacy_task_file = target_dir / FILE_TASK_JSON
+    beads_issue_id = read_bead_marker(target_dir)
+    if beads_issue_id:
+        try:
+            _update_beads_trellis_task(target_dir, {"base_branch": base_branch}, repo_root)
+        except (BeadsCliError, BeadsLinkError) as exc:
+            print(colored(f"Error: failed to update Beads metadata: {exc}", Colors.RED))
+            return 1
+        print(colored(f"✓ Beads base branch set to: {base_branch}", Colors.GREEN))
+        print(f"  PR will target: {base_branch}")
+        return 0
+
+    if not legacy_task_file.is_file():
+        print(colored(f"Error: legacy task state not found at {target_dir}", Colors.RED))
         return 1
 
-    data = read_json(task_json)
+    data = read_json(legacy_task_file)
     if not data:
         return 1
 
     data["base_branch"] = base_branch
-    write_json(task_json, data)
+    write_json(legacy_task_file, data)
 
     print(colored(f"✓ Base branch set to: {base_branch}", Colors.GREEN))
     print(f"  PR will target: {base_branch}")
@@ -885,17 +1047,27 @@ def cmd_set_scope(args: argparse.Namespace) -> int:
         print("Usage: python3 task.py set-scope <task-dir> <scope>")
         return 1
 
-    task_json = target_dir / FILE_TASK_JSON
-    if not task_json.is_file():
-        print(colored(f"Error: task.json not found at {target_dir}", Colors.RED))
+    legacy_task_file = target_dir / FILE_TASK_JSON
+    beads_issue_id = read_bead_marker(target_dir)
+    if beads_issue_id:
+        try:
+            _update_beads_trellis_task(target_dir, {"scope": scope}, repo_root)
+        except (BeadsCliError, BeadsLinkError) as exc:
+            print(colored(f"Error: failed to update Beads metadata: {exc}", Colors.RED))
+            return 1
+        print(colored(f"✓ Beads scope set to: {scope}", Colors.GREEN))
+        return 0
+
+    if not legacy_task_file.is_file():
+        print(colored(f"Error: legacy task state not found at {target_dir}", Colors.RED))
         return 1
 
-    data = read_json(task_json)
+    data = read_json(legacy_task_file)
     if not data:
         return 1
 
     data["scope"] = scope
-    write_json(task_json, data)
+    write_json(legacy_task_file, data)
 
     print(colored(f"✓ Scope set to: {scope}", Colors.GREEN))
     return 0

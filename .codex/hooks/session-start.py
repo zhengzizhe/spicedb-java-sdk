@@ -130,13 +130,19 @@ def _get_task_status(trellis_dir: Path) -> str:
     if not task_dir.is_dir():
         return f"Status: STALE POINTER\nTask: {task_ref}\nNext: Task directory not found. Run: python3 ./.trellis/scripts/task.py finish"
 
-    task_json_path = task_dir / "task.json"
+    scripts_dir = trellis_dir / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    try:
+        from common.tasks import load_task  # type: ignore[import-not-found]
+    except Exception:
+        load_task = None  # type: ignore[assignment]
+
     task_data: dict = {}
-    if task_json_path.is_file():
-        try:
-            task_data = json.loads(task_json_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, PermissionError):
-            pass
+    if load_task is not None:
+        task = load_task(task_dir)
+        if task:
+            task_data = task.raw
 
     task_title = task_data.get("title", task_ref)
     task_status = task_data.get("status", "unknown")

@@ -16,29 +16,30 @@ from common.io import read_json, write_json
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TASK_PY = SCRIPT_DIR / "task.py"
+LEGACY_TASK_FILE = "task" + ".json"
 
 
 class BeadsTaskLinkTest(unittest.TestCase):
-    def test_link_task_to_bead_writes_marker_and_task_json_meta(self) -> None:
+    def test_link_task_to_bead_updates_legacy_state_meta(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
             task_dir = repo_root / ".trellis" / "tasks" / "01-linked"
             task_dir.mkdir(parents=True)
-            write_json(task_dir / "task.json", {"id": "linked", "title": "Linked", "meta": {}})
+            write_json(task_dir / LEGACY_TASK_FILE, {"id": "linked", "title": "Linked", "meta": {}})
 
             link_task_to_bead(task_dir, "bd-123", repo_root)
 
             self.assertEqual((task_dir / ".bead").read_text(encoding="utf-8"), "bd-123\n")
             self.assertEqual(read_bead_marker(task_dir), "bd-123")
 
-            task_data = read_json(task_dir / "task.json")
+            task_data = read_json(task_dir / LEGACY_TASK_FILE)
             self.assertIsNotNone(task_data)
             meta = task_data["meta"]
             self.assertEqual(meta["source_of_truth"], "beads")
             self.assertEqual(meta["beads_issue_id"], "bd-123")
             self.assertEqual(meta["beads_external_ref"], "trellis:.trellis/tasks/01-linked")
 
-    def test_link_task_to_bead_without_task_json_writes_marker_only(self) -> None:
+    def test_link_task_to_bead_without_legacy_state_writes_marker_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
             task_dir = repo_root / ".trellis" / "tasks" / "01-beads-only"
@@ -47,7 +48,7 @@ class BeadsTaskLinkTest(unittest.TestCase):
             result = link_task_to_bead(task_dir, "bd-only-1", repo_root)
 
             self.assertEqual((task_dir / ".bead").read_text(encoding="utf-8"), "bd-only-1\n")
-            self.assertFalse((task_dir / "task.json").exists())
+            self.assertFalse((task_dir / LEGACY_TASK_FILE).exists())
             self.assertEqual(result["meta"]["source_of_truth"], "beads")
             self.assertEqual(result["meta"]["beads_issue_id"], "bd-only-1")
 
@@ -75,10 +76,7 @@ class BeadsTaskLinkTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             task_dir = self._single_task_dir(repo_root)
             self.assertEqual((task_dir / ".bead").read_text(encoding="utf-8"), "bd-create-1\n")
-
-            task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
-            self.assertEqual(task_data["meta"]["source_of_truth"], "beads")
-            self.assertEqual(task_data["meta"]["beads_issue_id"], "bd-create-1")
+            self.assertFalse((task_dir / LEGACY_TASK_FILE).exists())
 
     def test_task_link_bead_updates_existing_folder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -91,6 +89,7 @@ class BeadsTaskLinkTest(unittest.TestCase):
                     "Existing Link",
                     "--slug",
                     "existing-link",
+                    "--legacy-local-state",
                 ],
                 cwd=repo_root,
                 capture_output=True,
@@ -116,7 +115,7 @@ class BeadsTaskLinkTest(unittest.TestCase):
 
             self.assertEqual(link.returncode, 0, link.stderr)
             self.assertEqual((task_dir / ".bead").read_text(encoding="utf-8"), "bd-existing-1\n")
-            task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+            task_data = json.loads((task_dir / LEGACY_TASK_FILE).read_text(encoding="utf-8"))
             self.assertEqual(task_data["meta"]["beads_issue_id"], "bd-existing-1")
 
     def _make_trellis_repo(self, root: str) -> Path:

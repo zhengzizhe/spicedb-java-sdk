@@ -19,7 +19,8 @@ max_journal_lines: 2000
 #-------------------------------------------------------------------------------
 
 # Shell commands to run after task lifecycle events.
-# Each hook receives TASK_JSON_PATH environment variable pointing to task.json.
+# Hooks receive TASK_DIR and BEADS_ISSUE_ID. LEGACY_TASK_STATE_PATH is set only
+# for legacy non-Beads folders.
 # Hook failures print a warning but do not block the main operation.
 #
 # hooks:

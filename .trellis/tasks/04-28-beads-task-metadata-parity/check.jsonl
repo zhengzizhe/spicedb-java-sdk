@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/tooling/index.md", "reason": "Tooling constraints"}
+{"file": ".trellis/spec/tooling/beads-task-backend.md", "reason": "Beads-first task backend contract"}
+{"file": ".trellis/tasks/archive/2026-04/04-28-beads-task-backend/prd.md", "reason": "Verify no legacy task-state regression"}
+{"file": ".trellis/tasks/04-28-beads-task-metadata-parity/prd.md", "reason": "Acceptance criteria"}

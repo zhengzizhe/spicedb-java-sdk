@@ -1,7 +1,7 @@
 """Beads issue linkage for Trellis task folders.
 
 This module keeps the folder-level `.bead` marker in sync with the optional
-`task.json.meta` compatibility cache. It does not call the `bd` CLI.
+legacy local metadata cache. It does not call the `bd` CLI.
 """
 
 from __future__ import annotations
@@ -75,11 +75,11 @@ def find_task_by_bead_id(tasks_dir: Path, beads_issue_id: str) -> Path | None:
         if read_bead_marker(task_dir) == issue_id:
             return task_dir
 
-        task_json_path = task_dir / FILE_TASK_JSON
-        if not task_json_path.is_file():
+        legacy_task_file = task_dir / FILE_TASK_JSON
+        if not legacy_task_file.is_file():
             continue
 
-        task_data = read_json(task_json_path)
+        task_data = read_json(legacy_task_file)
         meta = task_data.get("meta") if isinstance(task_data, dict) else None
         if isinstance(meta, dict) and meta.get("beads_issue_id") == issue_id:
             return task_dir
@@ -92,7 +92,7 @@ def link_task_to_bead(task_dir: Path, beads_issue_id: str, repo_root: Path) -> d
 
     Writes both:
     - `<task>/.bead` as the future durable folder marker.
-    - `<task>/task.json.meta` when task.json exists.
+    - legacy local metadata when the old state file exists.
     """
     if not task_dir.is_dir():
         raise BeadsLinkError(f"Task directory not found: {task_dir}")
@@ -106,13 +106,13 @@ def link_task_to_bead(task_dir: Path, beads_issue_id: str, repo_root: Path) -> d
         "beads_external_ref": task_external_ref(task_dir, repo_root),
     }
 
-    task_json_path = task_dir / FILE_TASK_JSON
-    if not task_json_path.is_file():
+    legacy_task_file = task_dir / FILE_TASK_JSON
+    if not legacy_task_file.is_file():
         return {"meta": fallback_meta}
 
-    task_data = read_json(task_json_path)
+    task_data = read_json(legacy_task_file)
     if not task_data:
-        raise BeadsLinkError(f"Failed to read task.json: {task_json_path}")
+        raise BeadsLinkError(f"Failed to read legacy task state: {legacy_task_file}")
 
     meta = task_data.get("meta")
     if not isinstance(meta, dict):
@@ -121,7 +121,7 @@ def link_task_to_bead(task_dir: Path, beads_issue_id: str, repo_root: Path) -> d
     meta.update(fallback_meta)
     task_data["meta"] = meta
 
-    if not write_json(task_json_path, task_data):
-        raise BeadsLinkError(f"Failed to write task.json: {task_json_path}")
+    if not write_json(legacy_task_file, task_data):
+        raise BeadsLinkError(f"Failed to write legacy task state: {legacy_task_file}")
 
     return task_data

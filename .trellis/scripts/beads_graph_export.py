@@ -68,7 +68,7 @@ def select_tasks(
 
         current_task = load_task(current_task_dir)
         if current_task is None:
-            raise ExportError(f"Current Trellis task has no valid task.json: {current_task_dir}")
+            raise ExportError(f"Current Trellis task has no valid task data: {current_task_dir}")
 
         tasks = [current_task]
     else:

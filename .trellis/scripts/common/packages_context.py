@@ -42,7 +42,7 @@ def _scan_spec_layers(spec_dir: Path, package: str | None = None) -> list[str]:
 
 
 def _get_active_task_package(repo_root: Path) -> str | None:
-    """Get the package field from the active task's task.json."""
+    """Get the package field from the active task data."""
     current = get_current_task(repo_root)
     if not current:
         return None

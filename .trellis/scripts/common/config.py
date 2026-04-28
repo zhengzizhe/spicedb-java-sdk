@@ -349,7 +349,7 @@ def resolve_package(
         if task_package in packages:
             return task_package
         print(
-            f"Warning: task.json package '{task_package}' not found in config, skipping",
+            f"Warning: legacy task package '{task_package}' not found in config, skipping",
             file=sys.stderr,
         )
 

@@ -2,7 +2,7 @@
 Core type definitions for Trellis task data.
 
 Provides:
-    TaskData     — TypedDict for task.json shape (read-path type hints only)
+    TaskData     — TypedDict for legacy local task state (read-path type hints only)
     TaskInfo     — Frozen dataclass for loaded task (the public API type)
     AgentRecord  — TypedDict for registry.json agent entries
 """
@@ -15,13 +15,13 @@ from typing import TypedDict
 
 
 # =============================================================================
-# task.json shape (TypedDict — used only for read-path type hints)
+# Legacy local task state shape (TypedDict — used only for read-path type hints)
 # =============================================================================
 
 class TaskData(TypedDict, total=False):
-    """Shape of task.json on disk.
+    """Shape of legacy local task state on disk.
 
-    Used only for type annotations when reading task.json.
+    Used only for type annotations when reading legacy local task state.
     Writes must use the original dict to avoid losing unknown fields.
     """
 

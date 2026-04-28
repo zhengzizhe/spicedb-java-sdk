@@ -8,7 +8,7 @@
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| _None currently active_ | Project-local tooling has no extra guideline files at this time. | No completion notification hook is configured |
+| [Beads Task Backend](./beads-task-backend.md) | Beads-first Trellis task lifecycle, loader, and hook contracts | Active |
 
 ---
 

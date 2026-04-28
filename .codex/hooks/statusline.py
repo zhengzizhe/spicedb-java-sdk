@@ -33,14 +33,28 @@ def _read_text(path: Path) -> str:
         return ""
 
 
-def _read_json(path: Path) -> dict:
-    text = _read_text(path)
-    if not text:
-        return {}
+def _load_trellis_task(task_path: Path) -> dict:
+    scripts_dir = task_path.parents[1] / "scripts" if len(task_path.parents) >= 2 else None
+    if scripts_dir and scripts_dir.is_dir() and str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
     try:
-        return json.loads(text)
-    except (json.JSONDecodeError, ValueError):
+        from common.tasks import load_task  # type: ignore[import-not-found]
+    except Exception:
         return {}
+
+    task = load_task(task_path)
+    return task.raw if task else {}
+
+
+def _iter_trellis_tasks(trellis_dir: Path) -> list:
+    scripts_dir = trellis_dir / "scripts"
+    if scripts_dir.is_dir() and str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    try:
+        from common.tasks import iter_active_tasks  # type: ignore[import-not-found]
+    except Exception:
+        return []
+    return list(iter_active_tasks(trellis_dir / "tasks"))
 
 
 def _normalize_task_ref(task_ref: str) -> str:
@@ -90,7 +104,7 @@ def _get_current_task(trellis_dir: Path) -> dict | None:
 
     # Resolve task directory
     task_path = _resolve_task_dir(trellis_dir, task_ref)
-    task_data = _read_json(task_path / "task.json")
+    task_data = _load_trellis_task(task_path)
     if not task_data:
         return None
 
@@ -102,13 +116,17 @@ def _get_current_task(trellis_dir: Path) -> dict | None:
 
 
 def _count_active_tasks(trellis_dir: Path) -> int:
-    """Count non-archived task directories with valid task.json."""
+    """Count non-archived task directories with Beads/legacy task data."""
+    loaded_tasks = _iter_trellis_tasks(trellis_dir)
+    if loaded_tasks:
+        return len(loaded_tasks)
+
     tasks_dir = trellis_dir / "tasks"
     if not tasks_dir.is_dir():
         return 0
     count = 0
     for d in tasks_dir.iterdir():
-        if d.is_dir() and d.name != "archive" and (d / "task.json").is_file():
+        if d.is_dir() and d.name != "archive" and (d / ".bead").is_file():
             count += 1
     return count
 

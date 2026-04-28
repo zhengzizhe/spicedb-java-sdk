@@ -9,10 +9,12 @@ Usage (called automatically by task.py hooks):
     python3 .trellis/scripts/hooks/linear_sync.py archive
 
 Manual usage:
-    TASK_JSON_PATH=.trellis/tasks/<name>/task.json python3 .trellis/scripts/hooks/linear_sync.py sync
+    TASK_DIR=.trellis/tasks/<name> python3 .trellis/scripts/hooks/linear_sync.py sync
 
 Environment:
-    TASK_JSON_PATH  - Absolute path to task.json (set by task.py)
+    TASK_DIR        - Absolute path to the task directory (set by task.py)
+    BEADS_ISSUE_ID  - Beads issue ID for Beads-backed tasks
+    LEGACY_TASK_STATE_PATH - Legacy local state path for non-Beads tasks only
 
 Configuration:
     .trellis/hooks.local.json  - Local config (gitignored), example:
@@ -47,10 +49,10 @@ STATUS_DONE = "Done"
 
 def _load_config() -> dict:
     """Load local hook config from .trellis/hooks.local.json."""
-    task_json_path = os.environ.get("TASK_JSON_PATH", "")
-    if task_json_path:
-        # Walk up from task.json to find .trellis/
-        trellis_dir = Path(task_json_path).parent.parent.parent
+    task_dir = os.environ.get("TASK_DIR", "")
+    if task_dir:
+        # Walk up from task dir to find .trellis/
+        trellis_dir = Path(task_dir).parent.parent
     else:
         trellis_dir = Path(".trellis")
 
@@ -72,16 +74,44 @@ ASSIGNEE_MAP = LINEAR_CFG.get("assignees", {})
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _read_task() -> tuple[dict, str]:
-    path = os.environ.get("TASK_JSON_PATH", "")
-    if not path:
-        print("TASK_JSON_PATH not set", file=sys.stderr)
+def _task_dir_from_env() -> Path:
+    task_dir = os.environ.get("TASK_DIR", "")
+    if task_dir:
+        return Path(task_dir)
+    legacy_path = os.environ.get("LEGACY_TASK_STATE_PATH", "")
+    if legacy_path:
+        return Path(legacy_path).parent
+    print("TASK_DIR not set", file=sys.stderr)
+    sys.exit(1)
+
+
+def _read_task() -> tuple[dict, Path]:
+    task_dir = _task_dir_from_env()
+    scripts_dir = task_dir.parents[1] / "scripts" if len(task_dir.parents) >= 2 else Path(".trellis/scripts")
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    try:
+        from common.tasks import load_task  # type: ignore[import-not-found]
+    except Exception as exc:
+        print(f"Cannot load Trellis task helpers: {exc}", file=sys.stderr)
         sys.exit(1)
-    with open(path, encoding="utf-8") as f:
-        return json.load(f), path
+
+    task = load_task(task_dir)
+    if task is None:
+        print(f"Task data not found: {task_dir}", file=sys.stderr)
+        sys.exit(1)
+    return task.raw, task_dir
 
 
-def _write_task(data: dict, path: str) -> None:
+def _write_legacy_task(data: dict, task_dir: Path) -> None:
+    try:
+        from common.paths import FILE_TASK_JSON as legacy_file_name  # type: ignore[import-not-found]
+    except Exception:
+        legacy_file_name = "task" + ".json"
+
+    path = task_dir / legacy_file_name
+    if not path.is_file():
+        return
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
@@ -119,7 +149,10 @@ def cmd_create() -> None:
         print("No linear.team configured in hooks.local.json", file=sys.stderr)
         sys.exit(1)
 
-    task, path = _read_task()
+    task, task_dir = _read_task()
+    if os.environ.get("BEADS_ISSUE_ID"):
+        print("Linear sync skipped for Beads-backed task")
+        return
 
     # Skip if already linked
     if _get_linear_issue(task):
@@ -154,7 +187,7 @@ def cmd_create() -> None:
         if not isinstance(task.get("meta"), dict):
             task["meta"] = {}
         task["meta"]["linear_issue"] = result["identifier"]
-        _write_task(task, path)
+        _write_legacy_task(task, task_dir)
         print(f"Created Linear issue: {result['identifier']}")
 
 
@@ -179,15 +212,14 @@ def cmd_archive() -> None:
 
 def cmd_sync() -> None:
     """Sync prd.md content to Linear issue description."""
-    task, _ = _read_task()
+    task, task_dir = _read_task()
     issue = _get_linear_issue(task)
     if not issue:
         print("No linear_issue in meta, run create first", file=sys.stderr)
         sys.exit(1)
 
-    # Find prd.md next to task.json
-    task_json_path = os.environ.get("TASK_JSON_PATH", "")
-    prd_path = Path(task_json_path).parent / "prd.md"
+    # Find prd.md next to the task directory
+    prd_path = task_dir / "prd.md"
     if not prd_path.is_file():
         print(f"No prd.md found at {prd_path}", file=sys.stderr)
         sys.exit(1)
@@ -206,21 +238,19 @@ def _resolve_parent_linear_issue(task: dict) -> str | None:
     if not parent_name:
         return None
 
-    task_json_path = os.environ.get("TASK_JSON_PATH", "")
-    if not task_json_path:
-        return None
-
-    current_task_dir = Path(task_json_path).parent
+    current_task_dir = _task_dir_from_env()
     tasks_dir = current_task_dir.parent
-    parent_json = tasks_dir / parent_name / "task.json"
-
-    if parent_json.exists():
-        try:
-            with open(parent_json, encoding="utf-8") as f:
-                parent_task = json.load(f)
-            return _get_linear_issue(parent_task)
-        except (json.JSONDecodeError, OSError):
-            pass
+    parent_dir = tasks_dir / parent_name
+    scripts_dir = current_task_dir.parents[1] / "scripts" if len(current_task_dir.parents) >= 2 else Path(".trellis/scripts")
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    try:
+        from common.tasks import load_task  # type: ignore[import-not-found]
+    except Exception:
+        return None
+    parent_task = load_task(parent_dir)
+    if parent_task:
+        return _get_linear_issue(parent_task.raw)
     return None
 
 
