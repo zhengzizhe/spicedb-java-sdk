@@ -47,3 +47,11 @@ tasks.withType(JavaCompile).configureEach {
 test {
     useJUnitPlatform()
 }
+
+tasks.register("generateAuthxSchema", JavaExec) {
+    group = "authx"
+    description = "Generate typed AuthX schema classes from the local SpiceDB instance."
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = "com.authx.testapp.tools.GenerateAuthxSchema"
+    workingDir = rootProject.projectDir
+}

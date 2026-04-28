@@ -1,0 +1,12 @@
+services:
+  spicedb:
+    image: authzed/spicedb:v1.51.1
+    command:
+      - serve
+      - --grpc-preshared-key
+      - localdevlocaldevlocaldevlocaldev
+      - --http-enabled
+      - "true"
+    ports:
+      - "50051:50051"
+      - "8443:8443"

@@ -2,25 +2,22 @@ package com.authx.sdk;
 
 import com.authx.sdk.model.GrantResult;
 
-import com.google.errorprone.annotations.CanIgnoreReturnValue;
-
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 /**
- * Chainable handle returned by {@link WriteFlow#commit()}. Wraps the
+ * Handle returned by {@link WriteFlow#commit()}. Wraps the
  * underlying write outcome and optionally fires synchronous /
  * asynchronous listeners. The write has already happened by the time
  * this object exists — a listener registered here runs immediately
  * (sync) or is submitted to its executor (async).
  *
  * <pre>
- * auth.on(Document).select(docId)
+ * WriteCompletion completion = auth.on(Document).select(docId)
  *     .grant(Document.Rel.VIEWER).to(User, "alice")
- *     .commit()
- *         .listener(c -> auditLog.write(c))
- *         .listenerAsync(c -> eventBus.emit(c), executor);
+ *     .commit();
+ * completion.listener(c -> auditLog.write(c));
  * </pre>
  *
  * <p>Delegates {@link #count()} / {@link #zedToken()} for call-site
@@ -39,6 +36,7 @@ public final class WriteCompletion {
 
     private final GrantResult result;
     private final int pendingCount;
+    private boolean listenerRegistered = false;
 
     WriteCompletion(GrantResult result, int pendingCount) {
         this.result = Objects.requireNonNull(result, "result");
@@ -69,21 +67,19 @@ public final class WriteCompletion {
 
     /**
      * Invoke {@code callback} synchronously on the calling thread with
-     * this completion. Exceptions propagate; subsequent chained
-     * listeners after a throw do not fire.
+     * this completion. Exceptions propagate to the caller.
      */
-    @CanIgnoreReturnValue
-    public WriteCompletion listener(Consumer<WriteCompletion> callback) {
+    public void listener(Consumer<WriteCompletion> callback) {
+        markListenerRegistered();
         Objects.requireNonNull(callback, "callback").accept(this);
-        return this;
     }
 
     /**
      * Dispatch {@code callback} to {@code executor}. Returns immediately.
      * Callback exceptions are caught, logged at WARNING, and swallowed.
      */
-    @CanIgnoreReturnValue
-    public WriteCompletion listenerAsync(Consumer<WriteCompletion> callback, Executor executor) {
+    public void listenerAsync(Consumer<WriteCompletion> callback, Executor executor) {
+        markListenerRegistered();
         Objects.requireNonNull(callback, "callback");
         Objects.requireNonNull(executor, "executor");
         executor.execute(() -> {
@@ -94,6 +90,13 @@ public final class WriteCompletion {
                         "WriteCompletion async listener threw — swallowed", t);
             }
         });
-        return this;
+    }
+
+    private void markListenerRegistered() {
+        if (listenerRegistered) {
+            throw new IllegalStateException(
+                    "WriteCompletion listener already registered — use one listener per completion");
+        }
+        listenerRegistered = true;
     }
 }

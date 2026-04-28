@@ -1,7 +1,11 @@
 package com.authx.sdk;
 
+import com.authx.sdk.action.RelationQuery;
+import com.authx.sdk.model.Consistency;
+import com.authx.sdk.model.ExpandTree;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
+import com.authx.sdk.model.ResourceRef;
 import com.google.errorprone.annotations.CheckReturnValue;
 import java.util.Collection;
 
@@ -28,7 +32,8 @@ import java.util.Collection;
  * {@code Document.java} (and any business-side helpers) can instantiate
  * it without needing to subclass a ResourceFactory.
  */
-public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
+public class TypedHandle<R extends Enum<R> & Relation.Named,
+                         P extends Enum<P> & Permission.Named> {
 
     protected final ResourceFactory factory;
     protected final String[] ids;
@@ -36,15 +41,15 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
      * Permission enum class — optional. Populated when the handle is
      * built via {@link TypedResourceEntry#select(String...)} so that
      * {@link #checkAll()} can iterate every permission without the
-     * caller having to pass {@code Xxx.Perm.class} explicitly.
+     * caller having to pass permission metadata explicitly.
      */
-    protected final Class<? extends P> permClass;
+    protected final Class<P> permClass;
 
     public TypedHandle(ResourceFactory factory, String[] ids) {
         this(factory, ids, null);
     }
 
-    public TypedHandle(ResourceFactory factory, String[] ids, Class<? extends P> permClass) {
+    public TypedHandle(ResourceFactory factory, String[] ids, Class<P> permClass) {
         this.factory = factory;
         this.ids = ids;
         this.permClass = permClass;
@@ -64,16 +69,16 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
      *
      * <pre>
      * // Grant-only
-     * client.on(Document).select(docId)
+     * client.on(DOCUMENT).select(docId)
      *     .grant(Document.Rel.VIEWER)
-     *     .to(User, "alice")
-     *     .to(Group, "eng", Group.Rel.MEMBER)
+     *     .to(USER, "alice")
+     *     .to(GROUP, "eng", Group.Rel.MEMBER)
      *     .commit();
      *
      * // Mixed — change role atomically
-     * client.on(Document).select(docId)
-     *     .revoke(Document.Rel.EDITOR).from(User, "alice")
-     *     .grant(Document.Rel.VIEWER).to(User, "alice")
+     * client.on(DOCUMENT).select(docId)
+     *     .revoke(Document.Rel.EDITOR).from(USER, "alice")
+     *     .grant(Document.Rel.VIEWER).to(USER, "alice")
      *     .commit();
      * </pre>
      */
@@ -147,47 +152,20 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
      *
      * <pre>
      * EnumMap&lt;Document.Perm, Boolean&gt; toolbar =
-     *     Document.select(client, docId).checkAll(Document.Perm.class).by(userId);
+     *     client.on(DOCUMENT).select(docId).checkAll().by(USER, userId);
      * </pre>
      */
-    public <E extends Enum<E> & Permission.Named> TypedCheckAllAction<E> checkAll(Class<E> permClass) {
-        return new TypedCheckAllAction<>(factory, ids, permClass);
-    }
-
-    /**
-     * Enum-typed proxy overload of {@link #checkAll(Class)}. Pass a
-     * generated {@code PermissionProxy} instance (e.g. {@code Document.Perm})
-     * — the SDK recovers the enum class from the proxy and delegates.
-     *
-     * <pre>
-     * EnumMap&lt;Document.Perm, Boolean&gt; toolbar =
-     *     client.on(Document).select(id).checkAll(Document.Perm).by(User, userId);
-     * </pre>
-     */
-    public <E extends Enum<E> & Permission.Named> TypedCheckAllAction<E> checkAll(
-            PermissionProxy<E> proxy) {
-        return checkAll(proxy.enumClass());
-    }
-
-    /**
-     * Parameterless overload — only works when the handle was produced
-     * via {@link TypedResourceEntry#select(String...)}, which wires the
-     * permission enum class through from {@link ResourceType#permClass()}.
-     * Throws if the handle has no enum class attached (i.e. was
-     * constructed directly without a {@link ResourceType}).
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public TypedCheckAllAction checkAll() {
+    public TypedCheckAllAction<P> checkAll() {
         if (permClass == null) {
             throw new IllegalStateException(
                     "checkAll() without args requires the handle to be built via " +
-                    "client.on(ResourceType).select(...); use checkAll(Perm.class) otherwise.");
+                    "client.on(ResourceType).select(...).");
         }
-        return new TypedCheckAllAction(factory, ids, (Class) permClass);
+        return new TypedCheckAllAction<>(factory, ids, permClass);
     }
 
     // ────────────────────────────────────────────────────────────────
-    //  Who (lookupSubjects)
+    //  lookupSubjects — resource -> subjects
     // ────────────────────────────────────────────────────────────────
 
     /**
@@ -200,22 +178,46 @@ public class TypedHandle<R extends Relation.Named, P extends Permission.Named> {
      *                    LookupSubjects always filters by object type, so
      *                    the caller must specify it.
      */
-    public TypedWhoQuery who(String subjectType, P permission) {
+    public TypedWhoQuery lookupSubjects(String subjectType, P permission) {
         if (ids.length != 1) {
             throw new IllegalStateException(
-                    "who(...) requires exactly one selected resource id; got " + ids.length);
+                    "lookupSubjects(...) requires exactly one selected resource id; got " + ids.length);
         }
         return new TypedWhoQuery(factory, ids[0], subjectType, permission.permissionName());
     }
 
     /**
-     * Typed subject-type overload of {@link #who(String, Permission.Named)}:
-     * {@code client.on(Document).select(id).who(User, Document.Perm.EDIT)}.
+     * Typed subject-type overload of {@link #lookupSubjects(String, Permission.Named)}:
+     * {@code client.on(Document).select(id).lookupSubjects(User, Document.Perm.EDIT)}.
      * The subject type name is read from the {@code ResourceType} descriptor.
      */
     public <R2 extends Enum<R2> & Relation.Named,
             P2 extends Enum<P2> & Permission.Named>
-    TypedWhoQuery who(ResourceType<R2, P2> subjectType, P permission) {
-        return who(subjectType.name(), permission);
+    TypedWhoQuery lookupSubjects(ResourceType<R2, P2> subjectType, P permission) {
+        return lookupSubjects(subjectType.name(), permission);
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //  Relations / expand
+    // ────────────────────────────────────────────────────────────────
+
+    /** Read relationships on the selected typed resource. */
+    @SafeVarargs
+    public final RelationQuery relations(R... relations) {
+        requireSingleId("relations");
+        String[] names = new String[relations.length];
+        for (int i = 0; i < relations.length; i++) {
+            names[i] = relations[i].relationName();
+        }
+        return new RelationQuery(factory.resourceType(), ids[0], factory.transport(), names);
+    }
+
+    /** Expand the selected typed permission tree. */
+    public ExpandTree expand(P permission) {
+        requireSingleId("expand");
+        return factory.transport().expand(
+                ResourceRef.of(factory.resourceType(), ids[0]),
+                Permission.of(permission),
+                Consistency.full());
     }
 }

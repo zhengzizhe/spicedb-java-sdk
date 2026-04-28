@@ -299,12 +299,12 @@ class TypedClassesTest {
         }
 
         @Test
-        void checkAll_with_class() {
+        void checkAll_uses_bound_permission_metadata() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-1").grant("edit").to("user:alice");
-            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
+            TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"}, TestPerm.class);
 
-            TypedCheckAllAction<TestPerm> action = handle.checkAll(TestPerm.class);
+            TypedCheckAllAction<TestPerm> action = handle.checkAll();
             EnumMap<TestPerm, Boolean> result = action.by("user:alice");
 
             assertThat(result.get(TestPerm.VIEW)).isTrue();
@@ -335,7 +335,7 @@ class TypedClassesTest {
             docFactory.resource("doc-1").grant("view").to("user:alice", "user:bob");
             TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1"});
 
-            TypedWhoQuery query = handle.who("user", TestPerm.VIEW);
+            TypedWhoQuery query = handle.lookupSubjects("user", TestPerm.VIEW);
             List<String> ids = query.fetchIds();
             assertThat(ids).containsExactlyInAnyOrder("alice", "bob");
         }
@@ -344,7 +344,7 @@ class TypedClassesTest {
         void who_multipleIds_throws() {
             TypedHandle<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> handle = new TypedHandle<TestRel, TestPerm>(docFactory, new String[]{"doc-1", "doc-2"});
 
-            assertThatThrownBy(() -> handle.who("user", TestPerm.VIEW))
+            assertThatThrownBy(() -> handle.lookupSubjects("user", TestPerm.VIEW))
                     .isInstanceOf(IllegalStateException.class);
         }
     }
@@ -834,7 +834,7 @@ class TypedClassesTest {
         @Test
         void findByUser() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            TypedFinder<TestPerm> finder = entry.findBy("user:alice");
+            TypedFinder<TestPerm> finder = entry.lookupResources("user:alice");
             List<String> ids = finder.can(TestPerm.VIEW);
 
             assertThat(ids).contains("doc-1");
@@ -843,7 +843,7 @@ class TypedClassesTest {
         @Test
         void findBy_subjectRef() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
-            TypedFinder<TestPerm> finder = entry.findBy(SubjectRef.of("user", "alice"));
+            TypedFinder<TestPerm> finder = entry.lookupResources(SubjectRef.of("user", "alice"));
             List<String> ids = finder.can(TestPerm.VIEW);
 
             assertThat(ids).contains("doc-1");
@@ -854,7 +854,7 @@ class TypedClassesTest {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-2").grant("view").to("user:bob");
 
-            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.findBy("user:alice", "user:bob");
+            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.lookupResources("user:alice", "user:bob");
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("user:alice")).contains("doc-1");
@@ -865,7 +865,7 @@ class TypedClassesTest {
         void findBy_subjectRefs_varargs() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
 
-            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.findBy(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
+            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.lookupResources(SubjectRef.of("user", "alice"), SubjectRef.of("user", "bob"));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("user:alice")).contains("doc-1");
@@ -875,7 +875,7 @@ class TypedClassesTest {
         void findBy_subjectRefs_collection() {
             docFactory.resource("doc-1").grant("view").to("user:alice");
 
-            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
+            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.lookupResources(List.of(SubjectRef.of("user", "alice")));
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 
             assertThat(result.get("user:alice")).contains("doc-1");
@@ -886,7 +886,7 @@ class TypedClassesTest {
             docFactory.resource("doc-1").grant("view").to("user:alice");
             docFactory.resource("doc-2").grant("view").to("user:alice");
 
-            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.findBy(List.of(SubjectRef.of("user", "alice")));
+            TypedResourceEntry.MultiFinder<TypedClassesTest.TestRel, TypedClassesTest.TestPerm> multi = entry.lookupResources(List.of(SubjectRef.of("user", "alice")));
             multi.limit(1);
             Map<String, List<String>> result = multi.can(TestPerm.VIEW);
 

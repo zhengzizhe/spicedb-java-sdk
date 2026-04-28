@@ -39,6 +39,39 @@ class AuthxClientTest {
     }
 
     @Test
+    void dynamicOn_select_usesNewBusinessApiShape() {
+        client.on("document")
+                .select("doc-1")
+                .grant("editor")
+                .to("user:alice")
+                .commit();
+
+        assertTrue(client.on("document")
+                .select("doc-1")
+                .check("editor")
+                .by("user:alice"));
+        assertFalse(client.on("document")
+                .select("doc-1")
+                .check("editor")
+                .by("user:bob"));
+    }
+
+    @Test
+    void dynamicOn_lookupResources_usesNewBusinessApiShape() {
+        client.on("document")
+                .select("doc-1")
+                .grant("viewer")
+                .to("user:alice")
+                .commit();
+
+        List<String> ids = client.on("document")
+                .lookupResources("user:alice")
+                .can("viewer");
+
+        assertEquals(List.of("doc-1"), ids);
+    }
+
+    @Test
     void grant_multiple_users() {
         ResourceHandle doc = client.resource("document", "doc-1");
         doc.grant("viewer").to("user:alice", "user:bob", "user:carol");

@@ -51,10 +51,10 @@ class IterableOverloadCoverageTest {
     }
 
     @Test
-    void typedResourceEntryHasIterableTypedFindBy() {
+    void typedResourceEntryHasIterableTypedLookupResources() {
         assertThat(methodExists(TypedResourceEntry.class,
-                "findBy", ResourceType.class, Iterable.class))
-                .as("TypedResourceEntry.findBy(ResourceType, Iterable<String>)")
+                "lookupResources", ResourceType.class, Iterable.class))
+                .as("TypedResourceEntry.lookupResources(ResourceType, Iterable<String>)")
                 .isTrue();
     }
 

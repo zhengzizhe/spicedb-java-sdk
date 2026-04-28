@@ -13,7 +13,7 @@ import java.util.Map;
  * Strongly-typed chain entry point returned by
  * {@link AuthxClient#on(ResourceType)}. Knows the relation / permission
  * enum classes for its resource type, so {@link #select(String...)},
- * {@link #findBy(SubjectRef)} and friends hand back typed actions that
+ * {@link #lookupResources(SubjectRef)} and friends hand back typed actions that
  * accept only the matching enums.
  *
  * <pre>
@@ -68,38 +68,38 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
     }
 
     // ────────────────────────────────────────────────────────────────
-    //  findBy(...) — reverse lookup (lookupResources)
+    //  lookupResources(...) — subject -> resources
     // ────────────────────────────────────────────────────────────────
 
     /** "Which resources of this type can {@code subject} access?" */
-    public TypedFinder<P> findBy(SubjectRef subject) {
+    public TypedFinder<P> lookupResources(SubjectRef subject) {
         return new TypedFinder<>(factory, subject);
     }
 
-    /** Canonical-string form of {@link #findBy(SubjectRef)} — {@code "user:alice"} etc. */
-    public TypedFinder<P> findBy(String subjectRef) {
+    /** Canonical-string form of {@link #lookupResources(SubjectRef)} — {@code "user:alice"} etc. */
+    public TypedFinder<P> lookupResources(String subjectRef) {
         return new TypedFinder<>(factory, SubjectRef.parse(subjectRef));
     }
 
     /**
-     * Typed subject form: {@code client.on(Document).findBy(User, "alice")}.
+     * Typed subject form: {@code client.on(Document).lookupResources(User, "alice")}.
      * Constructs the canonical subject ref before building the finder.
      */
     public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
-    TypedFinder<P> findBy(ResourceType<SR, SP> subjectType, String id) {
-        return findBy(subjectType.name() + ":" + id);
+    TypedFinder<P> lookupResources(ResourceType<SR, SP> subjectType, String id) {
+        return lookupResources(subjectType.name() + ":" + id);
     }
 
     /**
      * Typed batch subject form:
-     * {@code client.on(Document).findBy(User, List.of("alice", "bob"))}.
+     * {@code client.on(Document).lookupResources(User, List.of("alice", "bob"))}.
      * Wraps each id as {@code type:id} and dispatches as a multi-subject lookup.
      */
     public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
-    MultiFinder<R, P> findBy(ResourceType<SR, SP> subjectType, Iterable<String> ids) {
+    MultiFinder<R, P> lookupResources(ResourceType<SR, SP> subjectType, Iterable<String> ids) {
         List<String> refs = new ArrayList<>();
         for (String id : ids) refs.add(subjectType.name() + ":" + id);
-        return findBy(refs);
+        return lookupResources(refs);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -113,27 +113,27 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
      *
      * <pre>
      * Map&lt;String, List&lt;String&gt;&gt; perUser = client.on(Document)
-     *     .findBy(SubjectRef.of("user","alice"), SubjectRef.of("user","bob"))
+     *     .lookupResources(SubjectRef.of("user","alice"), SubjectRef.of("user","bob"))
      *     .can(Document.Perm.EDIT);
      * </pre>
      */
-    public MultiFinder<R, P> findBy(SubjectRef... subjects) {
+    public MultiFinder<R, P> lookupResources(SubjectRef... subjects) {
         return new MultiFinder<>(factory, List.of(subjects));
     }
 
-    public MultiFinder<R, P> findBy(Collection<SubjectRef> subjects) {
+    public MultiFinder<R, P> lookupResources(Collection<SubjectRef> subjects) {
         return new MultiFinder<>(factory, List.copyOf(subjects));
     }
 
-    /** Canonical-string varargs form of {@link #findBy(SubjectRef...)}. */
-    public MultiFinder<R, P> findBy(String... subjectRefs) {
+    /** Canonical-string varargs form of {@link #lookupResources(SubjectRef...)}. */
+    public MultiFinder<R, P> lookupResources(String... subjectRefs) {
         ArrayList<SubjectRef> refs = new ArrayList<SubjectRef>(subjectRefs.length);
         for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
         return new MultiFinder<>(factory, refs);
     }
 
-    /** {@link Iterable} overload of {@link #findBy(String...)}. */
-    public MultiFinder<R, P> findBy(Iterable<String> subjectRefs) {
+    /** {@link Iterable} overload of {@link #lookupResources(String...)}. */
+    public MultiFinder<R, P> lookupResources(Iterable<String> subjectRefs) {
         ArrayList<SubjectRef> refs = new ArrayList<SubjectRef>();
         for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
         return new MultiFinder<>(factory, refs);

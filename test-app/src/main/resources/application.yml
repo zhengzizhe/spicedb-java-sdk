@@ -5,6 +5,12 @@ spring:
   application:
     name: authx-testapp
 
+authx:
+  spicedb:
+    target: localhost:50051
+    token: localdevlocaldevlocaldevlocaldev
+    tls: false
+
 management:
   endpoints:
     web:

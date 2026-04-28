@@ -49,6 +49,13 @@ public class ApiExceptionHandler {
         return error(HttpStatus.INTERNAL_SERVER_ERROR, e);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleBadRequest(IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                "error", e.getClass().getSimpleName(),
+                "message", String.valueOf(e.getMessage())));
+    }
+
     private static ResponseEntity<Map<String, String>> error(HttpStatus status, AuthxException e) {
         return ResponseEntity.status(status).body(Map.of(
                 "error", e.getClass().getSimpleName(),

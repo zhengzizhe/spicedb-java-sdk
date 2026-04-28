@@ -21,11 +21,11 @@ import java.util.Map;
  * {@code Perm.X} constant manually and from picking values out of a
  * {@link com.authx.sdk.model.CheckMatrix} by string name afterwards.
  *
- * <p>Construct via {@link TypedHandle#checkAll(Class)}.
+ * <p>Construct via {@link TypedHandle#checkAll()}.
  *
  * <pre>
  * EnumMap&lt;Document.Perm, Boolean&gt; toolbar =
- *     Document.select(client, docId).checkAll(Document.Perm.class).by(userId);
+ *     client.on(DOCUMENT).select(docId).checkAll().by(USER, userId);
  *
  * if (toolbar.get(Document.Perm.EDIT)) showEditButton();
  * </pre>
@@ -126,8 +126,8 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
      *
      * <pre>
      * Map&lt;String, EnumMap&lt;Document.Perm, Boolean&gt;&gt; perRow =
-     *     Document.select(client, pageIds)
-     *         .checkAll(Document.Perm.class).byAll(SubjectRef.of("user", userId));
+     *     client.on(DOCUMENT).select(pageIds)
+     *         .checkAll().byAll(SubjectRef.of("user", userId));
      * </pre>
      */
     public Map<String, EnumMap<E, Boolean>> byAll(SubjectRef subject) {
@@ -170,4 +170,5 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     Map<String, EnumMap<E, Boolean>> byAll(ResourceType<R2, P2> subjectType, String id) {
         return byAll(subjectType.name() + ":" + id);
     }
+
 }

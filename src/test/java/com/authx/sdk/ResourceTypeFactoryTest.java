@@ -10,7 +10,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class ResourceTypeSubclassTest {
+class ResourceTypeFactoryTest {
 
     enum TestRel implements Relation.Named {
         OWNER("owner", "user"),
@@ -33,28 +33,24 @@ class ResourceTypeSubclassTest {
         @Override public String permissionName() { return v; }
     }
 
-    static final class TestDescriptor extends ResourceType<TestRel, TestPerm> {
-        TestDescriptor() { super("test", TestRel.class, TestPerm.class); }
-    }
-
     @Test
-    void subclassRetainsMetadataFromProtectedConstructor() {
-        ResourceTypeSubclassTest.TestDescriptor desc = new TestDescriptor();
+    void factoryRetainsMetadata() {
+        ResourceType<TestRel, TestPerm> desc = ResourceType.of("test", TestRel.class, TestPerm.class);
         assertThat(desc.name()).isEqualTo("test");
         assertThat(desc.relClass()).isEqualTo(TestRel.class);
         assertThat(desc.permClass()).isEqualTo(TestPerm.class);
     }
 
     @Test
-    void subclassEqualsFactoryBuiltDescriptorByName() {
-        ResourceTypeSubclassTest.TestDescriptor fromSubclass = new TestDescriptor();
-        ResourceType<ResourceTypeSubclassTest.TestRel, ResourceTypeSubclassTest.TestPerm> fromFactory  = ResourceType.of("test", TestRel.class, TestPerm.class);
-        assertThat(fromSubclass).isEqualTo(fromFactory);
-        assertThat(fromSubclass.hashCode()).isEqualTo(fromFactory.hashCode());
+    void descriptorsWithSameNameAreEqual() {
+        ResourceType<TestRel, TestPerm> first = ResourceType.of("test", TestRel.class, TestPerm.class);
+        ResourceType<TestRel, TestPerm> second = ResourceType.of("test", TestRel.class, TestPerm.class);
+        assertThat(first).isEqualTo(second);
+        assertThat(first.hashCode()).isEqualTo(second.hashCode());
     }
 
     @Test
     void toStringReturnsName() {
-        assertThat(new TestDescriptor().toString()).isEqualTo("test");
+        assertThat(ResourceType.of("test", TestRel.class, TestPerm.class).toString()).isEqualTo("test");
     }
 }

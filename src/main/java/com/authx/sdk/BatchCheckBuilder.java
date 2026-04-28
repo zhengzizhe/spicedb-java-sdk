@@ -62,6 +62,13 @@ public final class BatchCheckBuilder {
         return add(resourceType.name(), resourceId, permission, subject);
     }
 
+    public BatchCheckBuilder add(ResourceType<?, ?> resourceType, String resourceId,
+                                  Permission.Named permission,
+                                  ResourceType<?, ?> subjectType, String subjectId) {
+        return add(resourceType, resourceId, permission,
+                SubjectRef.of(subjectType.name(), subjectId));
+    }
+
     /**
      * Fan one {@code (type, permission, subject)} triple across many
      * resource ids — common pattern for "can this user view any of these
@@ -75,6 +82,15 @@ public final class BatchCheckBuilder {
             add(resourceType.name(), id, permission, subject);
         }
         return this;
+    }
+
+    public BatchCheckBuilder addAll(ResourceType<?, ?> resourceType,
+                                     Collection<String> resourceIds,
+                                     Permission.Named permission,
+                                     ResourceType<?, ?> subjectType,
+                                     String subjectId) {
+        return addAll(resourceType, resourceIds, permission,
+                SubjectRef.of(subjectType.name(), subjectId));
     }
 
     /** Raw-string overload for {@link #addAll}. */
@@ -106,6 +122,7 @@ public final class BatchCheckBuilder {
                               Permission.Named perm, SubjectRef subject) {
             return new Cell(type.name(), id, perm.permissionName(), subject);
         }
+
     }
 
     /** String-based overload for dynamic-permission cases. */

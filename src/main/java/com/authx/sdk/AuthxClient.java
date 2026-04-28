@@ -44,7 +44,7 @@ public class AuthxClient implements AutoCloseable {
     private final HealthProbe healthProbe;
     private final SchemaClient schemaClient;
     private final @Nullable SchemaCache schemaCache;
-    private final ConcurrentHashMap<String, ResourceFactory> factories = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, DynamicResourceEntry> factories = new ConcurrentHashMap<>();
 
     /**
      * Legacy constructor — delegates with a null-backed {@link SchemaClient}
@@ -121,25 +121,22 @@ public class AuthxClient implements AutoCloseable {
     // ---- Business API ----
 
     /**
-     * Get a cached factory for a resource type. Auto-created on first call.
+     * String-based overload of the new business API. Prefer generated
+     * {@link ResourceType} descriptors when available, but use this dynamic
+     * form when the type / relation / permission names are runtime data.
      *
      * <pre>
-     * // Chain style
-     * client.on("document").resource("doc-1").check("view").by("alice");
-     *
-     * // Store factory, reuse
-     * ResourceHandle doc = client.on("document");
-     * doc.resource("doc-1").check("view").by("alice");
-     * doc.resource("doc-2").grant("editor").to("bob");
-     *
-     * // Simple style (no chaining needed)
-     * doc.check("doc-1", "view", "alice");
-     * doc.grant("doc-1", "editor", "bob");
+     * client.on("document").select("doc-1").check("view").by("user:alice");
+     * client.on("document").findBy("user:alice").can("view");
      * </pre>
      */
-    public ResourceFactory on(String resourceType) {
+    public DynamicResourceEntry on(String resourceType) {
+        return dynamic(resourceType);
+    }
+
+    private DynamicResourceEntry dynamic(String resourceType) {
         return factories.computeIfAbsent(resourceType, type ->
-                new ResourceFactory(type, transport, infra.asyncExecutor(), schemaCache));
+                new DynamicResourceEntry(type, transport, infra.asyncExecutor(), schemaCache));
     }
 
     /**
@@ -162,7 +159,7 @@ public class AuthxClient implements AutoCloseable {
     public <R extends Enum<R> & Relation.Named,
             P extends Enum<P> & Permission.Named>
     TypedResourceEntry<R, P> on(ResourceType<R, P> resourceType) {
-        return new TypedResourceEntry<>(on(resourceType.name()), resourceType);
+        return new TypedResourceEntry<>(dynamic(resourceType.name()), resourceType);
     }
 
     /**

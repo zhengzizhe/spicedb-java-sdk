@@ -74,14 +74,14 @@ class SdkEndToEndTest {
         // Check with full consistency (ensure we read after write)
         CheckResult checkResult = doc.check("editor")
                 .withConsistency(Consistency.full())
-                .by("alice");
+                .by("user:alice");
         assertTrue(checkResult.hasPermission(),
                 "alice should have editor on e2e-doc-1, got: " + checkResult.permissionship());
 
         // Check: bob should NOT have editor
         CheckResult bobCheck = doc.check("editor")
                 .withConsistency(Consistency.full())
-                .by("bob");
+                .by("user:bob");
         assertFalse(bobCheck.hasPermission(), "bob should NOT have editor on e2e-doc-1");
     }
 
@@ -111,7 +111,7 @@ class SdkEndToEndTest {
     @Test
     @Order(5)
     void lookup_resources() {
-        List<String> docs = client.lookup("document").withPermission("editor").by("alice")
+        List<String> docs = client.lookup("document").withPermission("editor").by("user:alice")
                 .withConsistency(Consistency.full())
                 .fetch();
         assertTrue(docs.contains("e2e-doc-1"), "alice should find e2e-doc-1 via lookup");
@@ -125,7 +125,7 @@ class SdkEndToEndTest {
 
         CheckResult checkResult = doc.check("editor")
                 .withConsistency(Consistency.full())
-                .by("alice");
+                .by("user:alice");
         assertFalse(checkResult.hasPermission(), "alice should no longer have editor after revoke");
     }
 
@@ -135,23 +135,23 @@ class SdkEndToEndTest {
         ResourceHandle doc = client.resource("document", "e2e-doc-batch");
 
         BatchResult result = doc.batch()
-                .grant("owner").to("carol")
-                .grant("editor").to("dave")
+                .grant("owner").to("user:carol")
+                .grant("editor").to("user:dave")
                 .execute();
 
         assertNotNull(result.zedToken());
 
         assertTrue(doc.check("owner")
                 .withConsistency(Consistency.full())
-                .by("carol").hasPermission());
+                .by("user:carol").hasPermission());
         assertTrue(doc.check("editor")
                 .withConsistency(Consistency.full())
-                .by("dave").hasPermission());
+                .by("user:dave").hasPermission());
 
         // Cleanup
         doc.batch()
-                .revoke("owner").from("carol")
-                .revoke("editor").from("dave")
+                .revoke("owner").from("user:carol")
+                .revoke("editor").from("user:dave")
                 .execute();
     }
 }

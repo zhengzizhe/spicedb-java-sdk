@@ -8,18 +8,19 @@ import org.jspecify.annotations.Nullable;
 import java.util.concurrent.Executor;
 
 /**
- * Factory for a specific resource type. All operations go through a
- * chain that starts with {@link #resource(String)} or {@link #lookup()}:
+ * Legacy factory for a specific resource type.
  *
- * <p><b>Typed chain (preferred):</b>
+ * <p><b>Preferred chain:</b>
  * <pre>
  * client.on(Document).select("doc-1")
  *     .grant(Document.Rel.EDITOR).to(User, "bob").commit();
  * client.on(Document).select("doc-1")
  *     .check(Document.Perm.VIEW).by(User, "alice");
+ * client.on("document").select("doc-1")
+ *     .check("view").by("user:alice");
  * </pre>
  *
- * <p><b>Untyped chain (dynamic / string-driven cases):</b>
+ * <p><b>Deprecated chain:</b>
  * <pre>
  * ResourceFactory doc = client.on("document");
  * doc.resource("doc-1").grant("editor").to("user:bob");
@@ -94,7 +95,7 @@ public class ResourceFactory {
 
     // ---- Entry points ----
 
-    /** Get a handle for advanced operations: batch, expand, who, relations. */
+    /** Get an untyped handle for dynamic string-driven operations. */
     public ResourceHandle resource(String id) {
         return new ResourceHandle(resourceType, id, transport, asyncExecutor, schemaCache);
     }

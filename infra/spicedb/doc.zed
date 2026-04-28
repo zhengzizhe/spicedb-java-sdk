@@ -1,0 +1,77 @@
+definition user {}
+
+definition org {
+  relation member: user
+}
+
+definition project {
+  relation owner: user
+  relation manager: user | org#member
+  relation member: user | org#member
+
+  permission manage = owner + manager
+  permission view = manage + member
+}
+
+definition task {
+  relation project: project
+  relation assignee: user
+  relation reviewer: user
+
+  permission edit = assignee + reviewer + project->manage
+  permission view = edit + project->view
+}
+
+definition doc_node {
+  // Permission inheritance edge. Only write this relationship when
+  // doc_nodes.inheritance = true.
+  relation parent: doc_node
+
+  // Direct collaborator roles from doc_collaborators / Neo4j collaborator edge.
+  relation owner: user
+  relation manager: user | org#member
+  relation editor: user | org#member
+  relation reader: user | org#member
+
+  // Visibility grants from Visibility.enterprise / Visibility.everyone.
+  // They are separated from collaborators so visibility can be replaced
+  // without touching explicit collaborators.
+  relation enterprise_manager: org#member
+  relation enterprise_editor: org#member
+  relation enterprise_reader: org#member
+  relation public_manager: user:*
+  relation public_editor: user:*
+  relation public_reader: user:*
+
+  // Enterprise spaces grant company members a configurable default role.
+  relation default_manager: org#member
+  relation default_editor: org#member
+  relation default_reader: org#member
+
+  // CSES collaborator lookup keeps the closest role by subject.
+  // If a node has any direct assignment for a subject, inherited roles
+  // for that same subject must not leak through.
+  permission direct_assignment =
+    owner + manager + editor + reader +
+    enterprise_manager + enterprise_editor + enterprise_reader +
+    public_manager + public_editor + public_reader +
+    default_manager + default_editor + default_reader
+
+  // Mirrors DocAuthRelationEnum.OWNER: owner is never inherited.
+  permission owner_effective = owner
+
+  // Mirrors MANAGER_EFFECTIVE / WRITER_EFFECTIVE / READER_EFFECTIVE.
+  // Parent owner becomes child manager because parent->manager_effective
+  // includes parent owner_effective, while owner_effective itself is not inherited.
+  permission manager_effective =
+    owner + manager + enterprise_manager + public_manager + default_manager +
+    (parent->manager_effective - direct_assignment)
+
+  permission editor_effective =
+    manager_effective + editor + enterprise_editor + public_editor + default_editor +
+    (parent->editor_effective - direct_assignment)
+
+  permission reader_effective =
+    editor_effective + reader + enterprise_reader + public_reader + default_reader +
+    (parent->reader_effective - direct_assignment)
+}

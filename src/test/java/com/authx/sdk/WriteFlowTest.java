@@ -410,36 +410,31 @@ class WriteFlowTest {
     @Test
     void listener_firesImmediatelyOnCallingThread() {
         AtomicInteger fired = new AtomicInteger(0);
-        newFlow()
+        WriteCompletion completion = newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
-                .commit()
-                .listener(c -> fired.incrementAndGet());
+                .commit();
+        completion.listener(c -> fired.incrementAndGet());
         assertThat(fired.get()).isEqualTo(1);
     }
 
     @Test
-    void listener_multipleFireInOrder() {
-        ArrayList<Integer> order = new ArrayList<Integer>();
-        newFlow()
+    void listener_syncThrowPropagates() {
+        WriteCompletion completion = newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
-                .commit()
-                .listener(c -> order.add(1))
-                .listener(c -> order.add(2))
-                .listener(c -> order.add(3));
-        assertThat(order).containsExactly(1, 2, 3);
+                .commit();
+        assertThatThrownBy(() -> completion.listener(c -> { throw new RuntimeException("boom"); }))
+                .isInstanceOf(RuntimeException.class).hasMessage("boom");
     }
 
     @Test
-    void listener_syncThrowStopsSubsequent() {
-        ArrayList<Integer> fired = new ArrayList<Integer>();
-        assertThatThrownBy(() -> newFlow()
+    void listener_allowsOnlyOneCallbackPerCompletion() {
+        WriteCompletion completion = newFlow()
                 .grant(DocRel.VIEWER).to(User, "alice")
-                .commit()
-                .listener(c -> fired.add(1))
-                .listener(c -> { throw new RuntimeException("boom"); })
-                .listener(c -> fired.add(3)))
-                .isInstanceOf(RuntimeException.class).hasMessage("boom");
-        assertThat(fired).containsExactly(1);
+                .commit();
+        completion.listener(c -> {});
+        assertThatThrownBy(() -> completion.listener(c -> {}))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("listener already registered");
     }
 
     @Test
@@ -450,13 +445,13 @@ class WriteFlowTest {
         try {
             CountDownLatch done = new CountDownLatch(1);
             AtomicReference<String> threadName = new AtomicReference<String>();
-            newFlow()
+            WriteCompletion completion = newFlow()
                     .grant(DocRel.VIEWER).to(User, "alice")
-                    .commit()
-                    .listenerAsync(c -> {
-                        threadName.set(Thread.currentThread().getName());
-                        done.countDown();
-                    }, exec);
+                    .commit();
+            completion.listenerAsync(c -> {
+                threadName.set(Thread.currentThread().getName());
+                done.countDown();
+            }, exec);
             assertThat(done.await(2, TimeUnit.SECONDS)).isTrue();
             assertThat(threadName.get()).isEqualTo("wf-async");
         } finally { exec.shutdown(); }
@@ -468,8 +463,8 @@ class WriteFlowTest {
         try {
             WriteCompletion c = newFlow()
                     .grant(DocRel.VIEWER).to(User, "alice")
-                    .commit()
-                    .listenerAsync(x -> { throw new RuntimeException("boom"); }, exec);
+                    .commit();
+            c.listenerAsync(x -> { throw new RuntimeException("boom"); }, exec);
             assertThat(c).isNotNull();
         } finally { exec.shutdown(); }
     }

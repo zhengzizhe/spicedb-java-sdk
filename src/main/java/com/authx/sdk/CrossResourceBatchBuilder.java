@@ -253,6 +253,7 @@ public class CrossResourceBatchBuilder {
             for (String id : ids) refs.add(subjectType.name() + ":" + id);
             return to(refs.toArray(String[]::new));
         }
+
     }
 
     /**
@@ -381,6 +382,7 @@ public class CrossResourceBatchBuilder {
             for (String id : ids) refs.add(subjectType.name() + ":" + id);
             return to(refs.toArray(String[]::new));
         }
+
     }
 
     public static class MultiRevokeScope {

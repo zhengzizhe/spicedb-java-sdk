@@ -6,9 +6,7 @@ import com.authx.sdk.trace.LogCtx;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,25 +25,19 @@ import java.util.stream.Collectors;
  * client.close();
  * </pre>
  *
- * <p>Per resource type, emits:
- * <ul>
- *   <li>{@code Xxx.java} — {@code Rel} enum (with {@code subjectTypes()}
- *       metadata per value), {@code Perm} enum, and a
- *       {@code public static final ResourceType<Rel, Perm> TYPE} constant</li>
- * </ul>
- * Plus:
- * <ul>
- *   <li>{@code ResourceTypes.java} — string constants for every type</li>
- *   <li>{@code XxxCaveat.java} — one per caveat (NAME, parameter-name
- *       constants, {@code ref(...)} + {@code context(...)} factories)</li>
- *   <li>{@code Caveats.java} — string constants for every caveat name</li>
- * </ul>
+ * <p>Per resource type, emits {@code Xxx.java} with a same-name resource
+ * object plus {@code Rel} and {@code Perm} enums. Business code can static
+ * import that object and call {@code client.on(Project)} while still using
+ * {@code Project.Rel.MEMBER}.
+ * Caveats are emitted as {@code XxxCaveat.java} classes plus a
+ * {@code Caveats.java} name aggregator.
  *
  * <p>The emitted {@code Rel} enum carries full {@link SubjectType}
  * metadata via a varargs constructor ({@code Rel(String v, String... sts)})
  * and a {@code subjectTypes()} override on {@link com.authx.sdk.model.Relation.Named}.
  * Business code can use this at runtime for subject-type inference and
- * validation without needing an extra schema lookup.
+ * validation without needing an extra schema lookup. Generated classes avoid
+ * descriptor/proxy boilerplate so business-visible code stays small.
  */
 public final class AuthxCodegen {
 
@@ -76,10 +68,7 @@ public final class AuthxCodegen {
             Set<String> relations = schema.relationsOf(type);
             Set<String> permissions = schema.permissionsOf(type);
             // Emit a class for every declared type, even subject-only ones
-            // such as {@code user} (no relations / no permissions). These
-            // still need a {@code TYPE} descriptor so business code can
-            // pass {@code User} to the typed subject overloads on
-            // Grant/Revoke/Check/Lookup.
+            // such as user. Each class carries its same-name typed descriptor.
 
             Map<String, List<SubjectType>> relSTs = schema.allSubjectTypes(type);
             String file = emitTypeClass(type, relations, permissions, relSTs, packageName);
@@ -90,7 +79,7 @@ public final class AuthxCodegen {
         }
 
         // ResourceTypes.java is no longer emitted — type names are carried by
-        // the Schema.Xxx descriptor fields. Delete any lingering file from a
+        // the generated descriptor classes. Delete any lingering file from a
         // previous generator run so the tree stays clean.
         Path oldResourceTypesPath = basePkgDir.resolve("ResourceTypes.java");
         if (Files.exists(oldResourceTypesPath)) {
@@ -99,17 +88,12 @@ public final class AuthxCodegen {
                     LogCtx.fmt("  Removed obsolete: {0}", oldResourceTypesPath));
         }
 
-        // Gather per-type rel/perm sets for the Schema aggregator.
-        LinkedHashMap<String, Set<String>> relsByType  = new LinkedHashMap<String, Set<String>>();
-        LinkedHashMap<String, Set<String>> permsByType = new LinkedHashMap<String, Set<String>>();
-        for (String type : types) {
-            relsByType.put(type, schema.relationsOf(type));
-            permsByType.put(type, schema.permissionsOf(type));
+        Path oldSchemaPath = basePkgDir.resolve("Schema.java");
+        if (Files.exists(oldSchemaPath)) {
+            Files.delete(oldSchemaPath);
+            LOG.log(System.Logger.Level.INFO,
+                    LogCtx.fmt("  Removed obsolete: {0}", oldSchemaPath));
         }
-        Path schemaPath = basePkgDir.resolve("Schema.java");
-        Files.writeString(schemaPath, emitSchema(packageName, relsByType, permsByType));
-        LOG.log(System.Logger.Level.INFO,
-                LogCtx.fmt("  Generated: {0}", schemaPath));
 
         Set<String> caveatNames = schema.getCaveatNames();
         if (!caveatNames.isEmpty()) {
@@ -143,22 +127,28 @@ public final class AuthxCodegen {
         String className = toPascalCase(typeName);
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(packageName).append(";\n\n");
+        sb.append("import com.authx.sdk.ResourceType;\n");
         sb.append("import com.authx.sdk.model.Permission;\n");
         sb.append("import com.authx.sdk.model.Relation;\n");
         sb.append("import com.authx.sdk.model.SubjectType;\n\n");
         sb.append("import java.util.Arrays;\n");
         sb.append("import java.util.List;\n\n");
 
-        sb.append("/**\n")
-          .append(" * Typed enums for SpiceDB resource type <b>").append(typeName).append("</b>.\n")
-          .append(" * Holds {@code Rel} + {@code Perm} enums used by the generated\n")
-          .append(" * {@code Schema.").append(className).append("Descriptor} in Schema.java.\n")
-          .append(" * Generated by AuthxCodegen at ").append(Instant.now()).append(" — do not edit.\n")
-          .append(" */\n");
+        sb.append("// Generated by AuthxCodegen. Do not edit.\n");
         sb.append("public final class ").append(className).append(" {\n\n");
+        sb.append("    public static final Resource ").append(className)
+          .append(" = new Resource();\n\n");
+        sb.append("    public static final class Resource extends ResourceType<Rel, Perm> {\n");
+        sb.append("        public final RelProxy Rel = new RelProxy();\n");
+        sb.append("        public final PermProxy Perm = new PermProxy();\n\n");
+        sb.append("        private Resource() {\n");
+        sb.append("            super(\"").append(typeName).append("\", ")
+          .append(packageName).append(".").append(className).append(".Rel::values, ")
+          .append(packageName).append(".").append(className).append(".Perm::values);\n");
+        sb.append("        }\n");
+        sb.append("    }\n\n");
 
         // ─── Rel enum with subject types varargs ───
-        sb.append("    /** Relations — used with grant / revoke on the typed chain. */\n");
         sb.append("    public enum Rel implements Relation.Named {\n");
         if (relations.isEmpty()) {
             sb.append("        ;\n");
@@ -185,8 +175,16 @@ public final class AuthxCodegen {
         sb.append("        @Override public List<SubjectType> subjectTypes() { return subjectTypes; }\n");
         sb.append("    }\n\n");
 
+        sb.append("    public static final class RelProxy {\n");
+        for (String rel : relations.stream().sorted().toList()) {
+            String constant = toConstant(rel);
+            sb.append("        public final Rel ").append(constant)
+              .append(" = Rel.").append(constant).append(";\n");
+        }
+        sb.append("        private RelProxy() {}\n");
+        sb.append("    }\n\n");
+
         // ─── Perm enum ───
-        sb.append("    /** Permissions — used with check / who / findBy on the typed chain. */\n");
         sb.append("    public enum Perm implements Permission.Named {\n");
         if (permissions.isEmpty()) {
             sb.append("        ;\n");
@@ -203,25 +201,16 @@ public final class AuthxCodegen {
         sb.append("        @Override public String permissionName() { return value; }\n");
         sb.append("    }\n\n");
 
-        // Descriptor + Rel/Perm proxy live in Schema.java (generated alongside).
-        sb.append("    private ").append(className).append("() {}\n");
-        sb.append("}\n");
-        return sb.toString();
-    }
-
-    static String emitResourceTypes(String packageName, Set<String> allTypes) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("package ").append(packageName).append(";\n\n");
-        sb.append("/**\n")
-          .append(" * Canonical resource type names from the SpiceDB schema.\n")
-          .append(" * Generated by AuthxCodegen — do not edit.\n")
-          .append(" */\n");
-        sb.append("public final class ResourceTypes {\n\n");
-        for (String type : allTypes.stream().sorted().toList()) {
-            sb.append("    public static final String ").append(toConstant(type))
-              .append(" = \"").append(type).append("\";\n");
+        sb.append("    public static final class PermProxy {\n");
+        for (String perm : permissions.stream().sorted().toList()) {
+            String constant = toConstant(perm);
+            sb.append("        public final Perm ").append(constant)
+              .append(" = Perm.").append(constant).append(";\n");
         }
-        sb.append("\n    private ResourceTypes() {}\n");
+        sb.append("        private PermProxy() {}\n");
+        sb.append("    }\n\n");
+
+        sb.append("    private ").append(className).append("() {}\n");
         sb.append("}\n");
         return sb.toString();
     }
@@ -317,94 +306,6 @@ public final class AuthxCodegen {
               .append(" = \"").append(n).append("\";\n");
         }
         sb.append("\n    private Caveats() {}\n");
-        sb.append("}\n");
-        return sb.toString();
-    }
-
-    /**
-     * Emit the {@code Schema.java} aggregator file containing one
-     * {@code XxxDescriptor} + {@code XxxRelProxy} + {@code XxxPermProxy}
-     * nested class per resource type, plus a {@code public static final}
-     * field for each descriptor.
-     *
-     * <p>All enum references inside proxy fields are written as fully
-     * qualified names to prevent class-initialization NPE under
-     * {@code import static Schema.*} — if we wrote {@code Organization.Rel.ADMIN}
-     * inside {@code OrganizationRelProxy}, the compiler would resolve
-     * {@code Organization} to the not-yet-initialised descriptor field
-     * on the enclosing {@code Schema} class and blow up at load time.
-     */
-    static String emitSchema(String packageName,
-                             Map<String, Set<String>> relationsByType,
-                             Map<String, Set<String>> permissionsByType) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("package ").append(packageName).append(";\n\n");
-        sb.append("import com.authx.sdk.PermissionProxy;\n");
-        sb.append("import com.authx.sdk.ResourceType;\n\n");
-        sb.append("/**\n");
-        sb.append(" * Flat descriptor aggregator — business code does {@code import static ")
-          .append(packageName).append(".Schema.*} to bring {@code Organization}, {@code User},\n");
-        sb.append(" * etc. into scope as typed descriptor values (NOT enum container classes).\n");
-        sb.append(" * Generated by AuthxCodegen at ").append(Instant.now()).append(" — do not edit.\n");
-        sb.append(" *\n");
-        sb.append(" * <pre>\n");
-        sb.append(" * import static ").append(packageName).append(".Schema.*;\n");
-        sb.append(" * client.on(Document).select(docId).check(Document.Perm.VIEW).by(User, userId);\n");
-        sb.append(" * </pre>\n");
-        sb.append(" */\n");
-        sb.append("public final class Schema {\n\n");
-        sb.append("    private Schema() {}\n\n");
-
-        List<String> typesSorted = relationsByType.keySet().stream().sorted().toList();
-        for (String type : typesSorted) {
-            String className = toPascalCase(type);
-            String fqn = packageName + "." + className;
-            List<String> rels  = relationsByType.getOrDefault(type, Set.of())
-                    .stream().sorted().toList();
-            List<String> perms = permissionsByType.getOrDefault(type, Set.of())
-                    .stream().sorted().toList();
-
-            // ── Descriptor ──
-            sb.append("    public static final class ").append(className).append("Descriptor\n");
-            sb.append("            extends ResourceType<").append(fqn).append(".Rel, ")
-              .append(fqn).append(".Perm> {\n");
-            sb.append("        protected ").append(className).append("Descriptor() {\n");
-            sb.append("            super(\"").append(type).append("\", ")
-              .append(fqn).append(".Rel.class, ").append(fqn).append(".Perm.class);\n");
-            sb.append("        }\n");
-            sb.append("        public final ").append(className).append("RelProxy  Rel  = new ")
-              .append(className).append("RelProxy();\n");
-            sb.append("        public final ").append(className).append("PermProxy Perm = new ")
-              .append(className).append("PermProxy();\n");
-            sb.append("    }\n\n");
-
-            // ── RelProxy ──
-            sb.append("    public static final class ").append(className).append("RelProxy {\n");
-            for (String r : rels) {
-                sb.append("        public final ").append(fqn).append(".Rel ")
-                  .append(toConstant(r)).append(" = ").append(fqn).append(".Rel.")
-                  .append(toConstant(r)).append(";\n");
-            }
-            sb.append("    }\n\n");
-
-            // ── PermProxy ──
-            sb.append("    public static final class ").append(className)
-              .append("PermProxy implements PermissionProxy<").append(fqn).append(".Perm> {\n");
-            for (String p : perms) {
-                sb.append("        public final ").append(fqn).append(".Perm ")
-                  .append(toConstant(p)).append(" = ").append(fqn).append(".Perm.")
-                  .append(toConstant(p)).append(";\n");
-            }
-            sb.append("        @Override public Class<").append(fqn).append(".Perm> enumClass() {\n");
-            sb.append("            return ").append(fqn).append(".Perm.class;\n");
-            sb.append("        }\n");
-            sb.append("    }\n\n");
-
-            // ── Field ──
-            sb.append("    public static final ").append(className).append("Descriptor ")
-              .append(className).append(" = new ").append(className).append("Descriptor();\n\n");
-        }
-
         sb.append("}\n");
         return sb.toString();
     }

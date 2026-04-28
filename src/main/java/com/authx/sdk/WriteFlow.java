@@ -31,26 +31,26 @@ import org.jspecify.annotations.Nullable;
  *
  * <h2>Grant-only</h2>
  * <pre>
- * auth.on(Document).select(docId)
+ * auth.on(DOCUMENT).select(docId)
  *     .grant(Document.Rel.VIEWER)
- *     .to(User, "alice")
- *     .to(Group, "eng", Group.Rel.MEMBER)
+ *     .to(USER, "alice")
+ *     .to(GROUP, "eng", Group.Rel.MEMBER)
  *     .commit();
  * </pre>
  *
  * <h2>Revoke-only</h2>
  * <pre>
- * auth.on(Document).select(docId)
+ * auth.on(DOCUMENT).select(docId)
  *     .revoke(Document.Rel.VIEWER)
- *     .from(User, "alice")
+ *     .from(USER, "alice")
  *     .commit();
  * </pre>
  *
  * <h2>Mixed — change role atomically</h2>
  * <pre>
- * auth.on(Document).select(docId)
- *     .revoke(Document.Rel.EDITOR).from(User, "alice")
- *     .grant(Document.Rel.VIEWER).to(User, "alice")
+ * auth.on(DOCUMENT).select(docId)
+ *     .revoke(Document.Rel.EDITOR).from(USER, "alice")
+ *     .grant(Document.Rel.VIEWER).to(USER, "alice")
  *     .commit();
  * </pre>
  *
@@ -63,8 +63,8 @@ import org.jspecify.annotations.Nullable;
  *
  * <h2>Listener hooks</h2>
  *
- * <p>{@link #commit()} returns a {@link WriteCompletion} that supports
- * chaining synchronous / asynchronous callbacks. See {@link WriteCompletion}.
+ * <p>{@link #commit()} returns a {@link WriteCompletion} that can fire
+ * one synchronous or asynchronous callback. See {@link WriteCompletion}.
  *
  * <h2>Lifecycle</h2>
  * <ul>

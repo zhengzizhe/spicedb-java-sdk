@@ -3,7 +3,12 @@ package com.authx.sdk.transport;
 import com.authx.sdk.model.*;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.policy.ReadConsistency;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Replaces SessionConsistencyTransport. Uses PolicyRegistry to resolve per-resource-type
@@ -65,18 +70,48 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     }
 
     @Override
+    public List<CheckResult> checkBulkMulti(List<BulkCheckItem> items, Consistency consistency) {
+        if (items.isEmpty()) return List.of();
+
+        Map<Consistency, List<IndexedBulkCheckItem>> groups = new LinkedHashMap<>();
+        for (int i = 0; i < items.size(); i++) {
+            BulkCheckItem item = items.get(i);
+            Consistency effective = resolveConsistency(item.resource().type(), consistency);
+            groups.computeIfAbsent(effective, ignored -> new ArrayList<>())
+                    .add(new IndexedBulkCheckItem(i, item));
+        }
+
+        ArrayList<CheckResult> ordered = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            ordered.add(null);
+        }
+
+        for (Map.Entry<Consistency, List<IndexedBulkCheckItem>> entry : groups.entrySet()) {
+            List<BulkCheckItem> groupItems = entry.getValue().stream()
+                    .map(IndexedBulkCheckItem::item)
+                    .toList();
+            List<CheckResult> groupResults = delegate.checkBulkMulti(groupItems, entry.getKey());
+            for (int i = 0; i < groupResults.size(); i++) {
+                CheckResult result = groupResults.get(i);
+                ordered.set(entry.getValue().get(i).index(), result);
+                tokenTracker.recordRead(result.zedToken());
+            }
+        }
+
+        return ordered;
+    }
+
+    @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
         GrantResult result = delegate.writeRelationships(updates);
-        String resType = updates.isEmpty() ? null : updates.getFirst().resource().type();
-        tokenTracker.recordWrite(resType, result.zedToken());
+        recordWriteForTouchedResourceTypes(updates, result.zedToken());
         return result;
     }
 
     @Override
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
         RevokeResult result = delegate.deleteRelationships(updates);
-        String resType = updates.isEmpty() ? null : updates.getFirst().resource().type();
-        tokenTracker.recordWrite(resType, result.zedToken());
+        recordWriteForTouchedResourceTypes(updates, result.zedToken());
         return result;
     }
 
@@ -134,4 +169,20 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
         }
         return effective;
     }
+
+    private void recordWriteForTouchedResourceTypes(List<RelationshipUpdate> updates, String zedToken) {
+        if (updates.isEmpty()) {
+            tokenTracker.recordWrite(null, zedToken);
+            return;
+        }
+        Set<String> resourceTypes = new LinkedHashSet<>();
+        for (RelationshipUpdate update : updates) {
+            resourceTypes.add(update.resource().type());
+        }
+        for (String resourceType : resourceTypes) {
+            tokenTracker.recordWrite(resourceType, zedToken);
+        }
+    }
+
+    private record IndexedBulkCheckItem(int index, BulkCheckItem item) {}
 }
