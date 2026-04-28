@@ -42,6 +42,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/grant")
     public void grant(@RequestBody ProjectUser req) {
+        // Authx 链含义：在 Project 类型中选中一个项目，把 MEMBER 关系授予指定 User，然后 commit 写入 SpiceDB。
         client.on(Project)
                 .select(req.projectId())
                 .grant(Project.Rel.MEMBER)
@@ -51,6 +52,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/grant-subject-set")
     public void grantSubjectSet(@RequestBody ProjectOrg req) {
+        // Authx 链含义：把项目 MEMBER 关系授予一个主体集合，即 org:{id}#member 中的所有成员。
         client.on(Project)
                 .select(req.projectId())
                 .grant(Project.Rel.MEMBER)
@@ -60,6 +62,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/grant-wildcard")
     public void grantWildcard(@RequestBody ProjectOnly req) {
+        // Authx 链含义：把项目 MEMBER 关系授予 User 类型的通配主体，相当于允许所有 user:* 成为成员。
         client.on(Project)
                 .select(req.projectId())
                 .grant(Project.Rel.MEMBER)
@@ -69,6 +72,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/write-flow")
     public void writeFlow(@RequestBody WriteFlowReq req) {
+        // Authx 链含义：同一个写入流先撤销旧用户 MEMBER，再授予新用户 MANAGER，最后一次 commit 原子提交。
         client.on(Project)
                 .select(req.projectId())
                 .revoke(Project.Rel.MEMBER)
@@ -80,6 +84,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/listener")
     public void listener(@RequestBody ProjectUser req) {
+        // Authx 链含义：正常授予关系并提交；返回的 WriteCompletion 可注册 listener 观察写入完成结果。
         WriteCompletion completion = client.on(Project)
                 .select(req.projectId())
                 .grant(Project.Rel.MEMBER)
@@ -91,6 +96,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/check")
     public boolean check(@RequestBody ProjectUser req) {
+        // Authx 链含义：检查指定 User 是否对选中的 Project 拥有 VIEW 权限，返回简单 boolean。
         return client.on(Project)
                 .select(req.projectId())
                 .check(Project.Perm.VIEW)
@@ -99,6 +105,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/check-detailed")
     public CheckResult checkDetailed(@RequestBody ProjectUser req) {
+        // Authx 链含义：执行同样的 VIEW 权限检查，但 detailedBy 返回包含 permissionship 等细节的结果。
         return client.on(Project)
                 .select(req.projectId())
                 .check(Project.Perm.VIEW)
@@ -107,6 +114,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/check-all")
     public EnumMap<Project.Perm, Boolean> checkAll(@RequestBody ProjectUser req) {
+        // Authx 链含义：针对一个 Project 和一个 User，一次检查 Project 枚举里的全部权限。
         return client.on(Project)
                 .select(req.projectId())
                 .checkAll()
@@ -115,6 +123,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/check-matrix")
     public List<CheckMatrix.Cell> checkMatrix(@RequestBody MatrixReq req) {
+        // Authx 链含义：对多个 Project、多个权限、多个 User 组成矩阵批量检查，并展开为 Cell 列表。
         return client.on(Project)
                 .select(req.projectIds())
                 .check(Project.Perm.VIEW, Project.Perm.MANAGE)
@@ -124,6 +133,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/batch-write")
     public void batchWrite(@RequestBody BatchWriteReq req) {
+        // Authx 链含义：batch() 收集多个资源类型的关系写入；on/onAll 切换目标资源，最后统一 commit。
         client.batch()
                 .on(Project, req.projectId())
                     .grant(Project.Rel.MEMBER).to(User, req.userId())
@@ -134,6 +144,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/batch-check")
     public List<CheckMatrix.Cell> batchCheck(@RequestBody BatchCheckReq req) {
+        // Authx 链含义：batchCheck() 手动追加多个检查项，fetch 执行后用 cells() 读取矩阵结果。
         return client.batchCheck()
                 .add(Project, req.projectId(), Project.Perm.VIEW, User, req.userId())
                 .addAll(Task, req.taskIds(), Task.Perm.EDIT, User, req.userId())
@@ -143,6 +154,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/lookup-resources")
     public List<String> lookupResources(@RequestBody UserOnly req) {
+        // Authx 链含义：从 User 反查其可 VIEW 的 Project，limit 限制最多返回 100 个资源 ID。
         return client.on(Project)
                 .lookupResources(User, req.userId())
                 .limit(100)
@@ -151,6 +163,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/lookup-resources-by-permissions")
     public Map<Project.Perm, List<String>> lookupResourcesByPermissions(@RequestBody UserOnly req) {
+        // Authx 链含义：同一个 User 按权限分别反查 Project，返回每个权限对应的资源 ID 列表。
         return client.on(Project)
                 .lookupResources(User, req.userId())
                 .can(Project.Perm.VIEW, Project.Perm.MANAGE);
@@ -158,6 +171,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/lookup-resources-any")
     public List<String> lookupResourcesAny(@RequestBody UserOnly req) {
+        // Authx 链含义：反查 User 至少拥有 VIEW 或 MANAGE 其中一个权限的 Project。
         return client.on(Project)
                 .lookupResources(User, req.userId())
                 .canAny(Project.Perm.VIEW, Project.Perm.MANAGE);
@@ -165,6 +179,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/lookup-resources-all")
     public List<String> lookupResourcesAll(@RequestBody UserOnly req) {
+        // Authx 链含义：反查 User 同时拥有 VIEW 和 MANAGE 两个权限的 Project。
         return client.on(Project)
                 .lookupResources(User, req.userId())
                 .canAll(Project.Perm.VIEW, Project.Perm.MANAGE);
@@ -172,6 +187,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/lookup-resources-by-subjects")
     public Map<String, List<String>> lookupResourcesBySubjects(@RequestBody UsersOnly req) {
+        // Authx 链含义：对多个 User 分别反查其可 VIEW 的 Project，返回 userId 到资源 ID 列表的映射。
         return client.on(Project)
                 .lookupResources(User, req.userIds())
                 .can(Project.Perm.VIEW);
@@ -179,6 +195,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/lookup-subjects")
     public List<String> lookupSubjects(@RequestBody ProjectOnly req) {
+        // Authx 链含义：在选中的 Project 上反查哪些 User 拥有 VIEW 权限，并取前 100 个主体 ID。
         return client.on(Project)
                 .select(req.projectId())
                 .lookupSubjects(User, Project.Perm.VIEW)
@@ -188,6 +205,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/lookup-subjects-exists")
     public boolean lookupSubjectsExists(@RequestBody ProjectOnly req) {
+        // Authx 链含义：只判断是否存在任意 User 对该 Project 拥有 VIEW 权限，不拉取完整主体列表。
         return client.on(Project)
                 .select(req.projectId())
                 .lookupSubjects(User, Project.Perm.VIEW)
@@ -196,6 +214,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/relations")
     public List<Tuple> relations(@RequestBody ProjectOnly req) {
+        // Authx 链含义：读取选中 Project 上的全部直接关系元组，返回原始 Tuple 列表。
         return client.on(Project)
                 .select(req.projectId())
                 .relations()
@@ -204,6 +223,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/relations-grouped")
     public Map<String, List<String>> relationsGrouped(@RequestBody ProjectOnly req) {
+        // Authx 链含义：只读取 OWNER/MANAGER/MEMBER 关系，并按关系名分组为 relation -> subjects。
         return client.on(Project)
                 .select(req.projectId())
                 .relations(Project.Rel.OWNER, Project.Rel.MANAGER, Project.Rel.MEMBER)
@@ -212,6 +232,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/expand")
     public ExpandTree expand(@RequestBody ProjectOnly req) {
+        // Authx 链含义：展开选中 Project 的 VIEW 权限树，用于查看权限由哪些关系和主体推导而来。
         return client.on(Project)
                 .select(req.projectId())
                 .expand(Project.Perm.VIEW);
@@ -221,6 +242,7 @@ public class BusinessApiDemoController {
     public boolean consistency(@RequestBody ProjectUser req) {
 
 
+        // Authx 链含义：检查 VIEW 权限时显式使用 full consistency，要求从最新可见状态读取。
         return client.on(Project)
                 .select(req.projectId())
                 .check(Project.Perm.VIEW)
@@ -230,6 +252,7 @@ public class BusinessApiDemoController {
 
     @PostMapping("/dynamic")
     public boolean dynamic(@RequestBody ProjectUser req) {
+        // Authx 链含义：动态字符串 API 与 typed API 语义一致，直接使用 type/id/permission/subject 字符串。
         return client.on("project")
                 .select(req.projectId())
                 .check("view")
@@ -238,6 +261,7 @@ public class BusinessApiDemoController {
 
     @GetMapping("/health")
     public Object health() {
+        // Authx 链含义：health() 不是权限链，而是读取 SDK/底层传输的健康检查结果。
         return client.health();
     }
 
