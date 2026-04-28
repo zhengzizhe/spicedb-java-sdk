@@ -19,7 +19,8 @@
   "pr_url": null,
   "subtasks": [],
   "children": [
-    "04-28-beads-graph-dry-run-exporter"
+    "04-28-beads-graph-dry-run-exporter",
+    "04-28-beads-backed-task-folders"
   ],
   "parent": null,
   "relatedFiles": [

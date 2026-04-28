@@ -18,6 +18,7 @@ Usage:
     python3 task.py list-archive [month]        # List archived tasks
     python3 task.py add-subtask <parent-dir> <child-dir>     # Link child to parent
     python3 task.py remove-subtask <parent-dir> <child-dir>  # Unlink child from parent
+    python3 task.py link-bead <task-dir> <beads-id>          # Link task folder to Beads issue
 """
 
 from __future__ import annotations
@@ -50,6 +51,7 @@ from common.task_store import (
     cmd_set_scope,
     cmd_add_subtask,
     cmd_remove_subtask,
+    cmd_link_bead,
 )
 from common.task_context import (
     cmd_add_context,
@@ -343,6 +345,7 @@ def main() -> int:
     p_create.add_argument("--description", "-d", help="Task description")
     p_create.add_argument("--parent", help="Parent task directory (establishes subtask link)")
     p_create.add_argument("--package", help="Package name for monorepo projects")
+    p_create.add_argument("--beads-id", help="Existing Beads issue ID to link to this task folder")
 
     # add-context
     p_add = subparsers.add_parser("add-context", help="Add context entry")
@@ -401,6 +404,11 @@ def main() -> int:
     p_rmsub.add_argument("parent_dir", help="Parent task directory")
     p_rmsub.add_argument("child_dir", help="Child task directory")
 
+    # link-bead
+    p_link_bead = subparsers.add_parser("link-bead", help="Link task folder to an existing Beads issue")
+    p_link_bead.add_argument("dir", help="Task directory")
+    p_link_bead.add_argument("beads_id", help="Beads issue ID")
+
     # list-archive
     p_listarch = subparsers.add_parser("list-archive", help="List archived tasks")
     p_listarch.add_argument("month", nargs="?", help="Month (YYYY-MM)")
@@ -424,6 +432,7 @@ def main() -> int:
         "archive": cmd_archive,
         "add-subtask": cmd_add_subtask,
         "remove-subtask": cmd_remove_subtask,
+        "link-bead": cmd_link_bead,
         "list": cmd_list,
         "list-archive": cmd_list_archive,
     }

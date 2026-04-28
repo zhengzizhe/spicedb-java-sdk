@@ -1,0 +1,39 @@
+{
+  "id": "beads-backed-task-folders",
+  "name": "beads-backed-task-folders",
+  "title": "Upgrade Trellis for Beads-backed task folders",
+  "description": "Introduce first-stage Beads-backed task folder support: one Beads issue maps to one Trellis folder via a .bead marker while keeping task.json as compatibility cache.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cses-38",
+  "assignee": "cses-38",
+  "createdAt": "2026-04-28",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "04-28-beads-adoption-plan",
+  "relatedFiles": [
+    ".trellis/tasks/04-28-beads-backed-task-folders/prd.md",
+    ".trellis/tasks/04-28-beads-adoption-plan/research/beads-adoption-plan.md",
+    ".trellis/tasks/04-28-beads-task-json-handoff-research/research/beads-first-task-creation.md",
+    ".trellis/scripts/task.py",
+    ".trellis/scripts/common/beads_link.py",
+    ".trellis/scripts/test_beads_task_link.py",
+    ".trellis/scripts/common/task_store.py",
+    ".trellis/scripts/common/task_utils.py",
+    ".trellis/scripts/common/io.py"
+  ],
+  "notes": "Phase 1 upgrade implemented: add .bead marker plus task.py create --beads-id and task.py link-bead. This links one Beads issue to one Trellis folder while keeping task.json as compatibility cache. No bd calls and no .beads init.",
+  "meta": {
+    "parent_decision_task": "04-28-beads-adoption-plan",
+    "upgrade_phase": "folder-marker-and-task-json-cache"
+  }
+}

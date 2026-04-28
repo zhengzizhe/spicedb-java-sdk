@@ -29,6 +29,7 @@ from .config import (
     validate_package,
 )
 from .git import run_git
+from .beads_link import BeadsLinkError, link_task_to_bead
 from .io import read_json, write_json
 from .log import Colors, colored
 from .paths import (
@@ -261,6 +262,15 @@ def cmd_create(args: argparse.Namespace) -> int:
                 write_json(task_json_path, task_data)
 
                 print(colored(f"Linked as child of: {parent_dir.name}", Colors.GREEN), file=sys.stderr)
+
+    beads_id = getattr(args, "beads_id", None)
+    if beads_id:
+        try:
+            link_task_to_bead(task_dir, beads_id, repo_root)
+            print(colored(f"Linked Beads issue: {beads_id}", Colors.GREEN), file=sys.stderr)
+        except BeadsLinkError as exc:
+            print(colored(f"Error: {exc}", Colors.RED), file=sys.stderr)
+            return 1
 
     print(colored(f"Created task: {dir_name}", Colors.GREEN), file=sys.stderr)
     print("", file=sys.stderr)
@@ -498,6 +508,27 @@ def cmd_remove_subtask(args: argparse.Namespace) -> int:
     write_json(child_json_path, child_data)
 
     print(colored(f"Unlinked: {child_dir.name} from {parent_dir.name}", Colors.GREEN), file=sys.stderr)
+    return 0
+
+
+# =============================================================================
+# Command: link-bead
+# =============================================================================
+
+def cmd_link_bead(args: argparse.Namespace) -> int:
+    """Link an existing Trellis task folder to a Beads issue."""
+    repo_root = get_repo_root()
+    target_dir = resolve_task_dir(args.dir, repo_root)
+
+    try:
+        link_task_to_bead(target_dir, args.beads_id, repo_root)
+    except BeadsLinkError as exc:
+        print(colored(f"Error: {exc}", Colors.RED), file=sys.stderr)
+        return 1
+
+    print(colored(f"✓ Linked Beads issue: {args.beads_id}", Colors.GREEN))
+    print(f"  Task: {target_dir}")
+    print(f"  Marker: {target_dir / '.bead'}")
     return 0
 
 
