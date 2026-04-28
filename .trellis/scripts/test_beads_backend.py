@@ -46,11 +46,8 @@ class BeadsBackendTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             task_dir = self._single_task_dir(repo_root)
             self.assertEqual((task_dir / ".bead").read_text(encoding="utf-8"), "bd-created-1\n")
+            self.assertFalse((task_dir / "task.json").exists())
             self.assertFalse((repo_root / ".beads").exists())
-
-            task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
-            self.assertEqual(task_data["meta"]["source_of_truth"], "beads")
-            self.assertEqual(task_data["meta"]["beads_issue_id"], "bd-created-1")
 
             entries = self._read_log(log_path)
             self.assertEqual(entries[0]["command"], "create")
@@ -137,10 +134,32 @@ class BeadsBackendTest(unittest.TestCase):
             task_dir = repo_root / ".trellis" / "tasks" / "04-28-materialized-bead"
             self.assertTrue(task_dir.is_dir())
             self.assertEqual((task_dir / ".bead").read_text(encoding="utf-8"), "bd-claim-new\n")
-            task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
-            self.assertEqual(task_data["title"], "Materialized Bead")
-            self.assertEqual(task_data["status"], "in_progress")
+            self.assertFalse((task_dir / "task.json").exists())
             self.assertEqual((repo_root / ".trellis" / ".current-task").read_text(encoding="utf-8"), ".trellis/tasks/04-28-materialized-bead")
+            self.assertFalse((repo_root / ".beads").exists())
+
+    def test_task_list_loads_beads_folder_without_task_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = self._make_trellis_repo(tmp)
+            fake_bd, log_path = self._make_fake_bd(repo_root)
+            task_dir = repo_root / ".trellis" / "tasks" / "04-28-beads-only"
+            task_dir.mkdir(parents=True)
+            (task_dir / ".bead").write_text("bd-list-1\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(TASK_PY), "list"],
+                cwd=repo_root,
+                env=self._env(fake_bd, log_path),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("04-28-beads-only/", result.stdout)
+            self.assertIn("in_progress", result.stdout)
+            entries = self._read_log(log_path)
+            self.assertEqual(entries[0]["command"], "show")
             self.assertFalse((repo_root / ".beads").exists())
 
     def _make_trellis_repo(self, root: str) -> Path:
@@ -216,6 +235,11 @@ elif command == "update":
     log_path.open("a", encoding="utf-8").write(json.dumps(entry) + "\\n")
     title = "Materialized Bead" if issue_id == "bd-claim-new" else "Claim Existing"
     print(json.dumps([issue(issue_id, title)]))
+elif command == "show":
+    issue_id = argv[argv.index("show") + 1]
+    entry["issue_id"] = issue_id
+    log_path.open("a", encoding="utf-8").write(json.dumps(entry) + "\\n")
+    print(json.dumps(issue(issue_id, "Listed Bead")))
 else:
     log_path.open("a", encoding="utf-8").write(json.dumps(entry) + "\\n")
     print(json.dumps({"error": "unknown command"}))

@@ -15,7 +15,6 @@ Beads issue
 
 Trellis task folder
   .bead
-  task.json compatibility cache
   prd.md
   research/
   implement.jsonl
@@ -36,7 +35,7 @@ Trellis task folder
   * parse the returned Beads issue ID
   * create/materialize the Trellis task folder
   * write `.bead`
-  * write `task.json.meta.source_of_truth=beads`
+  * do not write `task.json` for new Beads-backed folders
 * Keep `task.py create --beads-id` for linking an already-created Beads issue.
 * Add `task.py beads-ready`:
   * call `bd ready --json`
@@ -53,7 +52,7 @@ Trellis task folder
 ## Acceptance Criteria
 
 * [x] `task.py create --beads "Title"` creates a Beads issue before materializing a Trellis folder.
-* [x] Beads-created folders contain `.bead` and task metadata cache.
+* [x] Beads-created folders contain `.bead` and no `task.json`.
 * [x] `task.py beads-ready` delegates to `bd ready --json`.
 * [x] `task.py beads-claim <id>` delegates to `bd update <id> --claim --json` and sets current task.
 * [x] Tests do not require real Beads or `.beads/`.
@@ -63,14 +62,14 @@ Trellis task folder
 ## Out of Scope
 
 * Auto-running `bd init`.
-* Removing `task.json`.
 * Rewriting statusline/session hooks to call Beads.
 * Bidirectional sync.
 * Migrating all existing tasks into a real Beads database.
 
 ## Technical Notes
 
-* Folder linkage is already implemented in `.trellis/scripts/common/beads_link.py`.
+* Folder linkage is implemented in `.trellis/scripts/common/beads_link.py`.
+* `task.json` remains supported for legacy/non-Beads tasks and old folders.
 * Existing task creation is in `.trellis/scripts/common/task_store.py`.
 * CLI wiring is in `.trellis/scripts/task.py`.
 * Prior dry-run exporter is `.trellis/scripts/beads_graph_export.py`.

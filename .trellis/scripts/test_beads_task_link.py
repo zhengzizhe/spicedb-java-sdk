@@ -38,6 +38,19 @@ class BeadsTaskLinkTest(unittest.TestCase):
             self.assertEqual(meta["beads_issue_id"], "bd-123")
             self.assertEqual(meta["beads_external_ref"], "trellis:.trellis/tasks/01-linked")
 
+    def test_link_task_to_bead_without_task_json_writes_marker_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            task_dir = repo_root / ".trellis" / "tasks" / "01-beads-only"
+            task_dir.mkdir(parents=True)
+
+            result = link_task_to_bead(task_dir, "bd-only-1", repo_root)
+
+            self.assertEqual((task_dir / ".bead").read_text(encoding="utf-8"), "bd-only-1\n")
+            self.assertFalse((task_dir / "task.json").exists())
+            self.assertEqual(result["meta"]["source_of_truth"], "beads")
+            self.assertEqual(result["meta"]["beads_issue_id"], "bd-only-1")
+
     def test_task_create_with_beads_id_links_new_folder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = self._make_trellis_repo(tmp)

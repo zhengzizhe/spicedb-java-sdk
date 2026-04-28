@@ -1,7 +1,7 @@
 """Beads issue linkage for Trellis task folders.
 
-This module keeps the folder-level `.bead` marker and the transitional
-`task.json.meta` cache in sync. It does not call the `bd` CLI.
+This module keeps the folder-level `.bead` marker in sync with the optional
+`task.json.meta` compatibility cache. It does not call the `bd` CLI.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ def link_task_to_bead(task_dir: Path, beads_issue_id: str, repo_root: Path) -> d
 
     Writes both:
     - `<task>/.bead` as the future durable folder marker.
-    - `<task>/task.json.meta` as the compatibility cache used by current Trellis.
+    - `<task>/task.json.meta` when task.json exists.
     """
     if not task_dir.is_dir():
         raise BeadsLinkError(f"Task directory not found: {task_dir}")
@@ -100,9 +100,15 @@ def link_task_to_bead(task_dir: Path, beads_issue_id: str, repo_root: Path) -> d
     issue_id = normalize_beads_issue_id(beads_issue_id)
     write_bead_marker(task_dir, issue_id)
 
+    fallback_meta = {
+        "source_of_truth": SOURCE_OF_TRUTH_BEADS,
+        "beads_issue_id": issue_id,
+        "beads_external_ref": task_external_ref(task_dir, repo_root),
+    }
+
     task_json_path = task_dir / FILE_TASK_JSON
     if not task_json_path.is_file():
-        raise BeadsLinkError(f"task.json not found: {task_json_path}")
+        return {"meta": fallback_meta}
 
     task_data = read_json(task_json_path)
     if not task_data:
@@ -112,13 +118,7 @@ def link_task_to_bead(task_dir: Path, beads_issue_id: str, repo_root: Path) -> d
     if not isinstance(meta, dict):
         meta = {}
 
-    meta.update(
-        {
-            "source_of_truth": SOURCE_OF_TRUTH_BEADS,
-            "beads_issue_id": issue_id,
-            "beads_external_ref": task_external_ref(task_dir, repo_root),
-        }
-    )
+    meta.update(fallback_meta)
     task_data["meta"] = meta
 
     if not write_json(task_json_path, task_data):

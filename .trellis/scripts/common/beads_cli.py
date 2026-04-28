@@ -175,3 +175,23 @@ def issue_metadata(issue: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
     return {}
+
+
+def priority_to_trellis(priority: Any) -> str:
+    """Convert Beads numeric priority into Trellis priority strings."""
+    if isinstance(priority, int):
+        return f"P{priority}"
+    normalized = str(priority or "P2").strip().upper()
+    if normalized.startswith("P"):
+        return normalized
+    if normalized.isdigit():
+        return f"P{normalized}"
+    return "P2"
+
+
+def status_to_trellis(status: Any) -> str:
+    """Map Beads statuses into Trellis compatibility statuses."""
+    normalized = str(status or "planning").strip()
+    if normalized == "open":
+        return "planning"
+    return normalized or "planning"

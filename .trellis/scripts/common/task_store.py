@@ -230,26 +230,6 @@ def _create_beads_issue_for_task(
     return issue_id_from_payload(result.payload)
 
 
-def _priority_from_beads(priority: Any) -> str:
-    """Convert Beads numeric priority into Trellis priority strings."""
-    if isinstance(priority, int):
-        return f"P{priority}"
-    normalized = str(priority or "P2").strip().upper()
-    if normalized.startswith("P"):
-        return normalized
-    if normalized.isdigit():
-        return f"P{normalized}"
-    return "P2"
-
-
-def _status_from_beads(status: Any) -> str:
-    """Map Beads statuses into Trellis compatibility statuses."""
-    normalized = str(status or "planning").strip()
-    if normalized == "open":
-        return "planning"
-    return normalized or "planning"
-
-
 def _metadata_task_dir(value: Any, repo_root: Path) -> Path | None:
     """Resolve trusted Trellis task directory metadata under .trellis/tasks."""
     if not isinstance(value, str) or not value.strip():
@@ -308,34 +288,7 @@ def _materialize_beads_issue(issue: Mapping[str, Any], repo_root: Path) -> Path:
 
     task_dir = _task_dir_from_beads_issue(issue, repo_root)
     task_dir.mkdir(parents=True, exist_ok=True)
-
-    task_json_path = task_dir / FILE_TASK_JSON
-    if not task_json_path.exists():
-        metadata = issue_metadata(issue)
-        slug = str(metadata.get("trellis_task_id") or _slugify(str(issue.get("title") or "")) or issue_id)
-        assignee = str(issue.get("assignee") or get_developer(repo_root) or "")
-        creator = str(issue.get("created_by") or get_developer(repo_root) or assignee)
-        package = metadata.get("package")
-        if not isinstance(package, str):
-            package = None
-        created_at = str(issue.get("created_at") or datetime.now().strftime("%Y-%m-%d"))[:10]
-
-        task_data = _build_task_data(
-            slug=slug,
-            title=str(issue.get("title") or issue_id),
-            description=str(issue.get("description") or ""),
-            status=_status_from_beads(issue.get("status")),
-            package=package,
-            priority=_priority_from_beads(issue.get("priority")),
-            creator=creator,
-            assignee=assignee,
-            today=created_at,
-            base_branch=_current_branch(repo_root),
-        )
-        if not write_json(task_json_path, task_data):
-            raise BeadsLinkError(f"Failed to write task.json: {task_json_path}")
-        _seed_context_files(task_dir, repo_root)
-
+    _seed_context_files(task_dir, repo_root)
     link_task_to_bead(task_dir, issue_id, repo_root)
     return task_dir
 
@@ -484,21 +437,23 @@ def cmd_create(args: argparse.Namespace) -> int:
     else:
         task_dir.mkdir(parents=True)
 
-    today = datetime.now().strftime("%Y-%m-%d")
-    task_data = _build_task_data(
-        slug=slug,
-        title=args.title,
-        description=args.description or "",
-        status="planning",
-        package=package,
-        priority=args.priority,
-        creator=creator,
-        assignee=assignee,
-        today=today,
-        base_branch=_current_branch(repo_root),
-    )
-
-    write_json(task_json_path, task_data)
+    if use_beads:
+        task_data: dict[str, Any] | None = None
+    else:
+        today = datetime.now().strftime("%Y-%m-%d")
+        task_data = _build_task_data(
+            slug=slug,
+            title=args.title,
+            description=args.description or "",
+            status="planning",
+            package=package,
+            priority=args.priority,
+            creator=creator,
+            assignee=assignee,
+            today=today,
+            base_branch=_current_branch(repo_root),
+        )
+        write_json(task_json_path, task_data)
 
     # Seed implement.jsonl / check.jsonl for sub-agent-capable platforms.
     # Agent curates real entries in Phase 1.3 (see .trellis/workflow.md).
@@ -507,7 +462,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     seeded_jsonl = _seed_context_files(task_dir, repo_root)
 
     # Handle --parent: establish bidirectional link
-    if args.parent and parent_dir:
+    if args.parent and parent_dir and not use_beads and task_data is not None:
         parent_json_path = parent_dir / FILE_TASK_JSON
         if not parent_json_path.is_file():
             print(colored(f"Warning: Parent task.json not found: {args.parent}", Colors.YELLOW), file=sys.stderr)
@@ -553,7 +508,8 @@ def cmd_create(args: argparse.Namespace) -> int:
     # Output relative path for script chaining
     print(f"{DIR_WORKFLOW}/{DIR_TASKS}/{dir_name}")
 
-    run_task_hooks("after_create", task_json_path, repo_root)
+    if task_json_path.is_file():
+        run_task_hooks("after_create", task_json_path, repo_root)
     return 0
 
 
