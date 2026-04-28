@@ -217,6 +217,8 @@ class BeadsBackendTest(unittest.TestCase):
             entries = self._read_log(log_path)
             self.assertEqual(entries[0]["command"], "update")
             self.assertIn("--claim", entries[0]["argv"])
+            self.assertIn("--status", entries[0]["argv"])
+            self.assertIn("in_progress", entries[0]["argv"])
             self.assertFalse((task_dir / LEGACY_TASK_FILE).exists())
 
     def test_task_archive_closes_beads_only_task(self) -> None:

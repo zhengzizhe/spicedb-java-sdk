@@ -48,6 +48,7 @@ from common.tasks import iter_active_tasks, children_progress
 
 # Import command handlers from split modules (also re-exports for plan.py compatibility)
 from common.task_store import (
+    _update_beads_trellis_task,
     cmd_create,
     cmd_archive,
     cmd_set_branch,
@@ -100,7 +101,8 @@ def cmd_start(args: argparse.Namespace) -> int:
         beads_issue_id = read_bead_marker(full_path)
         if beads_issue_id:
             try:
-                run_bd_json(["update", beads_issue_id, "--claim"], repo_root)
+                run_bd_json(["update", beads_issue_id, "--claim", "--status", "in_progress"], repo_root)
+                _update_beads_trellis_task(full_path, {"status": "in_progress"}, repo_root)
                 print(colored(f"✓ Beads claimed: {beads_issue_id}", Colors.GREEN))
             except BeadsCliError as exc:
                 print(colored(f"Warning: Beads claim failed: {exc}", Colors.YELLOW))

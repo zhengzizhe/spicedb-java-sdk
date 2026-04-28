@@ -46,7 +46,7 @@
 - Default create calls `bd create`, sends `metadata.trellis_task`, writes `.bead`, and does not write legacy local state.
 - `.bead`-only folders are listed and expose package/base branch/related files through `TaskInfo.raw`.
 - Codex statusline, prompt injection, and session-start hooks render a `.bead`-only current task.
-- Beads-backed start claims via `bd update --claim`.
+- Beads-backed start claims via `bd update --claim --status in_progress` and updates `metadata.trellis_task.status`.
 - Beads-backed archive updates metadata and closes via `bd close`.
 - Explicit legacy and `--beads-id` compatibility paths remain covered.
 
