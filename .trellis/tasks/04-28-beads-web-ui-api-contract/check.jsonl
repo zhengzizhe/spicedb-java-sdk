@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/tooling/beads-task-backend.md", "reason": "Check that the API keeps Beads as source of truth."}
+{"file": ".trellis/tasks/04-28-beads-web-ui-api-contract/prd.md", "reason": "Acceptance criteria for the scaffold and command allowlist."}
+

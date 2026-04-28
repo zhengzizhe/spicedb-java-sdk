@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/tooling/beads-task-backend.md", "reason": "Defines Beads JSON and metadata conventions consumed by the data service."}
+{"file": ".trellis/tasks/04-28-beads-web-ui-plan/prd.md", "reason": "Parent epic scope and sequencing for the Web UI program."}
+{"file": ".trellis/tasks/04-28-beads-web-ui-readonly-data-service/prd.md", "reason": "Specific read-only data service requirements."}
