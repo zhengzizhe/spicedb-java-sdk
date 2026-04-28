@@ -9,6 +9,35 @@ GRADLE_USER_HOME=/tmp/authcses-gradle ./gradlew :test-app:generateAuthxSchema --
 GRADLE_USER_HOME=/tmp/authcses-gradle ./gradlew :test-app:bootRun --no-daemon --console=plain --args='--server.port=8081'
 ```
 
+HTTP requests are traced by default. The app creates one OpenTelemetry server
+span for each Spring request, enables SDK telemetry so AuthX SDK operations
+create child spans, and the SDK propagates `traceparent` to SpiceDB gRPC calls.
+Spans are logged locally by default, so no Jaeger or collector is required.
+
+Useful local tracing knobs:
+
+```bash
+# Default: print spans to the app console.
+AUTHX_TRACING_EXPORTERS=console ./gradlew :test-app:bootRun
+
+# Send spans to a local OTLP collector instead.
+AUTHX_TRACING_EXPORTERS=otlp \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4317 \
+./gradlew :test-app:bootRun
+
+# Export to both console and OTLP.
+AUTHX_TRACING_EXPORTERS=console,otlp \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4317 \
+./gradlew :test-app:bootRun
+
+# Disable request spans and SDK child spans.
+AUTHX_TRACING_ENABLED=false ./gradlew :test-app:bootRun
+```
+
+Application logs include `trace_id` and `span_id` MDC fields for the active
+HTTP span. SDK logs also include the SDK's `[trace=<id>]` prefix and `authx.*`
+MDC fields around SDK calls.
+
 Core demo APIs:
 
 - `POST /doc/nodes`

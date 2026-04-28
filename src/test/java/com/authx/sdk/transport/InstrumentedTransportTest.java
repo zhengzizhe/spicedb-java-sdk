@@ -80,6 +80,34 @@ class InstrumentedTransportTest {
     }
 
     @Test
+    void checkBulkMultiRecordsMetricsAndTelemetry() {
+        InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
+
+        List<CheckResult> results = transport.checkBulkMulti(List.of(new SdkTransport.BulkCheckItem(
+                ResourceRef.of("document", "d1"),
+                Permission.of("editor"),
+                SubjectRef.of("user", "alice", null))),
+                Consistency.minimizeLatency());
+
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().hasPermission()).isTrue();
+        assertThat(metrics.totalRequests()).isEqualTo(1);
+        assertThat(metrics.totalErrors()).isZero();
+
+        reporter.close();
+
+        assertThat(recordedEvents).hasSize(1);
+        Map<String, Object> event = recordedEvents.getFirst();
+        assertThat(event.get("action")).isEqualTo("CHECK_BULK");
+        assertThat(event.get("resourceType")).isEqualTo("document");
+        assertThat(event.get("resourceId")).isEqualTo("d1");
+        assertThat(event.get("subjectType")).isEqualTo("user");
+        assertThat(event.get("subjectId")).isEqualTo("alice");
+        assertThat(event.get("permission")).isEqualTo("editor");
+        assertThat(event.get("result")).isEqualTo("SUCCESS");
+    }
+
+    @Test
     void writeRelationshipsRecordsMetrics() {
         InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
 
@@ -113,6 +141,32 @@ class InstrumentedTransportTest {
 
         assertThat(result.count()).isEqualTo(1);
         assertThat(metrics.totalRequests()).isEqualTo(1);
+    }
+
+    @Test
+    void deleteByFilterRecordsMetricsAndTelemetry() {
+        InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
+
+        RevokeResult result = transport.deleteByFilter(
+                ResourceRef.of("document", "d1"),
+                SubjectRef.of("user", "alice", null),
+                Relation.of("editor"));
+
+        assertThat(result.count()).isEqualTo(1);
+        assertThat(metrics.totalRequests()).isEqualTo(1);
+        assertThat(metrics.totalErrors()).isZero();
+
+        reporter.close();
+
+        assertThat(recordedEvents).hasSize(1);
+        Map<String, Object> event = recordedEvents.getFirst();
+        assertThat(event.get("action")).isEqualTo("DELETE");
+        assertThat(event.get("resourceType")).isEqualTo("document");
+        assertThat(event.get("resourceId")).isEqualTo("d1");
+        assertThat(event.get("subjectType")).isEqualTo("user");
+        assertThat(event.get("subjectId")).isEqualTo("alice");
+        assertThat(event.get("permission")).isEqualTo("editor");
+        assertThat(event.get("result")).isEqualTo("SUCCESS");
     }
 
     @Test
@@ -152,6 +206,30 @@ class InstrumentedTransportTest {
 
         assertThat(tuples).hasSize(1);
         assertThat(metrics.totalRequests()).isEqualTo(1);
+    }
+
+    @Test
+    void expandRecordsMetricsAndTelemetry() {
+        InstrumentedTransport transport = new InstrumentedTransport(inner, reporter, metrics);
+
+        ExpandTree tree = transport.expand(
+                ResourceRef.of("document", "d1"),
+                Permission.of("editor"),
+                Consistency.minimizeLatency());
+
+        assertThat(tree.subjects()).containsExactly("user:alice");
+        assertThat(metrics.totalRequests()).isEqualTo(1);
+        assertThat(metrics.totalErrors()).isZero();
+
+        reporter.close();
+
+        assertThat(recordedEvents).hasSize(1);
+        Map<String, Object> event = recordedEvents.getFirst();
+        assertThat(event.get("action")).isEqualTo("EXPAND");
+        assertThat(event.get("resourceType")).isEqualTo("document");
+        assertThat(event.get("resourceId")).isEqualTo("d1");
+        assertThat(event.get("permission")).isEqualTo("editor");
+        assertThat(event.get("result")).isEqualTo("SUCCESS");
     }
 
     @Test

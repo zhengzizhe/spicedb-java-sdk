@@ -7,6 +7,17 @@ services:
       - localdevlocaldevlocaldevlocaldev
       - --http-enabled
       - "true"
+      - --otel-provider
+      - otlpgrpc
+      - --otel-endpoint
+      - host.docker.internal:4317
+      - --otel-insecure
+      - --otel-sample-ratio
+      - "1"
+      - --otel-service-name
+      - spicedb-local
+      - --otel-trace-propagator
+      - w3c
     ports:
       - "50051:50051"
       - "8443:8443"

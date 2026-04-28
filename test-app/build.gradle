@@ -31,9 +31,10 @@ dependencies {
     // Micrometer — Prometheus metrics export
     implementation("io.micrometer:micrometer-registry-prometheus")
 
-    // OpenTelemetry — trace export to Jaeger via OTLP
+    // OpenTelemetry — local console export by default, OTLP when configured
     implementation("io.opentelemetry:opentelemetry-sdk:1.40.0")
     implementation("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure:1.40.0")
+    implementation("io.opentelemetry:opentelemetry-exporter-logging:1.40.0")
     implementation("io.opentelemetry:opentelemetry-exporter-otlp:1.40.0")
 
     // Test

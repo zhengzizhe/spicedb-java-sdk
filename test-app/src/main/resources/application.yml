@@ -6,10 +6,24 @@ spring:
     name: authx-testapp
 
 authx:
+  sdk:
+    telemetry:
+      enabled: ${AUTHX_SDK_TELEMETRY_ENABLED:${AUTHX_TRACING_ENABLED:true}}
   spicedb:
     target: localhost:50051
     token: localdevlocaldevlocaldevlocaldev
     tls: false
+  tracing:
+    enabled: ${AUTHX_TRACING_ENABLED:true}
+    service-name: ${OTEL_SERVICE_NAME:authx-testapp}
+    exporters: ${OTEL_TRACES_EXPORTER:${AUTHX_TRACING_EXPORTERS:console}}
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:}
+      timeout: ${OTEL_EXPORTER_OTLP_TIMEOUT:5s}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] trace=%X{trace_id:-} span=%X{span_id:-} authx=%X{authx.action:-} %logger{36} - %msg%n"
 
 management:
   endpoints:

@@ -54,6 +54,20 @@ public class InstrumentedTransport extends ForwardingTransport {
     }
 
     @Override
+    public List<CheckResult> checkBulkMulti(List<BulkCheckItem> items, Consistency consistency) {
+        BulkCheckItem first = items.isEmpty() ? null : items.getFirst();
+        return instrument(SdkAction.CHECK_BULK,
+                first != null ? first.resource().type() : "",
+                first != null ? first.resource().id() : "",
+                first != null ? first.subject().type() : "",
+                first != null ? first.subject().id() : "",
+                first != null ? first.permission().name() : "",
+                () -> new InstrumentedResult<>(
+                        delegate.checkBulkMulti(items, consistency),
+                        OperationResult.SUCCESS.name()));
+    }
+
+    @Override
     public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
         return instrument(SdkAction.WRITE, "", "", "", "", "",
                 () -> new InstrumentedResult<>(delegate.writeRelationships(updates), OperationResult.SUCCESS.name()));
@@ -63,6 +77,18 @@ public class InstrumentedTransport extends ForwardingTransport {
     public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
         return instrument(SdkAction.DELETE, "", "", "", "", "",
                 () -> new InstrumentedResult<>(delegate.deleteRelationships(updates), OperationResult.SUCCESS.name()));
+    }
+
+    @Override
+    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+                                       Relation optionalRelation) {
+        return instrument(SdkAction.DELETE,
+                resource.type(), resource.id(),
+                subject.type(), subject.id(),
+                optionalRelation != null ? optionalRelation.name() : "",
+                () -> new InstrumentedResult<>(
+                        delegate.deleteByFilter(resource, subject, optionalRelation),
+                        OperationResult.SUCCESS.name()));
     }
 
     @Override
@@ -95,6 +121,16 @@ public class InstrumentedTransport extends ForwardingTransport {
                 () -> new InstrumentedResult<>(
                         delegate.lookupResources(request),
                         "SUCCESS"));
+    }
+
+    @Override
+    public ExpandTree expand(ResourceRef resource, Permission permission, Consistency consistency) {
+        return instrument(SdkAction.EXPAND,
+                resource.type(), resource.id(), "", "",
+                permission.name(),
+                () -> new InstrumentedResult<>(
+                        delegate.expand(resource, permission, consistency),
+                        OperationResult.SUCCESS.name()));
     }
 
     @Override
