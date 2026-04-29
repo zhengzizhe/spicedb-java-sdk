@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/tooling/beads-task-backend.md", "reason": "Check lifecycle operations do not reintroduce legacy local state."}
-{"file": ".trellis/tasks/04-28-beads-web-ui-trellis-bridge/prd.md", "reason": "Acceptance criteria for Beads-to-Trellis execution bridge."}
-

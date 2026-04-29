@@ -1,3 +1,3 @@
 {"file": ".trellis/spec/tooling/beads-task-backend.md", "reason": "Defines Trellis folder, .bead marker, and lifecycle sync contracts."}
 {"file": ".trellis/tasks/04-28-beads-web-ui-plan/prd.md", "reason": "Parent epic scope for Trellis execution bridge."}
-{"file": ".trellis/tasks/04-28-beads-web-ui-trellis-bridge/prd.md", "reason": "Specific Trellis bridge requirements."}
+{"file": ".trellis/tasks/archive/2026-04/04-28-beads-web-ui-trellis-bridge/prd.md", "reason": "Specific Trellis bridge requirements."}
