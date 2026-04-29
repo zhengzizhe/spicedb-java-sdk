@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/tooling/beads-task-backend.md", "reason": "Quality check must preserve Beads as source of truth and avoid reintroducing task.json parsing."}
-{"file": ".trellis/tasks/04-28-beads-web-ui-plan/prd.md", "reason": "Quality check should verify implemented scope matches the agreed Web UI plan."}
-{"file": ".trellis/tasks/04-28-beads-web-ui-plan/research/vibe-kanban-and-beads-ui.md", "reason": "Quality check should preserve the intended product direction and local Beads constraints."}
