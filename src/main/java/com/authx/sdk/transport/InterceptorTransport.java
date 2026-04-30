@@ -65,15 +65,14 @@ public class InterceptorTransport extends ForwardingTransport {
     }
 
     @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        String resType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
-        String resId = updates.isEmpty() ? "" : updates.getFirst().resource().id();
-        String rel = updates.isEmpty() ? null : updates.getFirst().relation().name();
-        String subj = updates.isEmpty() ? null : refOf(updates.getFirst().subject());
-        Map<String, String> mdc = mdcFields("GRANT", resType, resId, null, rel, subj, null);
+    public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
+        RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
+        Map<String, String> mdc = mdcFields("GRANT", batch.resourceType(), batch.resourceId(),
+                null, batch.relation(), batch.subjectRef(), null);
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.writeRelationships(updates);
-            SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.WRITE, resType, resId, "", "", "");
+            SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.WRITE,
+                    batch.resourceType(), batch.resourceId(), "", batch.subjectType(), batch.subjectId());
             WriteRequest writeRequest = new WriteRequest(updates);
             RealWriteChain chain = new RealWriteChain(interceptors, 0, writeRequest, delegate, ctx);
             return chain.proceed(writeRequest);
@@ -85,15 +84,14 @@ public class InterceptorTransport extends ForwardingTransport {
     // ---- Generic chain-based operations ----
 
     @Override
-    public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        String resType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
-        String resId = updates.isEmpty() ? "" : updates.getFirst().resource().id();
-        String rel = updates.isEmpty() ? null : updates.getFirst().relation().name();
-        String subj = updates.isEmpty() ? null : refOf(updates.getFirst().subject());
-        Map<String, String> mdc = mdcFields("REVOKE", resType, resId, null, rel, subj, null);
+    public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
+        RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
+        Map<String, String> mdc = mdcFields("REVOKE", batch.resourceType(), batch.resourceId(),
+                null, batch.relation(), batch.subjectRef(), null);
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
             if (interceptors.isEmpty()) return delegate.deleteRelationships(updates);
-            SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.DELETE, resType, resId, "", "", "");
+            SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.DELETE,
+                    batch.resourceType(), batch.resourceId(), "", batch.subjectType(), batch.subjectId());
             return chainOperation(ctx, () -> delegate.deleteRelationships(updates));
         } catch (IOException e) {
             throw new RuntimeException("Unreachable: MDC Closeable does not throw", e);
@@ -101,7 +99,7 @@ public class InterceptorTransport extends ForwardingTransport {
     }
 
     @Override
-    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+    public WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
         Map<String, String> mdc = mdcFields("REVOKE", resource.type(), resource.id(),
                 null,

@@ -1,27 +1,25 @@
 package com.authx.sdk;
 
-import com.authx.sdk.model.BatchResult;
-import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.WriteResult;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
-import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Cross-resource batch builder: atomic operations across multiple resources.
  *
  * <pre>
  * client.batch()
- *     .on(client.resource("document", "doc-1"))
+ *     .on("document", "doc-1")
  *         .grant("owner").to("carol")
- *     .on(client.resource("folder", "folder-1"))
+ *     .on("folder", "folder-1")
  *         .grant("editor").to("dave")
  *         .revoke("viewer").from("eve")
  *     .execute();
@@ -30,21 +28,14 @@ import java.util.List;
 public class CrossResourceBatchBuilder {
 
     private final SdkTransport transport;
-    private final List<RelationshipUpdate> updates = new ArrayList<>();
+    private final ArrayList<RelationshipUpdate> updates = new ArrayList<>();
 
     CrossResourceBatchBuilder(SdkTransport transport) {
         this.transport = transport;
     }
 
-    /** Target a specific resource for the next operations. */
-    public ResourceScope on(ResourceHandle resource) {
-        return new ResourceScope(this, resource.resourceType(), resource.resourceId());
-    }
-
     /**
-     * Target a specific resource by {@code (type, id)} without needing a
-     * {@link ResourceHandle} — most callers want this since they already
-     * have both strings at call sites.
+     * Target a specific resource by {@code (type, id)}.
      *
      * <pre>
      * client.batch()
@@ -54,7 +45,9 @@ public class CrossResourceBatchBuilder {
      * </pre>
      */
     public ResourceScope on(String resourceType, String resourceId) {
-        return new ResourceScope(this, resourceType, resourceId);
+        return new ResourceScope(this,
+                Objects.requireNonNull(resourceType, "resourceType"),
+                Objects.requireNonNull(resourceId, "resourceId"));
     }
 
     /**
@@ -63,7 +56,9 @@ public class CrossResourceBatchBuilder {
      * it uses in {@code client.on(Xxx)} chains.
      */
     public ResourceScope on(ResourceType<?, ?> resourceType, String resourceId) {
-        return new ResourceScope(this, resourceType.name(), resourceId);
+        return new ResourceScope(this,
+                Objects.requireNonNull(resourceType, "resourceType").name(),
+                Objects.requireNonNull(resourceId, "resourceId"));
     }
 
     /**
@@ -80,33 +75,37 @@ public class CrossResourceBatchBuilder {
      * </pre>
      */
     public MultiResourceScope onAll(ResourceType<?, ?> resourceType, Collection<String> resourceIds) {
-        return new MultiResourceScope(this, resourceType.name(), List.copyOf(resourceIds));
+        SdkRefs.requireNotEmpty(resourceIds, "onAll(...)", "resource id");
+        return new MultiResourceScope(this,
+                Objects.requireNonNull(resourceType, "resourceType").name(),
+                List.copyOf(resourceIds));
     }
 
     /** Raw-string overload for {@link #onAll(ResourceType, Collection)}. */
     public MultiResourceScope onAll(String resourceType, Collection<String> resourceIds) {
-        return new MultiResourceScope(this, resourceType, List.copyOf(resourceIds));
+        SdkRefs.requireNotEmpty(resourceIds, "onAll(...)", "resource id");
+        return new MultiResourceScope(this,
+                Objects.requireNonNull(resourceType, "resourceType"),
+                List.copyOf(resourceIds));
     }
 
     /**
      * Execute all accumulated operations in a single atomic
      * {@code WriteRelationships} RPC. All-or-nothing: either every update
-     * applies, or none do. Returns the zedToken of the committed batch for
-     * subsequent write-after-read consistency.
+     * applies, or none do. Returns the same write completion shape used by
+     * normal {@link WriteFlow#commit()} calls.
      */
-    public BatchResult execute() {
-        if (updates.isEmpty()) return new BatchResult(null);
-        GrantResult r = transport.writeRelationships(updates);
-        return new BatchResult(r.zedToken());
+    public WriteCompletion execute() {
+        if (updates.isEmpty()) {
+            throw new IllegalStateException("batch commit requires at least one update");
+        }
+        WriteResult r = transport.writeRelationships(List.copyOf(updates));
+        return new WriteCompletion(r, updates.size());
     }
 
     /** Alias for {@link #execute()} — read more naturally in some call sites. */
-    public BatchResult commit() {
+    public WriteCompletion commit() {
         return execute();
-    }
-
-    void addUpdate(RelationshipUpdate update) {
-        updates.add(update);
     }
 
     /** Scoped context targeting a single resource within a cross-resource batch. */
@@ -123,31 +122,24 @@ public class CrossResourceBatchBuilder {
 
         /** Add grant operations for the given relations on the scoped resource. */
         public GrantScope grant(String... relations) {
+            SdkRefs.requireNotEmpty(relations, "grant(...)", "relation");
             return new GrantScope(this, relations);
         }
 
         /** Typed overload — grant one or more {@link Relation.Named} relations. */
         public GrantScope grant(Relation.Named... relations) {
-            String[] names = new String[relations.length];
-            for (int i = 0; i < relations.length; i++) names[i] = relations[i].relationName();
-            return new GrantScope(this, names);
+            return new GrantScope(this, SdkRefs.relationNames(relations, "grant(...)"));
         }
 
         /** Add revoke operations for the given relations on the scoped resource. */
         public RevokeScope revoke(String... relations) {
+            SdkRefs.requireNotEmpty(relations, "revoke(...)", "relation");
             return new RevokeScope(this, relations);
         }
 
         /** Typed overload — revoke one or more {@link Relation.Named} relations. */
         public RevokeScope revoke(Relation.Named... relations) {
-            String[] names = new String[relations.length];
-            for (int i = 0; i < relations.length; i++) names[i] = relations[i].relationName();
-            return new RevokeScope(this, names);
-        }
-
-        /** Switch to a different resource. */
-        public ResourceScope on(ResourceHandle resource) {
-            return batch.on(resource);
+            return new RevokeScope(this, SdkRefs.relationNames(relations, "revoke(...)"));
         }
 
         /** Switch to a different resource by type/id. */
@@ -170,12 +162,12 @@ public class CrossResourceBatchBuilder {
         }
 
         /** Execute all operations. */
-        public BatchResult execute() {
+        public WriteCompletion execute() {
             return batch.execute();
         }
 
         /** Alias for {@link #execute()}. */
-        public BatchResult commit() {
+        public WriteCompletion commit() {
             return batch.commit();
         }
     }
@@ -192,41 +184,33 @@ public class CrossResourceBatchBuilder {
 
         /** Grant the relation(s) to the given {@link SubjectRef subjects}. */
         public ResourceScope to(SubjectRef... subjects) {
-            ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
-            for (String rel : relations) {
-                for (SubjectRef sub : subjects) {
-                    scope.batch.addUpdate(new RelationshipUpdate(
-                            Operation.TOUCH, resource, Relation.of(rel), sub));
-                }
-            }
+            SdkRefs.requireNotEmpty(subjects, "to(...)", "subject");
+            RelationshipUpdates.addTo(scope.batch.updates, scope.resourceType, scope.resourceId,
+                    Operation.TOUCH, relations, subjects);
             return scope;
         }
 
         /** Grant the relation(s) to the given canonical subject strings
          *  ({@code "user:alice"}, {@code "group:eng#member"}, {@code "user:*"}). */
         public ResourceScope to(String... subjectRefs) {
-            SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
-            for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
-            return to(subjects);
+            return to(SdkRefs.subjects(subjectRefs, "to(...)"));
         }
 
         /** {@link Iterable} overload of {@link #to(String...)}. */
         public ResourceScope to(Iterable<String> subjectRefs) {
-            List<SubjectRef> subjects = new ArrayList<>();
-            for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
-            return to(subjects.toArray(SubjectRef[]::new));
+            return to(SdkRefs.subjects(subjectRefs, "to(Iterable)"));
         }
 
-        // ────── Typed subject overloads (mirror GrantAction) ─────
+        // ────── Typed subject overloads (mirror WriteFlow grant) ─────
 
         /** Typed single subject: {@code .grant(...).to(User, "alice")}. */
         public ResourceScope to(ResourceType<?, ?> subjectType, String id) {
-            return to(new String[]{subjectType.name() + ":" + id});
+            return to(SdkRefs.typedSubject(subjectType, id));
         }
 
         /** Typed sub-relation: {@code .grant(...).to(Group, "eng", "member")}. */
         public ResourceScope to(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
-            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+            return to(SdkRefs.typedSubject(subjectType, id, subjectRelation));
         }
 
         /** Enum-typed sub-relation: {@code .grant(...).to(Group, "eng", Group.Rel.MEMBER)}. */
@@ -239,19 +223,17 @@ public class CrossResourceBatchBuilder {
         /** Enum-typed sub-permission: {@code .grant(...).to(Department, "hq", Department.Perm.ALL_MEMBERS)}. */
         public ResourceScope to(ResourceType<?, ?> subjectType, String id,
                                  Permission.Named subjectPermission) {
-            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+            return to(SdkRefs.typedSubject(subjectType, id, subjectPermission.permissionName()));
         }
 
         /** Typed wildcard: {@code .grant(...).toWildcard(User)}. */
         public ResourceScope toWildcard(ResourceType<?, ?> subjectType) {
-            return to(new String[]{subjectType.name() + ":*"});
+            return to(SdkRefs.wildcardSubject(subjectType));
         }
 
         /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
         public ResourceScope to(ResourceType<?, ?> subjectType, Iterable<String> ids) {
-            List<String> refs = new ArrayList<>();
-            for (String id : ids) refs.add(subjectType.name() + ":" + id);
-            return to(refs.toArray(String[]::new));
+            return to(SdkRefs.typedSubjectStrings(subjectType, ids, "to(ResourceType, Iterable)"));
         }
 
     }
@@ -273,23 +255,21 @@ public class CrossResourceBatchBuilder {
         }
 
         public MultiGrantScope grant(String... relations) {
+            SdkRefs.requireNotEmpty(relations, "grant(...)", "relation");
             return new MultiGrantScope(this, relations);
         }
 
         public MultiGrantScope grant(Relation.Named... relations) {
-            String[] names = new String[relations.length];
-            for (int i = 0; i < relations.length; i++) names[i] = relations[i].relationName();
-            return new MultiGrantScope(this, names);
+            return new MultiGrantScope(this, SdkRefs.relationNames(relations, "grant(...)"));
         }
 
         public MultiRevokeScope revoke(String... relations) {
+            SdkRefs.requireNotEmpty(relations, "revoke(...)", "relation");
             return new MultiRevokeScope(this, relations);
         }
 
         public MultiRevokeScope revoke(Relation.Named... relations) {
-            String[] names = new String[relations.length];
-            for (int i = 0; i < relations.length; i++) names[i] = relations[i].relationName();
-            return new MultiRevokeScope(this, names);
+            return new MultiRevokeScope(this, SdkRefs.relationNames(relations, "revoke(...)"));
         }
 
         /** Leave the fan and go back to single-resource scope. */
@@ -305,8 +285,8 @@ public class CrossResourceBatchBuilder {
             return batch.onAll(type, ids);
         }
 
-        public BatchResult execute() { return batch.execute(); }
-        public BatchResult commit()  { return batch.commit(); }
+        public WriteCompletion execute() { return batch.execute(); }
+        public WriteCompletion commit()  { return batch.commit(); }
     }
 
     public static class MultiGrantScope {
@@ -320,42 +300,32 @@ public class CrossResourceBatchBuilder {
 
         /** Grant the relation(s) to the given {@link SubjectRef subjects}, fanned across all resource ids. */
         public MultiResourceScope to(SubjectRef... subjects) {
-            for (String id : scope.resourceIds) {
-                ResourceRef resource = ResourceRef.of(scope.resourceType, id);
-                for (String rel : relations) {
-                    for (SubjectRef sub : subjects) {
-                        scope.batch.addUpdate(new RelationshipUpdate(
-                                Operation.TOUCH, resource, Relation.of(rel), sub));
-                    }
-                }
-            }
+            SdkRefs.requireNotEmpty(subjects, "to(...)", "subject");
+            RelationshipUpdates.addTo(scope.batch.updates, scope.resourceType, scope.resourceIds,
+                    Operation.TOUCH, relations, subjects);
             return scope;
         }
 
         /** Grant the relation(s) to the given canonical subject strings, fanned across all resource ids. */
         public MultiResourceScope to(String... subjectRefs) {
-            SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
-            for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
-            return to(subjects);
+            return to(SdkRefs.subjects(subjectRefs, "to(...)"));
         }
 
         /** {@link Iterable} overload of {@link #to(String...)}. */
         public MultiResourceScope to(Iterable<String> subjectRefs) {
-            List<SubjectRef> subjects = new ArrayList<>();
-            for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
-            return to(subjects.toArray(SubjectRef[]::new));
+            return to(SdkRefs.subjects(subjectRefs, "to(Iterable)"));
         }
 
-        // ────── Typed subject overloads (mirror GrantAction) ─────
+        // ────── Typed subject overloads (mirror WriteFlow grant) ─────
 
         /** Typed single subject across every resource id in the fan. */
         public MultiResourceScope to(ResourceType<?, ?> subjectType, String id) {
-            return to(new String[]{subjectType.name() + ":" + id});
+            return to(SdkRefs.typedSubject(subjectType, id));
         }
 
         /** Typed sub-relation across every resource id in the fan. */
         public MultiResourceScope to(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
-            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+            return to(SdkRefs.typedSubject(subjectType, id, subjectRelation));
         }
 
         /** Enum-typed sub-relation across every resource id in the fan. */
@@ -368,19 +338,17 @@ public class CrossResourceBatchBuilder {
         /** Enum-typed sub-permission across every resource id in the fan. */
         public MultiResourceScope to(ResourceType<?, ?> subjectType, String id,
                                        Permission.Named subjectPermission) {
-            return to(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+            return to(SdkRefs.typedSubject(subjectType, id, subjectPermission.permissionName()));
         }
 
         /** Typed wildcard across every resource id in the fan. */
         public MultiResourceScope toWildcard(ResourceType<?, ?> subjectType) {
-            return to(new String[]{subjectType.name() + ":*"});
+            return to(SdkRefs.wildcardSubject(subjectType));
         }
 
         /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
         public MultiResourceScope to(ResourceType<?, ?> subjectType, Iterable<String> ids) {
-            List<String> refs = new ArrayList<>();
-            for (String id : ids) refs.add(subjectType.name() + ":" + id);
-            return to(refs.toArray(String[]::new));
+            return to(SdkRefs.typedSubjectStrings(subjectType, ids, "to(ResourceType, Iterable)"));
         }
 
     }
@@ -396,42 +364,32 @@ public class CrossResourceBatchBuilder {
 
         /** Revoke the relation(s) from the given {@link SubjectRef subjects}, fanned across all resource ids. */
         public MultiResourceScope from(SubjectRef... subjects) {
-            for (String id : scope.resourceIds) {
-                ResourceRef resource = ResourceRef.of(scope.resourceType, id);
-                for (String rel : relations) {
-                    for (SubjectRef sub : subjects) {
-                        scope.batch.addUpdate(new RelationshipUpdate(
-                                Operation.DELETE, resource, Relation.of(rel), sub));
-                    }
-                }
-            }
+            SdkRefs.requireNotEmpty(subjects, "from(...)", "subject");
+            RelationshipUpdates.addTo(scope.batch.updates, scope.resourceType, scope.resourceIds,
+                    Operation.DELETE, relations, subjects);
             return scope;
         }
 
         /** Revoke the relation(s) from the given canonical subject strings, fanned across all resource ids. */
         public MultiResourceScope from(String... subjectRefs) {
-            SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
-            for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
-            return from(subjects);
+            return from(SdkRefs.subjects(subjectRefs, "from(...)"));
         }
 
         /** {@link Iterable} overload of {@link #from(String...)}. */
         public MultiResourceScope from(Iterable<String> subjectRefs) {
-            List<SubjectRef> subjects = new ArrayList<>();
-            for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
-            return from(subjects.toArray(SubjectRef[]::new));
+            return from(SdkRefs.subjects(subjectRefs, "from(Iterable)"));
         }
 
-        // ────── Typed subject overloads (mirror RevokeAction) ─────
+        // ────── Typed subject overloads (mirror WriteFlow revoke) ─────
 
         /** Typed single subject across every resource id in the fan. */
         public MultiResourceScope from(ResourceType<?, ?> subjectType, String id) {
-            return from(new String[]{subjectType.name() + ":" + id});
+            return from(SdkRefs.typedSubject(subjectType, id));
         }
 
         /** Typed sub-relation across every resource id in the fan. */
         public MultiResourceScope from(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
-            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+            return from(SdkRefs.typedSubject(subjectType, id, subjectRelation));
         }
 
         /** Enum-typed sub-relation across every resource id in the fan. */
@@ -444,19 +402,17 @@ public class CrossResourceBatchBuilder {
         /** Enum-typed sub-permission across every resource id in the fan. */
         public MultiResourceScope from(ResourceType<?, ?> subjectType, String id,
                                          Permission.Named subjectPermission) {
-            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+            return from(SdkRefs.typedSubject(subjectType, id, subjectPermission.permissionName()));
         }
 
         /** Typed wildcard across every resource id in the fan. */
         public MultiResourceScope fromWildcard(ResourceType<?, ?> subjectType) {
-            return from(new String[]{subjectType.name() + ":*"});
+            return from(SdkRefs.wildcardSubject(subjectType));
         }
 
         /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
         public MultiResourceScope from(ResourceType<?, ?> subjectType, Iterable<String> ids) {
-            List<String> refs = new ArrayList<>();
-            for (String id : ids) refs.add(subjectType.name() + ":" + id);
-            return from(refs.toArray(String[]::new));
+            return from(SdkRefs.typedSubjectStrings(subjectType, ids, "from(ResourceType, Iterable)"));
         }
     }
 
@@ -472,40 +428,32 @@ public class CrossResourceBatchBuilder {
 
         /** Revoke the relation(s) from the given {@link SubjectRef subjects}. */
         public ResourceScope from(SubjectRef... subjects) {
-            ResourceRef resource = ResourceRef.of(scope.resourceType, scope.resourceId);
-            for (String rel : relations) {
-                for (SubjectRef sub : subjects) {
-                    scope.batch.addUpdate(new RelationshipUpdate(
-                            Operation.DELETE, resource, Relation.of(rel), sub));
-                }
-            }
+            SdkRefs.requireNotEmpty(subjects, "from(...)", "subject");
+            RelationshipUpdates.addTo(scope.batch.updates, scope.resourceType, scope.resourceId,
+                    Operation.DELETE, relations, subjects);
             return scope;
         }
 
         /** Revoke the relation(s) from the given canonical subject strings. */
         public ResourceScope from(String... subjectRefs) {
-            SubjectRef[] subjects = new SubjectRef[subjectRefs.length];
-            for (int i = 0; i < subjectRefs.length; i++) subjects[i] = SubjectRef.parse(subjectRefs[i]);
-            return from(subjects);
+            return from(SdkRefs.subjects(subjectRefs, "from(...)"));
         }
 
         /** {@link Iterable} overload of {@link #from(String...)}. */
         public ResourceScope from(Iterable<String> subjectRefs) {
-            List<SubjectRef> subjects = new ArrayList<>();
-            for (String ref : subjectRefs) subjects.add(SubjectRef.parse(ref));
-            return from(subjects.toArray(SubjectRef[]::new));
+            return from(SdkRefs.subjects(subjectRefs, "from(Iterable)"));
         }
 
-        // ────── Typed subject overloads (mirror RevokeAction) ─────
+        // ────── Typed subject overloads (mirror WriteFlow revoke) ─────
 
         /** Typed single subject: {@code .revoke(...).from(User, "alice")}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, String id) {
-            return from(new String[]{subjectType.name() + ":" + id});
+            return from(SdkRefs.typedSubject(subjectType, id));
         }
 
         /** Typed sub-relation: {@code .revoke(...).from(Group, "eng", "member")}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, String id, String subjectRelation) {
-            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectRelation});
+            return from(SdkRefs.typedSubject(subjectType, id, subjectRelation));
         }
 
         /** Enum-typed sub-relation: {@code .revoke(...).from(Group, "eng", Group.Rel.MEMBER)}. */
@@ -518,19 +466,17 @@ public class CrossResourceBatchBuilder {
         /** Enum-typed sub-permission: {@code .revoke(...).from(Department, "hq", Department.Perm.ALL_MEMBERS)}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, String id,
                                    Permission.Named subjectPermission) {
-            return from(new String[]{subjectType.name() + ":" + id + "#" + subjectPermission.permissionName()});
+            return from(SdkRefs.typedSubject(subjectType, id, subjectPermission.permissionName()));
         }
 
         /** Typed wildcard: {@code .revoke(...).fromWildcard(User)}. */
         public ResourceScope fromWildcard(ResourceType<?, ?> subjectType) {
-            return from(new String[]{subjectType.name() + ":*"});
+            return from(SdkRefs.wildcardSubject(subjectType));
         }
 
         /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, Iterable<String> ids) {
-            List<String> refs = new ArrayList<>();
-            for (String id : ids) refs.add(subjectType.name() + ":" + id);
-            return from(refs.toArray(String[]::new));
+            return from(SdkRefs.typedSubjectStrings(subjectType, ids, "from(ResourceType, Iterable)"));
         }
     }
 }

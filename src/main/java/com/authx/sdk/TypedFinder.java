@@ -3,21 +3,17 @@ package com.authx.sdk;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.SubjectRef;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Typed lookupResources query — "which resources of this type can this
  * subject perform permission X on?". Construct via
- * {@code Document.findBy(client, subject)} or equivalent generated
- * static method on the resource type's constants class.
+ * {@code client.on(Document).lookupResources(subject)}.
  *
  * <pre>
- * List&lt;String&gt; myDocs = Document.findBy(client, SubjectRef.of("user", "alice"))
+ * List&lt;String&gt; myDocs = client.on(Document).lookupResources(SubjectRef.of("user", "alice"))
  *     .limit(100)
  *     .can(Document.Perm.VIEW);
  * </pre>
@@ -28,13 +24,16 @@ public class TypedFinder<P extends Permission.Named> {
     private final SubjectRef subject;
     private int limit = 0;
 
-    public TypedFinder(ResourceFactory factory, SubjectRef subject) {
+    TypedFinder(ResourceFactory factory, SubjectRef subject) {
         this.factory = factory;
         this.subject = subject;
     }
 
     /** Limit the number of resources returned. 0 = no limit. */
     public TypedFinder<P> limit(int n) {
+        if (n < 0) {
+            throw new IllegalArgumentException("limit must be >= 0");
+        }
         this.limit = n;
         return this;
     }
@@ -45,11 +44,7 @@ public class TypedFinder<P extends Permission.Named> {
      * {@code LookupResources}).
      */
     public List<String> can(P permission) {
-        return factory.lookup()
-                .withPermission(permission.permissionName())
-                .by(subject)
-                .limit(limit)
-                .fetch();
+        return ResourceLookupSupport.can(factory, subject, permission.permissionName(), limit);
     }
 
     /**
@@ -60,7 +55,7 @@ public class TypedFinder<P extends Permission.Named> {
      *
      * <pre>
      * Map&lt;Document.Perm, List&lt;String&gt;&gt; byPerm =
-     *     client.on(Document).findByUser(userId).limit(200)
+     *     client.on(Document).lookupResources(User, userId).limit(200)
      *           .can(Document.Perm.VIEW, Document.Perm.EDIT);
      *
      * List&lt;String&gt; viewable = byPerm.get(Document.Perm.VIEW);
@@ -69,7 +64,7 @@ public class TypedFinder<P extends Permission.Named> {
      */
     @SafeVarargs
     public final Map<P, List<String>> can(P... permissions) {
-        if (permissions == null || permissions.length == 0) return Map.of();
+        SdkRefs.requireNotEmpty(permissions, "can(...)", "permission");
         LinkedHashMap<P, List<String>> out = new LinkedHashMap<P, List<String>>(permissions.length);
         for (P p : permissions) {
             out.put(p, can(p));
@@ -79,7 +74,7 @@ public class TypedFinder<P extends Permission.Named> {
 
     /** Collection overload for {@link #can(Permission.Named...)}. */
     public Map<P, List<String>> can(Collection<P> permissions) {
-        if (permissions == null || permissions.isEmpty()) return Map.of();
+        SdkRefs.requireNotEmpty(permissions, "can(Collection)", "permission");
         LinkedHashMap<P, List<String>> out = new LinkedHashMap<P, List<String>>(permissions.size());
         for (P p : permissions) {
             out.put(p, can(p));
@@ -94,10 +89,8 @@ public class TypedFinder<P extends Permission.Named> {
      */
     @SafeVarargs
     public final List<String> canAny(P... permissions) {
-        if (permissions == null || permissions.length == 0) return List.of();
-        LinkedHashSet<String> seen = new LinkedHashSet<String>();
-        for (P p : permissions) seen.addAll(can(p));
-        return List.copyOf(seen);
+        return ResourceLookupSupport.canAny(
+                factory, subject, SdkRefs.permissionNames(permissions, "canAny(...)"), limit, "canAny(...)");
     }
 
     /**
@@ -107,11 +100,7 @@ public class TypedFinder<P extends Permission.Named> {
      */
     @SafeVarargs
     public final List<String> canAll(P... permissions) {
-        if (permissions == null || permissions.length == 0) return List.of();
-        Set<String> acc = new LinkedHashSet<>(can(permissions[0]));
-        for (int i = 1; i < permissions.length && !acc.isEmpty(); i++) {
-            acc.retainAll(new HashSet<>(can(permissions[i])));
-        }
-        return List.copyOf(acc);
+        return ResourceLookupSupport.canAll(
+                factory, subject, SdkRefs.permissionNames(permissions, "canAll(...)"), limit, "canAll(...)");
     }
 }

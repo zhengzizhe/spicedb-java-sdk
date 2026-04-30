@@ -10,6 +10,10 @@ import net.ltgt.gradle.errorprone.CheckSeverity
 group = "io.github.authxkit"
 version = rootProject.findProperty("sdkVersion") ?: "1.0.0"
 
+def skipSigning = providers.gradleProperty("skipSigning")
+        .map { it.toBoolean() }
+        .getOrElse(false)
+
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
@@ -33,6 +37,17 @@ test {
     // docker-java (used by Testcontainers) defaults to API version 1.32, but Docker Desktop 29+
     // requires minimum 1.40. Override to 1.43 for compatibility.
     systemProperty "api.version", "1.43"
+}
+
+tasks.register("spicedbE2eTest", Test) {
+    group = "verification"
+    description = "Runs real SpiceDB Testcontainers end-to-end tests and fails if Docker is unavailable."
+    useJUnitPlatform {
+        includeTags "spicedb-e2e"
+    }
+    systemProperty "api.version", "1.43"
+    systemProperty "authx.spicedb.e2e.required", "true"
+    shouldRunAfter test
 }
 
 repositories {
@@ -109,7 +124,9 @@ mavenPublishing {
     // permanently public — mistakes cannot be unpublished. Manual release lets
     // us verify the staging deployment in the Central Portal UI first.
     publishToMavenCentral(false)
-    signAllPublications()
+    if (!skipSigning) {
+        signAllPublications()
+    }
 
     coordinates("io.github.authxkit", "authx-spicedb-sdk", version.toString())
 

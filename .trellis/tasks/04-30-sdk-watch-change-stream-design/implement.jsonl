@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Watch must not reintroduce removed decision-cache or unsafe invalidation infrastructure."}
+{"file": ".trellis/spec/guides/approach-evaluation-thinking-guide.md", "reason": "Watch requires design evaluation before implementation."}

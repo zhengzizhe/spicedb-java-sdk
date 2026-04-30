@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Guides placement for page model records and fluent lookup/read APIs."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Existing lookup limit semantics and real SpiceDB verification constraints."}

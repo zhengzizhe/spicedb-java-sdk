@@ -2,7 +2,7 @@ package com.authx.sdk.spi;
 
 import com.authx.sdk.model.CheckRequest;
 import com.authx.sdk.model.CheckResult;
-import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.WriteResult;
 import com.authx.sdk.model.WriteRequest;
 import com.authx.sdk.model.enums.SdkAction;
 
@@ -47,7 +47,7 @@ public interface SdkInterceptor {
      *
      * <p>Default implementation passes through to the next interceptor in the chain.
      */
-    default GrantResult interceptWrite(WriteChain chain) {
+    default WriteResult interceptWrite(WriteChain chain) {
         return chain.proceed(chain.request());
     }
 
@@ -96,7 +96,7 @@ public interface SdkInterceptor {
         WriteRequest request();
 
         /** Advance to the next interceptor, or execute the transport if at the end. */
-        GrantResult proceed(WriteRequest request);
+        WriteResult proceed(WriteRequest request);
 
         /** Shared context for the operation. */
         OperationContext operationContext();

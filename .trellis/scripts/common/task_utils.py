@@ -221,7 +221,7 @@ def run_task_hooks(event: str, task_ref_path: Path, repo_root: Path) -> None:
     Args:
         event: Event name (e.g. "after_create").
         task_ref_path: Absolute path inside the task directory; usually
-            `.bead` for Beads-backed folders or the legacy local state file.
+            `.bead` for Beads-backed folders or the task.json state file.
         repo_root: Repository root for cwd and config lookup.
     """
     import os
@@ -241,6 +241,7 @@ def run_task_hooks(event: str, task_ref_path: Path, repo_root: Path) -> None:
         **os.environ,
         "TASK_DIR": str(task_dir),
         "BEADS_ISSUE_ID": beads_issue_id,
+        "TASK_JSON_PATH": str(task_dir / FILE_TASK_JSON),
     }
     if task_ref_path.is_file() and task_ref_path.name == FILE_TASK_JSON:
         env["LEGACY_TASK_STATE_PATH"] = str(task_ref_path)

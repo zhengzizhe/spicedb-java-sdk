@@ -3,6 +3,7 @@ package com.authx.sdk;
 import com.authx.sdk.model.CheckMatrix;
 import com.authx.sdk.model.CheckRequest;
 import com.authx.sdk.model.CheckResult;
+import com.authx.sdk.model.CaveatContext;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
@@ -14,28 +15,30 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Typed check terminator — resolves a permission check into a boolean
  * (single cell), a full {@link CheckResult} (caveat-aware), or a
  * {@link CheckMatrix} (N × M × K matrix via CheckBulkPermissions).
  *
- * <p>Construct via {@link TypedHandle#check(com.authx.sdk.model.Permission.Named)}.
+ * <p>Construct via {@link TypedHandle#check(Enum)} on a typed handle.
  *
  * <pre>
  * // boolean
- * boolean b = Document.select(client, "doc-1").check(Document.Perm.VIEW).by("alice");
+ * boolean b = client.on(Document).select("doc-1")
+ *         .check(Document.Perm.VIEW).by(User, "alice");
  *
  * // caveat-aware CheckResult
- * CheckResult r = Document.select(client, "doc-1")
+ * CheckResult r = client.on(Document).select("doc-1")
  *         .check(Document.Perm.EDIT)
  *         .withContext(Map.of("user_ip", "10.0.0.5"))
- *         .detailedBy("alice");
+ *         .detailedBy(User, "alice");
  *
  * // matrix via CheckBulkPermissions
- * CheckMatrix m = Document.select(client, "doc-1", "doc-2")
+ * CheckMatrix m = client.on(Document).select("doc-1", "doc-2")
  *         .check(Document.Perm.VIEW, Document.Perm.EDIT)
- *         .byAll("alice", "bob");
+ *         .byAll("user:alice", "user:bob");
  * </pre>
  */
 public class TypedCheckAction {
@@ -49,7 +52,7 @@ public class TypedCheckAction {
     private Consistency consistency = Consistency.minimizeLatency();
     private Map<String, Object> context;
 
-    public TypedCheckAction(ResourceFactory factory, String[] ids, String[] permissions) {
+    TypedCheckAction(ResourceFactory factory, String[] ids, String[] permissions) {
         this.factory = factory;
         this.ids = ids;
         this.permissions = permissions;
@@ -57,7 +60,7 @@ public class TypedCheckAction {
 
     /** Override consistency for this check. */
     public TypedCheckAction withConsistency(Consistency consistency) {
-        this.consistency = consistency;
+        this.consistency = Objects.requireNonNull(consistency, "consistency");
         return this;
     }
 
@@ -70,8 +73,14 @@ public class TypedCheckAction {
         return this;
     }
 
+    public TypedCheckAction withContext(CaveatContext context) {
+        this.context = Objects.requireNonNull(context, "context").values();
+        return this;
+    }
+
     /** Caveat context from alternating key-value pairs, e.g. {@code withContext(IpAllowlist.CLIENT_IP, "10.0.0.5")}. */
     public TypedCheckAction withContext(Object... keyValues) {
+        Objects.requireNonNull(keyValues, "keyValues");
         if (keyValues.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
         }
@@ -88,6 +97,9 @@ public class TypedCheckAction {
 
     /** Alias for {@link #withContext(Map)} — reads as "check access given ...". */
     public TypedCheckAction given(Map<String, Object> context) { return withContext(context); }
+
+    /** Alias for {@link #withContext(CaveatContext)}. */
+    public TypedCheckAction given(CaveatContext context) { return withContext(context); }
 
     /** Alias for {@link #withContext(Object...)} — reads as "check access given CLIENT_IP, ip". */
     public TypedCheckAction given(Object... keyValues) { return withContext(keyValues); }
@@ -112,7 +124,7 @@ public class TypedCheckAction {
 
     /** Canonical-string form of {@link #by(SubjectRef)} — {@code "user:alice"} etc. */
     public boolean by(String subjectRef) {
-        return by(SubjectRef.parse(subjectRef));
+        return by(SdkRefs.subject(subjectRef));
     }
 
     /**
@@ -123,7 +135,7 @@ public class TypedCheckAction {
     public <R2 extends Enum<R2> & Relation.Named,
             P2 extends Enum<P2> & Permission.Named>
     boolean by(ResourceType<R2, P2> subjectType, String id) {
-        return by(subjectType.name() + ":" + id);
+        return by(SdkRefs.typedSubject(subjectType, id));
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -146,7 +158,7 @@ public class TypedCheckAction {
 
     /** Canonical-string form of {@link #detailedBy(SubjectRef)}. */
     public CheckResult detailedBy(String subjectRef) {
-        return detailedBy(SubjectRef.parse(subjectRef));
+        return detailedBy(SdkRefs.subject(subjectRef));
     }
 
     /**
@@ -157,7 +169,7 @@ public class TypedCheckAction {
     public <R2 extends Enum<R2> & Relation.Named,
             P2 extends Enum<P2> & Permission.Named>
     CheckResult detailedBy(ResourceType<R2, P2> subjectType, String id) {
-        return detailedBy(subjectType.name() + ":" + id);
+        return detailedBy(SdkRefs.typedSubject(subjectType, id));
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -178,14 +190,7 @@ public class TypedCheckAction {
      */
     /** Matrix check against one or more canonical subject strings. */
     public CheckMatrix byAll(String... subjectRefs) {
-        if (subjectRefs == null || subjectRefs.length == 0) {
-            throw new IllegalArgumentException("byAll(...) requires at least one subject");
-        }
-        SubjectRef[] subs = new SubjectRef[subjectRefs.length];
-        for (int i = 0; i < subjectRefs.length; i++) {
-            subs[i] = SubjectRef.parse(subjectRefs[i]);
-        }
-        return byAll(subs);
+        return byAll(SdkRefs.subjects(subjectRefs, "byAll(...)"));
     }
 
     /** Collection overload — canonical subject strings. */
@@ -195,9 +200,7 @@ public class TypedCheckAction {
 
     /** {@link Iterable} overload of {@link #byAll(String...)}. */
     public CheckMatrix byAll(Iterable<String> subjectRefs) {
-        List<String> list = new ArrayList<>();
-        for (String ref : subjectRefs) list.add(ref);
-        return byAll(list.toArray(String[]::new));
+        return byAll(SdkRefs.subjects(subjectRefs, "byAll(Iterable)"));
     }
 
     /**
@@ -207,16 +210,12 @@ public class TypedCheckAction {
     public <R2 extends Enum<R2> & Relation.Named,
             P2 extends Enum<P2> & Permission.Named>
     CheckMatrix byAll(ResourceType<R2, P2> subjectType, Iterable<String> ids) {
-        List<String> refs = new ArrayList<>();
-        for (String id : ids) refs.add(subjectType.name() + ":" + id);
-        return byAll(refs.toArray(String[]::new));
+        return byAll(SdkRefs.typedSubjectStrings(subjectType, ids, "byAll(ResourceType, Iterable)"));
     }
 
     /** Matrix check against explicit {@link SubjectRef}s. */
     public CheckMatrix byAll(SubjectRef... subjects) {
-        if (subjects == null || subjects.length == 0) {
-            throw new IllegalArgumentException("byAll(...) requires at least one subject");
-        }
+        SdkRefs.requireNotEmpty(subjects, "byAll(...)", "subject");
         if (ids.length == 1 && permissions.length == 1 && subjects.length == 1) {
             // Hot path: single cell — cheaper to hit plain CheckPermission.
             CheckResult r = runSingle(ids[0], permissions[0], subjects[0]);
@@ -226,9 +225,10 @@ public class TypedCheckAction {
         }
 
         String resourceType = factory.resourceType();
-        List<SdkTransport.BulkCheckItem> items =
-                new ArrayList<>(ids.length * permissions.length * subjects.length);
-        String[] cellIds = new String[ids.length * permissions.length * subjects.length];
+        int cellCount = SdkRefs.checkedProduct(
+                "byAll(...)", ids.length, permissions.length, subjects.length);
+        List<SdkTransport.BulkCheckItem> items = new ArrayList<SdkTransport.BulkCheckItem>(cellCount);
+        String[] cellIds = new String[cellCount];
         String[] cellPerms = new String[cellIds.length];
         String[] cellSubjects = new String[cellIds.length];
         int k = 0;
@@ -248,8 +248,9 @@ public class TypedCheckAction {
         }
         List<CheckResult> results = factory.transport().checkBulkMulti(items, consistency);
         CheckMatrix.Builder b = CheckMatrix.builder();
-        for (int i = 0; i < results.size(); i++) {
-            b.add(cellIds[i], cellPerms[i], cellSubjects[i], results.get(i).hasPermission());
+        for (int i = 0; i < items.size(); i++) {
+            boolean allowed = i < results.size() && results.get(i).hasPermission();
+            b.add(cellIds[i], cellPerms[i], cellSubjects[i], allowed);
         }
         return b.build();
     }

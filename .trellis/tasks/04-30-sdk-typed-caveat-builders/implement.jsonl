@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Guides placement for generated typed API changes and model/helper records."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Fail-fast validation and real SpiceDB caveat e2e coverage requirements."}

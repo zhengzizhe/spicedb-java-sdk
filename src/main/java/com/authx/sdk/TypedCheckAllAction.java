@@ -1,6 +1,7 @@
 package com.authx.sdk;
 
 import com.authx.sdk.model.CheckResult;
+import com.authx.sdk.model.CaveatContext;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
@@ -12,6 +13,7 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Typed "check every permission declared on the type" terminator.
@@ -38,17 +40,26 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     private Consistency consistency = Consistency.minimizeLatency();
     private Map<String, Object> context;
 
-    public TypedCheckAllAction(ResourceFactory factory, String[] ids, Class<E> permClass) {
+    TypedCheckAllAction(ResourceFactory factory, String[] ids, Class<E> permClass) {
         this.factory = factory;
         this.ids = ids;
         this.permClass = permClass;
     }
 
-    public TypedCheckAllAction<E> withConsistency(Consistency c) { this.consistency = c; return this; }
+    public TypedCheckAllAction<E> withConsistency(Consistency c) {
+        this.consistency = Objects.requireNonNull(c, "consistency");
+        return this;
+    }
     public TypedCheckAllAction<E> withContext(Map<String, Object> ctx) { this.context = ctx; return this; }
+
+    public TypedCheckAllAction<E> withContext(CaveatContext ctx) {
+        this.context = Objects.requireNonNull(ctx, "ctx").values();
+        return this;
+    }
 
     /** Caveat context from alternating key-value pairs. */
     public TypedCheckAllAction<E> withContext(Object... keyValues) {
+        Objects.requireNonNull(keyValues, "keyValues");
         if (keyValues.length % 2 != 0) {
             throw new IllegalArgumentException("keyValues must have even length");
         }
@@ -65,6 +76,9 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
 
     /** Alias for {@link #withContext(Map)}. */
     public TypedCheckAllAction<E> given(Map<String, Object> ctx) { return withContext(ctx); }
+
+    /** Alias for {@link #withContext(CaveatContext)}. */
+    public TypedCheckAllAction<E> given(CaveatContext ctx) { return withContext(ctx); }
 
     /** Alias for {@link #withContext(Object...)}. */
     public TypedCheckAllAction<E> given(Object... keyValues) { return withContext(keyValues); }
@@ -102,7 +116,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
 
     /** Canonical-string form of {@link #by(SubjectRef)} — {@code "user:alice"} etc. */
     public EnumMap<E, Boolean> by(String subjectRef) {
-        return by(SubjectRef.parse(subjectRef));
+        return by(SdkRefs.subject(subjectRef));
     }
 
     /**
@@ -113,7 +127,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     public <R2 extends Enum<R2> & Relation.Named,
             P2 extends Enum<P2> & Permission.Named>
     EnumMap<E, Boolean> by(ResourceType<R2, P2> subjectType, String id) {
-        return by(subjectType.name() + ":" + id);
+        return by(SdkRefs.typedSubject(subjectType, id));
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -133,7 +147,9 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     public Map<String, EnumMap<E, Boolean>> byAll(SubjectRef subject) {
         E[] values = permClass.getEnumConstants();
         String resourceType = factory.resourceType();
-        ArrayList<SdkTransport.BulkCheckItem> items = new ArrayList<SdkTransport.BulkCheckItem>(ids.length * values.length);
+        int cellCount = SdkRefs.checkedProduct("checkAll().byAll(...)", ids.length, values.length);
+        ArrayList<SdkTransport.BulkCheckItem> items =
+                new ArrayList<SdkTransport.BulkCheckItem>(cellCount);
         for (String id : ids) {
             for (E v : values) {
                 items.add(new SdkTransport.BulkCheckItem(
@@ -158,7 +174,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
 
     /** Canonical-string form of {@link #byAll(SubjectRef)}. */
     public Map<String, EnumMap<E, Boolean>> byAll(String subjectRef) {
-        return byAll(SubjectRef.parse(subjectRef));
+        return byAll(SdkRefs.subject(subjectRef));
     }
 
     /**
@@ -168,7 +184,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
     public <R2 extends Enum<R2> & Relation.Named,
             P2 extends Enum<P2> & Permission.Named>
     Map<String, EnumMap<E, Boolean>> byAll(ResourceType<R2, P2> subjectType, String id) {
-        return byAll(subjectType.name() + ":" + id);
+        return byAll(SdkRefs.typedSubject(subjectType, id));
     }
 
 }

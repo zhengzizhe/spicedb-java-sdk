@@ -5,10 +5,10 @@ import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectRef;
 import com.authx.sdk.transport.SdkTransport;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.Executor;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -26,21 +26,19 @@ public final class DynamicResourceEntry extends ResourceFactory {
 
     DynamicResourceEntry(String resourceType,
                          SdkTransport transport,
-                         Executor asyncExecutor,
                          @Nullable SchemaCache schemaCache) {
-        super(resourceType, transport, asyncExecutor, schemaCache);
+        super(resourceType, transport, schemaCache);
     }
 
     /** Bind to one or more resource ids using the new {@code on(...).select(...)} shape. */
     public DynamicHandle select(String... ids) {
-        if (ids == null || ids.length == 0) {
-            throw new IllegalArgumentException("select() requires at least one id");
-        }
+        SdkRefs.requireNotEmpty(ids, "select()", "id");
         return new DynamicHandle(this, ids);
     }
 
     /** Collection overload for {@link #select(String...)}. */
     public DynamicHandle select(Collection<String> ids) {
+        SdkRefs.requireNotEmpty(ids, "select(Collection)", "id");
         return select(ids.toArray(String[]::new));
     }
 
@@ -51,28 +49,25 @@ public final class DynamicResourceEntry extends ResourceFactory {
 
     /** Canonical-string subject form, e.g. {@code "user:alice"}. */
     public DynamicFinder lookupResources(String subjectRef) {
-        return lookupResources(SubjectRef.parse(subjectRef));
+        return lookupResources(SdkRefs.subject(subjectRef));
     }
 
     /** Typed subject helper for dynamic resource types. */
     public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
     DynamicFinder lookupResources(ResourceType<SR, SP> subjectType, String id) {
-        return lookupResources(subjectType.name() + ":" + id);
+        return lookupResources(SdkRefs.typedSubject(subjectType, id));
     }
 
     /** Multi-subject reverse lookup. */
     public MultiFinder lookupResources(String... subjectRefs) {
-        ArrayList<SubjectRef> refs = new ArrayList<>(subjectRefs.length);
-        for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
-        return new MultiFinder(this, refs);
+        return new MultiFinder(this, List.of(SdkRefs.subjects(subjectRefs, "lookupResources()")));
     }
 
     /** Typed multi-subject reverse lookup. */
     public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
     MultiFinder lookupResources(ResourceType<SR, SP> subjectType, Iterable<String> ids) {
-        ArrayList<SubjectRef> refs = new ArrayList<>();
-        for (String id : ids) refs.add(SubjectRef.of(subjectType.name(), id));
-        return new MultiFinder(this, refs);
+        return lookupResources(SdkRefs.typedSubjectStrings(
+                subjectType, ids, "lookupResources(ResourceType, Iterable)"));
     }
 
     public static final class MultiFinder {
@@ -81,17 +76,23 @@ public final class DynamicResourceEntry extends ResourceFactory {
         private int limit = 0;
 
         MultiFinder(DynamicResourceEntry entry, List<SubjectRef> subjects) {
+            if (subjects == null || subjects.isEmpty()) {
+                throw new IllegalArgumentException("lookupResources(...) requires at least one subject");
+            }
             this.entry = entry;
             this.subjects = List.copyOf(subjects);
         }
 
         public MultiFinder limit(int n) {
+            if (n < 0) {
+                throw new IllegalArgumentException("limit must be >= 0");
+            }
             this.limit = n;
             return this;
         }
 
-        public java.util.Map<String, List<String>> can(String permission) {
-            java.util.LinkedHashMap<String, List<String>> out = new java.util.LinkedHashMap<>(subjects.size());
+        public Map<String, List<String>> can(String permission) {
+            LinkedHashMap<String, List<String>> out = new LinkedHashMap<>(subjects.size());
             for (SubjectRef subject : subjects) {
                 out.put(subject.toRefString(), new DynamicFinder(entry, subject).limit(limit).can(permission));
             }

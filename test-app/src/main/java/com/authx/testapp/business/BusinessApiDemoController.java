@@ -2,15 +2,13 @@ package com.authx.testapp.business;
 
 import com.authx.sdk.AuthxClient;
 import com.authx.sdk.WriteCompletion;
+import com.authx.sdk.WriteListenerStage;
 import com.authx.sdk.model.CheckMatrix;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.ExpandTree;
 import com.authx.sdk.model.Tuple;
-import com.authx.testapp.schema.Org;
 import com.authx.testapp.schema.Project;
-import com.authx.testapp.schema.Task;
-import com.authx.testapp.schema.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import static com.authx.testapp.schema.Org.Org;
 import static com.authx.testapp.schema.Project.Project;
@@ -83,15 +82,15 @@ public class BusinessApiDemoController {
     }
 
     @PostMapping("/listener")
-    public void listener(@RequestBody ProjectUser req) {
-        // Authx 链含义：正常授予关系并提交；返回的 WriteCompletion 可注册 listener 观察写入完成结果。
-        WriteCompletion completion = client.on(Project)
+    public CompletableFuture<WriteCompletion> listener(@RequestBody ProjectUser req) {
+        // Authx 链含义：listener 是异步写入监听阶段；该阶段的 commit 返回 Future。
+        WriteListenerStage listener = client.on(Project)
                 .select(req.projectId())
                 .grant(Project.Rel.MEMBER)
                 .to(User, req.userId())
-                .commit();
+                .listener(done -> log.info("project member granted, count={}", done.count()));
 
-        completion.listener(done -> log.info("project member granted, count={}", done.count()));
+        return listener.commit();
     }
 
     @PostMapping("/check")

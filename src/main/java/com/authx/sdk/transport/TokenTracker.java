@@ -7,7 +7,6 @@ import com.authx.sdk.policy.ReadConsistency;
 import com.authx.sdk.spi.DistributedTokenStore;
 import com.authx.sdk.trace.LogCtx;
 import java.time.Instant;
-import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
@@ -83,18 +82,6 @@ public class TokenTracker {
     }
 
     /**
-     * Record a write token without resource type (backward compatibility).
-     * Stores under the global key "_global".
-     */
-    public void recordWrite(String token) {
-        recordWrite("_global", token);
-    }
-
-    public void recordRead(String token) {
-        // Reserved for future use
-    }
-
-    /**
      * Resolve a ReadConsistency policy into a concrete SpiceDB Consistency for a specific resource type.
      */
     public Consistency resolve(ReadConsistency policy, String resourceType) {
@@ -121,13 +108,6 @@ public class TokenTracker {
                     // Full time-based bounded staleness requires SpiceDB API support (planned).
                     Consistency.minimizeLatency();
         };
-    }
-
-    /**
-     * Resolve without resource type (backward compatibility). Uses global key.
-     */
-    public Consistency resolve(ReadConsistency policy) {
-        return resolve(policy, "_global");
     }
 
     private String getDistributedToken(String key) {
@@ -190,16 +170,7 @@ public class TokenTracker {
      * Get the last write token for a specific resource type.
      */
     public String getLastWriteToken(String resourceType) {
-        if (resourceType == null) return getLastWriteToken();
+        if (resourceType == null) return null;
         return lastWriteTokens.get(resourceType);
-    }
-
-    /**
-     * Get any last write token (backward compatibility).
-     * Returns an arbitrary token if multiple resource types have tokens, or null if none.
-     */
-    public String getLastWriteToken() {
-        Collection<String> values = lastWriteTokens.values();
-        return values.isEmpty() ? null : values.iterator().next();
     }
 }

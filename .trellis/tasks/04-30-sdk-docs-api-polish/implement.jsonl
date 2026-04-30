@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Guides which documentation and SDK public files belong to this repo layout."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Public API docs must match implemented behavior and verification commands."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Search existing examples before editing repeated docs snippets."}

@@ -35,6 +35,9 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.MetadataUtils;
+import java.net.InetAddress;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -107,9 +110,9 @@ public class GrpcTransport implements SdkTransport {
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
         com.authzed.api.v1.CheckBulkPermissionsRequest.Builder builder = CheckBulkPermissionsRequest.newBuilder()
                 .setConsistency(toGrpc(request.consistency()));
-        List<String> subjectIds = new ArrayList<>(subjects.size());
+        List<String> subjectRefs = new ArrayList<>(subjects.size());
         for (SubjectRef sub : subjects) {
-            subjectIds.add(sub.id());
+            subjectRefs.add(sub.toRefString());
             builder.addItems(CheckBulkPermissionsRequestItem.newBuilder()
                     .setResource(objRef(request.resource()))
                     .setPermission(request.permission().name())
@@ -120,18 +123,11 @@ public class GrpcTransport implements SdkTransport {
 
         Map<String, CheckResult> results = new LinkedHashMap<>();
         String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
-        for (int i = 0; i < subjectIds.size() && i < response.getPairsCount(); i++) {
-            com.authzed.api.v1.CheckBulkPermissionsPair pair = response.getPairs(i);
-            CheckResult cr;
-            if (pair.hasError()) {
-                LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
-                        "Bulk check item error (treating as NO_PERMISSION): {0}",
-                        pair.getError().getMessage()));
-                cr = new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
-            } else {
-                cr = mapPermissionship(pair.getItem().getPermissionship(), bulkToken);
-            }
-            results.put(subjectIds.get(i), cr);
+        for (int i = 0; i < subjectRefs.size(); i++) {
+            CheckResult result = i < response.getPairsCount()
+                    ? mapBulkPair(response.getPairs(i), bulkToken)
+                    : CheckResult.denied(bulkToken);
+            results.put(subjectRefs.get(i), result);
         }
         return new BulkCheckResult(results);
     }
@@ -166,24 +162,29 @@ public class GrpcTransport implements SdkTransport {
         String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
         List<CheckResult> results = new ArrayList<>(items.size());
-        for (int i = 0; i < items.size() && i < response.getPairsCount(); i++) {
-            com.authzed.api.v1.CheckBulkPermissionsPair pair = response.getPairs(i);
-            CheckResult cr;
-            if (pair.hasError()) {
-                LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
-                        "Bulk check item error (treating as NO_PERMISSION): {0}",
-                        pair.getError().getMessage()));
-                cr = new CheckResult(Permissionship.NO_PERMISSION, bulkToken, Optional.empty());
-            } else {
-                cr = mapPermissionship(pair.getItem().getPermissionship(), bulkToken);
-            }
-            results.add(cr);
+        for (int i = 0; i < items.size(); i++) {
+            CheckResult result = i < response.getPairsCount()
+                    ? mapBulkPair(response.getPairs(i), bulkToken)
+                    : CheckResult.denied(bulkToken);
+            results.add(result);
         }
         return results;
     }
 
+    static CheckResult mapBulkPair(com.authzed.api.v1.CheckBulkPermissionsPair pair, String bulkToken) {
+        if (pair.hasError()) {
+            LOG.log(System.Logger.Level.DEBUG, LogCtx.fmt(
+                    "Bulk check item error: {0}",
+                    pair.getError().getMessage()));
+            io.grpc.Status status = io.grpc.Status.fromCodeValue(pair.getError().getCode())
+                    .withDescription(pair.getError().getMessage());
+            throw GrpcExceptionMapper.map(status.asRuntimeException());
+        }
+        return mapPermissionship(pair.getItem().getPermissionship(), bulkToken);
+    }
+
     @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
+    public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
         com.authzed.api.v1.WriteRelationshipsRequest.Builder builder = WriteRelationshipsRequest.newBuilder();
         for (SdkTransport.RelationshipUpdate u : updates) {
             builder.addUpdates(com.authzed.api.v1.RelationshipUpdate.newBuilder()
@@ -192,11 +193,11 @@ public class GrpcTransport implements SdkTransport {
         }
         com.authzed.api.v1.WriteRelationshipsResponse response = withErrorHandling(() -> stub().writeRelationships(builder.build()));
         String token = response.hasWrittenAt() ? response.getWrittenAt().getToken() : null;
-        return new GrantResult(token, updates.size());
+        return new WriteResult(token, updates.size());
     }
 
     @Override
-    public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
+    public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
         com.authzed.api.v1.WriteRelationshipsRequest.Builder builder = WriteRelationshipsRequest.newBuilder();
         for (SdkTransport.RelationshipUpdate u : updates) {
             builder.addUpdates(com.authzed.api.v1.RelationshipUpdate.newBuilder()
@@ -205,7 +206,7 @@ public class GrpcTransport implements SdkTransport {
         }
         com.authzed.api.v1.WriteRelationshipsResponse response = withErrorHandling(() -> stub().writeRelationships(builder.build()));
         String token = response.hasWrittenAt() ? response.getWrittenAt().getToken() : null;
-        return new RevokeResult(token, updates.size());
+        return new WriteResult(token, updates.size());
     }
 
     @Override
@@ -294,7 +295,7 @@ public class GrpcTransport implements SdkTransport {
     }
 
     @Override
-    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+    public WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
         com.authzed.api.v1.RelationshipFilter.Builder filterBuilder = RelationshipFilter.newBuilder()
                 .setResourceType(resource.type())
@@ -314,7 +315,7 @@ public class GrpcTransport implements SdkTransport {
 
         com.authzed.api.v1.DeleteRelationshipsResponse response = withErrorHandling(() -> stub().deleteRelationships(request));
         String token = response.hasDeletedAt() ? response.getDeletedAt().getToken() : null;
-        return new RevokeResult(token, 0);
+        return WriteResult.unknownSubmittedUpdateCount(token);
     }
 
     @Override
@@ -450,6 +451,16 @@ public class GrpcTransport implements SdkTransport {
             return Value.newBuilder().setNumberValue(n.doubleValue()).build();
         } else if (obj instanceof Boolean b) {
             return Value.newBuilder().setBoolValue(b).build();
+        } else if (obj instanceof Instant instant) {
+            return Value.newBuilder().setStringValue(instant.toString()).build();
+        } else if (obj instanceof Duration duration) {
+            return Value.newBuilder().setStringValue(duration.toString()).build();
+        } else if (obj instanceof InetAddress address) {
+            return Value.newBuilder().setStringValue(address.getHostAddress()).build();
+        } else if (obj instanceof byte[] bytes) {
+            return Value.newBuilder()
+                    .setStringValue(Base64.getEncoder().encodeToString(bytes))
+                    .build();
         } else if (obj instanceof Map<?, ?> m) {
             return Value.newBuilder()
                     .setStructValue(toStruct((Map<String, Object>) m))
@@ -470,11 +481,11 @@ public class GrpcTransport implements SdkTransport {
             com.authzed.api.v1.CheckPermissionResponse.Permissionship p, String token) {
         return switch (p) {
             case PERMISSIONSHIP_HAS_PERMISSION ->
-                    new CheckResult(Permissionship.HAS_PERMISSION, token, Optional.empty());
+                    new CheckResult(Permissionship.HAS_PERMISSION, token);
             case PERMISSIONSHIP_CONDITIONAL_PERMISSION ->
-                    new CheckResult(Permissionship.CONDITIONAL_PERMISSION, token, Optional.empty());
+                    new CheckResult(Permissionship.CONDITIONAL_PERMISSION, token);
             default ->
-                    new CheckResult(Permissionship.NO_PERMISSION, token, Optional.empty());
+                    new CheckResult(Permissionship.NO_PERMISSION, token);
         };
     }
 

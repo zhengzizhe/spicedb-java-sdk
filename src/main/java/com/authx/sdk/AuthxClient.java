@@ -17,7 +17,6 @@ import com.authx.sdk.trace.LogCtx;
 import com.authx.sdk.transport.InMemoryTransport;
 import com.authx.sdk.transport.SdkTransport;
 
-import java.lang.reflect.Constructor;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -84,8 +83,8 @@ public class AuthxClient implements AutoCloseable {
         // Always non-null at the accessor — callers don't need a null check.
         this.schemaClient = schemaClient != null ? schemaClient : new SchemaClient(null);
         // Nullable — only wired when the builder populated it via ReflectSchema.
-        // Factories pass this to ResourceHandle → GrantAction for runtime
-        // subject-type validation. When null, validation is a no-op (fail-open).
+        // WriteFlow uses this for runtime subject-type validation. When
+        // null, validation is a no-op (fail-open).
         this.schemaCache = schemaCache;
     }
 
@@ -127,16 +126,16 @@ public class AuthxClient implements AutoCloseable {
      *
      * <pre>
      * client.on("document").select("doc-1").check("view").by("user:alice");
-     * client.on("document").findBy("user:alice").can("view");
+     * client.on("document").lookupResources("user:alice").can("view");
      * </pre>
      */
     public DynamicResourceEntry on(String resourceType) {
-        return dynamic(resourceType);
+        return dynamic(Objects.requireNonNull(resourceType, "resourceType"));
     }
 
     private DynamicResourceEntry dynamic(String resourceType) {
         return factories.computeIfAbsent(resourceType, type ->
-                new DynamicResourceEntry(type, transport, infra.asyncExecutor(), schemaCache));
+                new DynamicResourceEntry(type, transport, schemaCache));
     }
 
     /**
@@ -145,10 +144,10 @@ public class AuthxClient implements AutoCloseable {
      * {@code import static Schema.*}):
      *
      * <pre>
-     * client.on(Document).select(docId).check(Document.Perm.VIEW).by(userId);
-     * client.on(Document).select(docId).grant(Document.Rel.EDITOR).to(userId);
-     * client.on(Document).select(docId).checkAll().by(userId);
-     * client.on(Document).findByUser(userId).limit(100).can(Document.Perm.VIEW);
+     * client.on(Document).select(docId).check(Document.Perm.VIEW).by(User, userId);
+     * client.on(Document).select(docId).grant(Document.Rel.EDITOR).to(User, userId);
+     * client.on(Document).select(docId).checkAll().by(User, userId);
+     * client.on(Document).lookupResources(User, userId).limit(100).can(Document.Perm.VIEW);
      * </pre>
      *
      * <p>Every operation that used to be spelled as a client-taking
@@ -163,47 +162,10 @@ public class AuthxClient implements AutoCloseable {
     }
 
     /**
-     * Create a typed permission service from a {@link PermissionResource} annotated class.
-     *
-     * <pre>
-     * @PermissionResource("document")
-     * public class DocumentPermission extends ResourceFactory {
-     *     public boolean canView(String docId, String userId) {
-     *         return check(docId, "view", userId);
-     *     }
-     * }
-     *
-     * @Bean DocumentPermission doc(AuthxClient c) { return c.create(DocumentPermission.class); }
-     * </pre>
+     * Start a cross-resource batch builder for atomic operations across
+     * multiple resources. Terminal {@code commit()} / {@code execute()} returns
+     * {@link WriteCompletion}, matching single-resource write flows.
      */
-    public <T extends ResourceFactory> T create(Class<T> clazz) {
-        PermissionResource annotation = clazz.getAnnotation(PermissionResource.class);
-        if (annotation == null) {
-            throw new IllegalArgumentException(clazz.getSimpleName() + " must be annotated with @PermissionResource");
-        }
-        String resourceType = annotation.value();
-        try {
-            Constructor<T> constructor = clazz.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            T instance = constructor.newInstance();
-            instance.init(resourceType, transport, infra.asyncExecutor());
-            return instance;
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("Failed to create " + clazz.getSimpleName() + ": " + e.getMessage(), e);
-        }
-    }
-
-    /** Create a one-off resource handle for the given type and id. */
-    public ResourceHandle resource(String type, String id) {
-        return new ResourceHandle(type, id, transport, infra.asyncExecutor(), schemaCache);
-    }
-
-    /** Start a cross-resource lookup query (find all resources a subject can access). */
-    public LookupQuery lookup(String resourceType) {
-        return new LookupQuery(resourceType, transport);
-    }
-
-    /** Start a cross-resource batch builder for atomic operations across multiple resources. */
     public CrossResourceBatchBuilder batch() {
         return new CrossResourceBatchBuilder(transport);
     }
@@ -225,7 +187,7 @@ public class AuthxClient implements AutoCloseable {
 
     // ---- Observability ----
 
-    /** Package-private: used by TypedResourceFactory to access the transport chain. */
+    /** Package-private: used by typed API internals to access the transport chain. */
     SdkTransport transport() { return transport; }
     Executor asyncExecutor() { return infra.asyncExecutor(); }
 

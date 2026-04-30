@@ -98,7 +98,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print()
 
     total_errors = 0
-    for jsonl_name in ["implement.jsonl", "check.jsonl"]:
+    for jsonl_name in ["implement.jsonl", "test.jsonl", "check.jsonl"]:
         jsonl_file = target_dir / jsonl_name
         errors = _validate_jsonl(jsonl_file, repo_root)
         total_errors += errors
@@ -181,7 +181,7 @@ def cmd_list_context(args: argparse.Namespace) -> int:
     print(colored("=== Context Files ===", Colors.BLUE))
     print()
 
-    for jsonl_name in ["implement.jsonl", "check.jsonl"]:
+    for jsonl_name in ["implement.jsonl", "test.jsonl", "check.jsonl"]:
         jsonl_file = target_dir / jsonl_name
         if not jsonl_file.is_file():
             continue

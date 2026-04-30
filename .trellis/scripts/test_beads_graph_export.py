@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,7 @@ from beads_graph_export import (
     priority_to_beads,
     select_tasks,
 )
+from common.active_task import set_active_task
 from common.io import write_json
 
 LEGACY_TASK_FILE = "task" + ".json"
@@ -114,11 +116,18 @@ class BeadsGraphExportTest(unittest.TestCase):
                     "status": "completed",
                 },
             )
-            current_file = repo_root / ".trellis" / ".current-task"
-            current_file.write_text(".trellis/tasks/01-current", encoding="utf-8")
-
-            current_tasks = select_tasks(repo_root, current_only=True)
-            incomplete_tasks = select_tasks(repo_root, incomplete_only=True)
+            old_context = os.environ.get("TRELLIS_CONTEXT_ID")
+            os.environ["TRELLIS_CONTEXT_ID"] = "test-session"
+            try:
+                active = set_active_task(".trellis/tasks/01-current", repo_root, platform="codex")
+                self.assertIsNotNone(active)
+                current_tasks = select_tasks(repo_root, current_only=True)
+                incomplete_tasks = select_tasks(repo_root, incomplete_only=True)
+            finally:
+                if old_context is None:
+                    os.environ.pop("TRELLIS_CONTEXT_ID", None)
+                else:
+                    os.environ["TRELLIS_CONTEXT_ID"] = old_context
 
             self.assertEqual([task.dir_name for task in current_tasks], ["01-current"])
             self.assertEqual([task.dir_name for task in incomplete_tasks], ["01-current"])

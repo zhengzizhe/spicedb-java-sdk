@@ -10,6 +10,7 @@ import com.authx.sdk.transport.SdkTransport;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Cross-resource batch permission check — send many arbitrary
@@ -45,7 +46,7 @@ public final class BatchCheckBuilder {
 
     /** Override the consistency level for this whole batch. */
     public BatchCheckBuilder withConsistency(Consistency consistency) {
-        this.consistency = consistency;
+        this.consistency = Objects.requireNonNull(consistency, "consistency");
         return this;
     }
 
@@ -66,7 +67,7 @@ public final class BatchCheckBuilder {
                                   Permission.Named permission,
                                   ResourceType<?, ?> subjectType, String subjectId) {
         return add(resourceType, resourceId, permission,
-                SubjectRef.of(subjectType.name(), subjectId));
+                SdkRefs.typedSubject(subjectType, subjectId));
     }
 
     /**
@@ -78,6 +79,7 @@ public final class BatchCheckBuilder {
                                      Collection<String> resourceIds,
                                      Permission.Named permission,
                                      SubjectRef subject) {
+        SdkRefs.requireNotEmpty(resourceIds, "addAll(...)", "resource id");
         for (String id : resourceIds) {
             add(resourceType.name(), id, permission, subject);
         }
@@ -90,7 +92,7 @@ public final class BatchCheckBuilder {
                                      ResourceType<?, ?> subjectType,
                                      String subjectId) {
         return addAll(resourceType, resourceIds, permission,
-                SubjectRef.of(subjectType.name(), subjectId));
+                SdkRefs.typedSubject(subjectType, subjectId));
     }
 
     /** Raw-string overload for {@link #addAll}. */
@@ -98,6 +100,7 @@ public final class BatchCheckBuilder {
                                      Collection<String> resourceIds,
                                      Permission.Named permission,
                                      SubjectRef subject) {
+        SdkRefs.requireNotEmpty(resourceIds, "addAll(...)", "resource id");
         for (String id : resourceIds) {
             add(resourceType, id, permission, subject);
         }
@@ -106,6 +109,7 @@ public final class BatchCheckBuilder {
 
     /** Bulk add from a pre-built list of {@link Cell}s. */
     public BatchCheckBuilder addAll(Collection<Cell> cells) {
+        SdkRefs.requireNotEmpty(cells, "addAll(...)", "cell");
         for (Cell c : cells) {
             entries.add(new Entry(c.resourceType, c.resourceId, c.permission, c.subject));
         }
@@ -139,7 +143,9 @@ public final class BatchCheckBuilder {
      * {@code (resourceType:resourceId, permission, subject.toRefString())}.
      */
     public CheckMatrix fetch() {
-        if (entries.isEmpty()) return CheckMatrix.builder().build();
+        if (entries.isEmpty()) {
+            throw new IllegalStateException("batchCheck fetch requires at least one entry");
+        }
         List<SdkTransport.BulkCheckItem> items = new ArrayList<>(entries.size());
         for (Entry e : entries) {
             items.add(new SdkTransport.BulkCheckItem(
@@ -149,10 +155,11 @@ public final class BatchCheckBuilder {
         }
         List<CheckResult> results = transport.checkBulkMulti(items, consistency);
         CheckMatrix.Builder b = CheckMatrix.builder();
-        for (int i = 0; i < results.size(); i++) {
+        for (int i = 0; i < entries.size(); i++) {
             Entry e = entries.get(i);
             String compositeId = e.resourceType + ":" + e.resourceId;
-            b.add(compositeId, e.permission, e.subject.toRefString(), results.get(i).hasPermission());
+            boolean allowed = i < results.size() && results.get(i).hasPermission();
+            b.add(compositeId, e.permission, e.subject.toRefString(), allowed);
         }
         return b.build();
     }

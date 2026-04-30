@@ -68,19 +68,25 @@ public class InstrumentedTransport extends ForwardingTransport {
     }
 
     @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        return instrument(SdkAction.WRITE, "", "", "", "", "",
+    public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
+        RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
+        return instrument(SdkAction.WRITE,
+                batch.resourceType(), batch.resourceId(), batch.subjectType(), batch.subjectId(),
+                batch.relation() != null ? batch.relation() : "",
                 () -> new InstrumentedResult<>(delegate.writeRelationships(updates), OperationResult.SUCCESS.name()));
     }
 
     @Override
-    public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        return instrument(SdkAction.DELETE, "", "", "", "", "",
+    public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
+        RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
+        return instrument(SdkAction.DELETE,
+                batch.resourceType(), batch.resourceId(), batch.subjectType(), batch.subjectId(),
+                batch.relation() != null ? batch.relation() : "",
                 () -> new InstrumentedResult<>(delegate.deleteRelationships(updates), OperationResult.SUCCESS.name()));
     }
 
     @Override
-    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+    public WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                        Relation optionalRelation) {
         return instrument(SdkAction.DELETE,
                 resource.type(), resource.id(),

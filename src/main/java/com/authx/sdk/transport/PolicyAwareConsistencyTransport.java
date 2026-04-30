@@ -42,31 +42,14 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     public CheckResult check(CheckRequest request) {
         CheckRequest adjusted = request.withConsistency(
                 resolveConsistency(request.resource().type(), request.consistency()));
-        CheckResult result = delegate.check(adjusted);
-        tokenTracker.recordRead(result.zedToken());
-        return result;
+        return delegate.check(adjusted);
     }
 
     @Override
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
         CheckRequest adjusted = request.withConsistency(
                 resolveConsistency(request.resource().type(), request.consistency()));
-        BulkCheckResult result = delegate.checkBulk(adjusted, subjects);
-        // F12-2: record the response zedToken so subsequent reads in the same
-        // session see at-least-this-revision consistency. The whole bulk result
-        // comes from a single SpiceDB dispatch, so every inner CheckResult
-        // carries the same zedToken — we just grab the first non-null one.
-        // Matches the symmetric behavior of single-subject check() above.
-        if (result != null) {
-            for (CheckResult entry : result.asMap().values()) {
-                String token = entry.zedToken();
-                if (token != null) {
-                    tokenTracker.recordRead(token);
-                    break;
-                }
-            }
-        }
-        return result;
+        return delegate.checkBulk(adjusted, subjects);
     }
 
     @Override
@@ -83,7 +66,7 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
         ArrayList<CheckResult> ordered = new ArrayList<>(items.size());
         for (int i = 0; i < items.size(); i++) {
-            ordered.add(null);
+            ordered.add(CheckResult.denied(null));
         }
 
         for (Map.Entry<Consistency, List<IndexedBulkCheckItem>> entry : groups.entrySet()) {
@@ -91,10 +74,11 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
                     .map(IndexedBulkCheckItem::item)
                     .toList();
             List<CheckResult> groupResults = delegate.checkBulkMulti(groupItems, entry.getKey());
-            for (int i = 0; i < groupResults.size(); i++) {
+            int resultCount = Math.min(groupResults.size(), entry.getValue().size());
+            for (int i = 0; i < resultCount; i++) {
                 CheckResult result = groupResults.get(i);
-                ordered.set(entry.getValue().get(i).index(), result);
-                tokenTracker.recordRead(result.zedToken());
+                ordered.set(entry.getValue().get(i).index(),
+                        result != null ? result : CheckResult.denied(null));
             }
         }
 
@@ -102,15 +86,15 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     }
 
     @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        GrantResult result = delegate.writeRelationships(updates);
+    public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
+        WriteResult result = delegate.writeRelationships(updates);
         recordWriteForTouchedResourceTypes(updates, result.zedToken());
         return result;
     }
 
     @Override
-    public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        RevokeResult result = delegate.deleteRelationships(updates);
+    public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
+        WriteResult result = delegate.deleteRelationships(updates);
         recordWriteForTouchedResourceTypes(updates, result.zedToken());
         return result;
     }
@@ -136,9 +120,9 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     }
 
     @Override
-    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+    public WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
-        RevokeResult result = delegate.deleteByFilter(resource, subject, optionalRelation);
+        WriteResult result = delegate.deleteByFilter(resource, subject, optionalRelation);
         tokenTracker.recordWrite(resource.type(), result.zedToken());
         return result;
     }
@@ -172,7 +156,6 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     private void recordWriteForTouchedResourceTypes(List<RelationshipUpdate> updates, String zedToken) {
         if (updates.isEmpty()) {
-            tokenTracker.recordWrite(null, zedToken);
             return;
         }
         Set<String> resourceTypes = new LinkedHashSet<>();

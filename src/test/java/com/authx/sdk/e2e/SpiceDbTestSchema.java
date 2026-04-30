@@ -6,21 +6,15 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
-
 import java.util.concurrent.TimeUnit;
 
 /**
- * Shared helper that writes a test schema to a fresh SpiceDB serve-testing instance.
- * Called from @BeforeAll in each E2E test class.
+ * Shared helper that writes a test schema to a fresh SpiceDB instance.
  */
 final class SpiceDbTestSchema {
 
     private SpiceDbTestSchema() {}
 
-    /**
-     * Minimal schema covering resource types used across E2E tests:
-     * document (owner, editor, viewer + view permission), folder, group, user.
-     */
     static final String SCHEMA = """
             definition user {}
 
@@ -43,12 +37,6 @@ final class SpiceDbTestSchema {
             }
             """;
 
-    /**
-     * Write the test schema to SpiceDB via gRPC.
-     *
-     * @param target  host:port of the SpiceDB gRPC endpoint
-     * @param presharedKey  the preshared key configured on the container
-     */
     static void writeSchema(String target, String presharedKey) {
         ManagedChannel channel = ManagedChannelBuilder.forTarget(target)
                 .usePlaintext()
@@ -59,7 +47,7 @@ final class SpiceDbTestSchema {
                     Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
                     "Bearer " + presharedKey);
 
-            com.authzed.api.v1.SchemaServiceGrpc.SchemaServiceBlockingStub stub = SchemaServiceGrpc.newBlockingStub(channel)
+            SchemaServiceGrpc.SchemaServiceBlockingStub stub = SchemaServiceGrpc.newBlockingStub(channel)
                     .withDeadlineAfter(10, TimeUnit.SECONDS)
                     .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata));
 

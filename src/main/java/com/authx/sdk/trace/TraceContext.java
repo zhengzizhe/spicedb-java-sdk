@@ -26,7 +26,7 @@ import java.util.Map;
  */
 public final class TraceContext {
 
-    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("authx-sdk", "1.0.0");
+    private static final Tracer TRACER = GlobalOpenTelemetry.getTracer("authx-sdk", "3.0.1");
 
     private TraceContext() {}
 

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "SDK quality rules for API changes, result semantics, and real SpiceDB verification."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Package placement conventions for public API, model records, transport wrappers, and tests."}

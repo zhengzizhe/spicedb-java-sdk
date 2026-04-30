@@ -1,6 +1,5 @@
 package com.authx.sdk;
 
-import com.authx.sdk.action.RelationQuery;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.ExpandTree;
 import com.authx.sdk.model.Permission;
@@ -35,6 +34,7 @@ public final class DynamicHandle {
     }
 
     public TypedCheckAction check(String... permissions) {
+        SdkRefs.requireNotEmpty(permissions, "check(...)", "permission");
         return new TypedCheckAction(factory, ids, permissions);
     }
 
@@ -45,6 +45,9 @@ public final class DynamicHandle {
 
     public RelationQuery relations(String... relations) {
         requireSingleId("relations");
+        if (relations == null) {
+            throw new IllegalArgumentException("relations(...) requires non-null relation names");
+        }
         return new RelationQuery(factory.resourceType(), ids[0], factory.transport(), relations);
     }
 

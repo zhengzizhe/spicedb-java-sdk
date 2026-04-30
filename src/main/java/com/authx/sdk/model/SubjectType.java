@@ -78,7 +78,7 @@ public record SubjectType(String type, @Nullable String relation, boolean wildca
      * declarations return empty (you cannot infer a concrete id from
      * {@code user:*}).
      *
-     * <p>Used by {@code GrantAction.to(String id)} (and the revoke
+     * <p>Used by {@code WriteFlow.to(String id)} (and the revoke
      * mirror) to decide whether a bare id can be wrapped into a
      * canonical {@code type:id} subject without forcing the caller to
      * name the type. Multi-type relations — the majority in practice —

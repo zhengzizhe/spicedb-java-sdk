@@ -25,7 +25,6 @@ import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -122,7 +121,7 @@ public class ResilientTransport extends ForwardingTransport {
                     () -> delegate.check(request));
         } catch (CircuitBreakerOpenException e) {
             if (failOpenPerms.contains(request.permission().name())) {
-                return new CheckResult(Permissionship.HAS_PERMISSION, null, Optional.empty());
+                return new CheckResult(Permissionship.HAS_PERMISSION, null);
             }
             throw e;
         }
@@ -135,15 +134,15 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
-        String resourceType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
-        return executeWithResilience(resourceType, () -> delegate.writeRelationships(updates));
+    public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
+        RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
+        return executeWithResilience(batch.resourceType(), () -> delegate.writeRelationships(updates));
     }
 
     @Override
-    public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
-        String resourceType = updates.isEmpty() ? "" : updates.getFirst().resource().type();
-        return executeWithResilience(resourceType, () -> delegate.deleteRelationships(updates));
+    public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
+        RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
+        return executeWithResilience(batch.resourceType(), () -> delegate.deleteRelationships(updates));
     }
 
     @Override
@@ -172,7 +171,7 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     @Override
-    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+    public WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
         return executeWithResilience(resource.type(),
                 () -> delegate.deleteByFilter(resource, subject, optionalRelation));

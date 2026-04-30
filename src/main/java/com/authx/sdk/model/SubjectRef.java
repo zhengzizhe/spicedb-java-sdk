@@ -13,8 +13,8 @@ import java.util.Objects;
  *
  * <h2>Preferred usage: strings</h2>
  *
- * Everywhere the SDK accepts a subject (e.g. {@link com.authx.sdk.action.GrantAction#to},
- * {@link com.authx.sdk.action.RevokeAction#from}) it also accepts a plain
+ * Everywhere the SDK accepts a subject (for example {@code WriteFlow.to(...)}
+ * and {@code WriteFlow.from(...)}) it also accepts a plain
  * {@link String} in SpiceDB canonical format. For most business code this is
  * the simplest path:
  *

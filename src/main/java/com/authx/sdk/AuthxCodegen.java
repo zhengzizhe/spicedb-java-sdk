@@ -221,6 +221,10 @@ public final class AuthxCodegen {
             case "int", "uint" -> "Long";
             case "double" -> "Double";
             case "bool" -> "Boolean";
+            case "timestamp" -> "Instant";
+            case "duration" -> "Duration";
+            case "ipaddress", "ip_address" -> "InetAddress";
+            case "bytes" -> "byte[]";
             case "any" -> "Object";
             default -> {
                 if (spiceType.startsWith("list<") && spiceType.endsWith(">")) {
@@ -245,9 +249,17 @@ public final class AuthxCodegen {
         String className = toPascalCase(caveatName);
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(packageName).append(";\n\n");
+        sb.append("import com.authx.sdk.model.CaveatContext;\n");
         sb.append("import com.authx.sdk.model.CaveatRef;\n\n");
+        sb.append("import java.net.InetAddress;\n");
+        sb.append("import java.time.Duration;\n");
+        sb.append("import java.time.Instant;\n");
         sb.append("import java.util.LinkedHashMap;\n");
-        sb.append("import java.util.Map;\n\n");
+        sb.append("import java.util.LinkedHashSet;\n");
+        sb.append("import java.util.List;\n");
+        sb.append("import java.util.Map;\n");
+        sb.append("import java.util.Objects;\n");
+        sb.append("import java.util.Set;\n\n");
         sb.append("/**\n");
         sb.append(" * Typed caveat <b>").append(caveatName).append("</b>.\n");
         if (!comment.isEmpty()) sb.append(" * <p>").append(comment).append("\n");
@@ -265,32 +277,137 @@ public final class AuthxCodegen {
             sb.append("    public static final String ").append(toConstant(e.getKey()))
               .append(" = \"").append(e.getKey()).append("\";\n\n");
         }
+        sb.append("    public static Builder builder() {\n");
+        sb.append("        return new Builder();\n");
+        sb.append("    }\n\n");
         sb.append("    /** Build a {@link CaveatRef} for grant-time binding. */\n");
         sb.append("    public static CaveatRef ref(Object... keyValues) {\n");
-        sb.append("        return new CaveatRef(NAME, toMap(keyValues));\n");
+        sb.append("        Builder builder = builder();\n");
+        sb.append("        builder.putAll(keyValues);\n");
+        sb.append("        return builder.ref();\n");
         sb.append("    }\n\n");
-        sb.append("    /** Build a context map for check-time evaluation. */\n");
-        sb.append("    public static Map<String, Object> context(Object... keyValues) {\n");
-        sb.append("        return toMap(keyValues);\n");
+        sb.append("    /** Build a complete {@link CaveatRef}; all schema parameters must be present. */\n");
+        sb.append("    public static CaveatRef completeRef(Object... keyValues) {\n");
+        sb.append("        Builder builder = builder();\n");
+        sb.append("        builder.putAll(keyValues);\n");
+        sb.append("        return builder.completeRef();\n");
         sb.append("    }\n\n");
-        sb.append("    private static Map<String, Object> toMap(Object... kv) {\n");
-        sb.append("        if (kv.length % 2 != 0) {\n");
-        sb.append("            throw new IllegalArgumentException(\n");
-        sb.append("                    \"keyValues must have even length (alternating key, value pairs)\");\n");
-        sb.append("        }\n");
-        sb.append("        Map<String, Object> map = new LinkedHashMap<String, Object>();\n");
-        sb.append("        for (int i = 0; i < kv.length; i += 2) {\n");
-        sb.append("            if (!(kv[i] instanceof String)) {\n");
+        sb.append("    /** Build a typed context for check-time evaluation. */\n");
+        sb.append("    public static CaveatContext context(Object... keyValues) {\n");
+        sb.append("        Builder builder = builder();\n");
+        sb.append("        builder.putAll(keyValues);\n");
+        sb.append("        return builder.context();\n");
+        sb.append("    }\n\n");
+        sb.append("    /** Build a complete typed context; all schema parameters must be present. */\n");
+        sb.append("    public static CaveatContext completeContext(Object... keyValues) {\n");
+        sb.append("        Builder builder = builder();\n");
+        sb.append("        builder.putAll(keyValues);\n");
+        sb.append("        return builder.completeContext();\n");
+        sb.append("    }\n\n");
+        sb.append("    public static final class Builder {\n\n");
+        sb.append("        private final LinkedHashMap<String, Object> values = new LinkedHashMap<String, Object>();\n");
+        sb.append("        private final Set<String> present = new LinkedHashSet<String>();\n\n");
+        for (Map.Entry<String, String> e : parameters.entrySet()) {
+            String javaType = mapSpiceDbType(e.getValue());
+            String paramName = e.getKey();
+            sb.append("        public Builder ").append(toCamelCase(paramName))
+              .append("(").append(javaType).append(" value) {\n");
+            sb.append("            return put(").append(toConstant(paramName)).append(", value);\n");
+            sb.append("        }\n\n");
+        }
+        sb.append("        public CaveatRef ref() {\n");
+        sb.append("            return new CaveatRef(NAME, context());\n");
+        sb.append("        }\n\n");
+        sb.append("        public CaveatRef completeRef() {\n");
+        sb.append("            return new CaveatRef(NAME, completeContext());\n");
+        sb.append("        }\n\n");
+        sb.append("        public CaveatContext context() {\n");
+        sb.append("            return new CaveatContext(values);\n");
+        sb.append("        }\n\n");
+        sb.append("        public CaveatContext completeContext() {\n");
+        sb.append("            requireAllPresent();\n");
+        sb.append("            return context();\n");
+        sb.append("        }\n\n");
+        sb.append("        private Builder put(String key, Object value) {\n");
+        sb.append("            values.put(key, validate(key, value));\n");
+        sb.append("            present.add(key);\n");
+        sb.append("            return this;\n");
+        sb.append("        }\n\n");
+        sb.append("        private void putAll(Object... kv) {\n");
+        sb.append("            Objects.requireNonNull(kv, \"keyValues\");\n");
+        sb.append("            if (kv.length % 2 != 0) {\n");
         sb.append("                throw new IllegalArgumentException(\n");
-        sb.append("                        \"Key at index \" + i + \" must be a String, got: \" + kv[i].getClass().getName());\n");
+        sb.append("                        \"keyValues must have even length (alternating key, value pairs)\");\n");
         sb.append("            }\n");
-        sb.append("            map.put((String) kv[i], kv[i + 1]);\n");
+        sb.append("            for (int i = 0; i < kv.length; i += 2) {\n");
+        sb.append("                if (!(kv[i] instanceof String key)) {\n");
+        sb.append("                    throw new IllegalArgumentException(\n");
+        sb.append("                            \"Key at index \" + i + \" must be a String, got: \"\n");
+        sb.append("                                    + (kv[i] == null ? \"null\" : kv[i].getClass().getName()));\n");
+        sb.append("                }\n");
+        sb.append("                put(key, kv[i + 1]);\n");
+        sb.append("            }\n");
+        sb.append("        }\n\n");
+        sb.append("        private void requireAllPresent() {\n");
+        for (String paramName : parameters.keySet()) {
+            sb.append("            if (!present.contains(").append(toConstant(paramName)).append(")) {\n");
+            sb.append("                throw new IllegalArgumentException(\"Missing caveat parameter: ")
+              .append(paramName).append("\");\n");
+            sb.append("            }\n");
+        }
         sb.append("        }\n");
-        sb.append("        return map;\n");
         sb.append("    }\n\n");
+        sb.append("    private static Object validate(String key, Object value) {\n");
+        sb.append("        return switch (key) {\n");
+        for (Map.Entry<String, String> e : parameters.entrySet()) {
+            sb.append("            case ").append(toConstant(e.getKey()))
+              .append(" -> ").append(validatorName(e.getKey()))
+              .append("(value);\n");
+        }
+        sb.append("            default -> throw new IllegalArgumentException(\"Unknown caveat parameter: \" + key);\n");
+        sb.append("        };\n");
+        sb.append("    }\n\n");
+        for (Map.Entry<String, String> e : parameters.entrySet()) {
+            appendValidator(sb, e.getKey(), e.getValue());
+        }
         sb.append("    private ").append(className).append("() {}\n");
         sb.append("}\n");
         return sb.toString();
+    }
+
+    private static void appendValidator(StringBuilder sb, String paramName, String spiceType) {
+        String javaType = mapSpiceDbType(spiceType);
+        String label = javaType.replace("\"", "\\\"");
+        sb.append("    private static Object ").append(validatorName(paramName)).append("(Object value) {\n");
+        if ("Object".equals(javaType)) {
+            sb.append("        return value;\n");
+        } else {
+            sb.append("        Objects.requireNonNull(value, \"").append(paramName).append("\");\n");
+            if ("byte[]".equals(javaType)) {
+                sb.append("        if (value instanceof byte[] bytes) {\n");
+                sb.append("            return bytes.clone();\n");
+                sb.append("        }\n");
+            } else if (javaType.startsWith("List<")) {
+                sb.append("        if (value instanceof List<?>) {\n");
+                sb.append("            return value;\n");
+                sb.append("        }\n");
+            } else if (javaType.startsWith("Map<")) {
+                sb.append("        if (value instanceof Map<?, ?>) {\n");
+                sb.append("            return value;\n");
+                sb.append("        }\n");
+            } else {
+                sb.append("        if (value instanceof ").append(javaType).append(") {\n");
+                sb.append("            return value;\n");
+                sb.append("        }\n");
+            }
+            sb.append("        throw new IllegalArgumentException(\"Parameter ").append(paramName)
+              .append(" must be ").append(label).append(", got: \" + value.getClass().getName());\n");
+        }
+        sb.append("    }\n\n");
+    }
+
+    private static String validatorName(String name) {
+        return "validate" + toPascalCase(name);
     }
 
     static String emitCaveats(String packageName, Set<String> allCaveats) {
@@ -314,6 +431,11 @@ public final class AuthxCodegen {
         return Arrays.stream(snake.split("[_-]"))
                 .map(s -> s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1))
                 .collect(Collectors.joining());
+    }
+
+    static String toCamelCase(String name) {
+        String pascal = toPascalCase(name);
+        return pascal.isEmpty() ? pascal : Character.toLowerCase(pascal.charAt(0)) + pascal.substring(1);
     }
 
     static String toConstant(String name) {

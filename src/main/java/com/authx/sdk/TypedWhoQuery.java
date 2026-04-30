@@ -1,6 +1,9 @@
 package com.authx.sdk;
 
-import com.authx.sdk.action.WhoBuilder;
+import com.authx.sdk.model.Consistency;
+import com.authx.sdk.model.LookupSubjectsRequest;
+import com.authx.sdk.model.Permission;
+import com.authx.sdk.model.ResourceRef;
 import com.authx.sdk.model.SubjectRef;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,11 +12,11 @@ import java.util.List;
  * Typed lookupSubjects query — "who (of the given subject type) has this
  * permission on this resource?".
  *
- * <p>Construct via {@link TypedHandle#who(String, com.authx.sdk.model.Permission.Named)}.
+ * <p>Construct via {@link TypedHandle#lookupSubjects(String, Enum)}.
  *
  * <pre>
- * List&lt;String&gt; editors = Document.select(client, "doc-1")
- *     .who("user", Document.Perm.EDIT)
+ * List&lt;String&gt; editors = client.on(Document).select("doc-1")
+ *     .lookupSubjects("user", Document.Perm.EDIT)
  *     .limit(50)
  *     .fetchIds();
  * </pre>
@@ -26,7 +29,7 @@ public class TypedWhoQuery {
     private final String permission;
     private int limit = 0;
 
-    public TypedWhoQuery(ResourceFactory factory, String resourceId,
+    TypedWhoQuery(ResourceFactory factory, String resourceId,
                           String subjectType, String permission) {
         this.factory = factory;
         this.resourceId = resourceId;
@@ -36,17 +39,28 @@ public class TypedWhoQuery {
 
     /** Limit the number of subjects returned. 0 = no limit (default). */
     public TypedWhoQuery limit(int n) {
+        if (n < 0) {
+            throw new IllegalArgumentException("limit must be >= 0");
+        }
         this.limit = n;
         return this;
     }
 
     /** Fetch the subject ids (of the bound subject type) that have the permission. */
     public List<String> fetchIds() {
-        return new WhoBuilder(factory.resourceType(), resourceId, factory.transport(),
-                subjectType, factory.asyncExecutor())
-                .withPermission(permission)
-                .limit(limit)
-                .fetch();
+        return fetchIds(limit);
+    }
+
+    private List<String> fetchIds(int effectiveLimit) {
+        LookupSubjectsRequest request = new LookupSubjectsRequest(
+                ResourceRef.of(factory.resourceType(), resourceId),
+                Permission.of(permission),
+                subjectType,
+                effectiveLimit,
+                Consistency.minimizeLatency());
+        return factory.transport().lookupSubjects(request).stream()
+                .map(SubjectRef::id)
+                .toList();
     }
 
     /**
@@ -56,7 +70,7 @@ public class TypedWhoQuery {
      *
      * <pre>
      * List&lt;String&gt; oldEditors = client.on(Document).select(docId)
-     *         .who("user", Document.Perm.EDIT).asSubjectRefs();
+     *         .lookupSubjects("user", Document.Perm.EDIT).asSubjectRefs();
      * client.on(Document).select(newDocId)
      *         .grant(Document.Rel.EDITOR).to(oldEditors);
      * </pre>
@@ -70,7 +84,7 @@ public class TypedWhoQuery {
         return out;
     }
 
-    /** Return just a count without materializing the id list. */
+    /** Return the number of matching subject ids. */
     public int count() {
         return fetchIds().size();
     }
@@ -81,12 +95,6 @@ public class TypedWhoQuery {
      * with limit=1 for efficiency.
      */
     public boolean exists() {
-        int saved = this.limit;
-        try {
-            this.limit = 1;
-            return !fetchIds().isEmpty();
-        } finally {
-            this.limit = saved;
-        }
+        return !fetchIds(1).isEmpty();
     }
 }

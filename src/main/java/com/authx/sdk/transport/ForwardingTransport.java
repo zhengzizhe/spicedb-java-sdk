@@ -30,12 +30,12 @@ public abstract class ForwardingTransport implements SdkTransport {
     }
 
     @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
+    public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
         return delegate().writeRelationships(updates);
     }
 
     @Override
-    public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
+    public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
         return delegate().deleteRelationships(updates);
     }
 
@@ -55,7 +55,7 @@ public abstract class ForwardingTransport implements SdkTransport {
     }
 
     @Override
-    public RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+    public WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
         return delegate().deleteByFilter(resource, subject, optionalRelation);
     }

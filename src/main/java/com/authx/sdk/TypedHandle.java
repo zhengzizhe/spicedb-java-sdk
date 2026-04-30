@@ -1,6 +1,5 @@
 package com.authx.sdk;
 
-import com.authx.sdk.action.RelationQuery;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.ExpandTree;
 import com.authx.sdk.model.Permission;
@@ -11,26 +10,10 @@ import java.util.Collection;
 
 /**
  * A typed handle scoped to one or more resource ids of a specific type.
- * Construct directly from a {@link ResourceFactory} (usually via
- * {@code client.on(Document)}) — no base class required, no wrapper object
- * to hold as a field:
- *
+ * Callers obtain handles through {@code client.on(Document).select(...)}:
  * <pre>
- * TypedHandle&lt;Document.Rel, Document.Perm&gt; handle = new TypedHandle&lt;Document.Rel, Document.Perm&gt;(
- *         client.on(Document), new String[]{"doc-1"});
- * boolean ok = handle.check(Document.Perm.VIEW).by("alice");
+ * client.on(Document).select("doc-1").check(Document.Perm.VIEW).by(User, "alice");
  * </pre>
- *
- * <p>In practice callers go through the generated static API on the
- * constants class instead:
- * <pre>
- * Document.select(client, "doc-1").check(Document.Perm.VIEW).by("alice");
- * </pre>
- *
- * <p>This class is the same shape the 1.x {@code TypedResourceFactory}
- * exposed as an inner class, pulled out to top-level so the generated
- * {@code Document.java} (and any business-side helpers) can instantiate
- * it without needing to subclass a ResourceFactory.
  */
 public class TypedHandle<R extends Enum<R> & Relation.Named,
                          P extends Enum<P> & Permission.Named> {
@@ -45,11 +28,11 @@ public class TypedHandle<R extends Enum<R> & Relation.Named,
      */
     protected final Class<P> permClass;
 
-    public TypedHandle(ResourceFactory factory, String[] ids) {
+    TypedHandle(ResourceFactory factory, String[] ids) {
         this(factory, ids, null);
     }
 
-    public TypedHandle(ResourceFactory factory, String[] ids, Class<P> permClass) {
+    TypedHandle(ResourceFactory factory, String[] ids, Class<P> permClass) {
         this.factory = factory;
         this.ids = ids;
         this.permClass = permClass;
@@ -88,7 +71,7 @@ public class TypedHandle<R extends Enum<R> & Relation.Named,
         return newFlow().grant(relation);
     }
 
-    /** Start a {@link WriteFlow} in REVOKE mode. See {@link #grant(Relation.Named)}. */
+    /** Start a {@link WriteFlow} in REVOKE mode. See {@link #grant(Enum)}. */
     @CheckReturnValue
     public WriteFlow revoke(R relation) {
         requireSingleId("revoke");
@@ -131,17 +114,12 @@ public class TypedHandle<R extends Enum<R> & Relation.Named,
      */
     @SafeVarargs
     public final TypedCheckAction check(P... permissions) {
-        String[] perms = new String[permissions.length];
-        for (int i = 0; i < permissions.length; i++) perms[i] = permissions[i].permissionName();
-        return new TypedCheckAction(factory, ids, perms);
+        return new TypedCheckAction(factory, ids, SdkRefs.permissionNames(permissions, "check(...)"));
     }
 
     /** Collection overload — {@code .check(EnumSet.of(Perm.VIEW, Perm.EDIT))}. */
     public TypedCheckAction check(Collection<P> permissions) {
-        String[] perms = new String[permissions.size()];
-        int i = 0;
-        for (P p : permissions) perms[i++] = p.permissionName();
-        return new TypedCheckAction(factory, ids, perms);
+        return new TypedCheckAction(factory, ids, SdkRefs.permissionNames(permissions, "check(Collection)"));
     }
 
     /**
@@ -187,7 +165,7 @@ public class TypedHandle<R extends Enum<R> & Relation.Named,
     }
 
     /**
-     * Typed subject-type overload of {@link #lookupSubjects(String, Permission.Named)}:
+     * Typed subject-type overload of {@link #lookupSubjects(String, Enum)}:
      * {@code client.on(Document).select(id).lookupSubjects(User, Document.Perm.EDIT)}.
      * The subject type name is read from the {@code ResourceType} descriptor.
      */
@@ -205,6 +183,9 @@ public class TypedHandle<R extends Enum<R> & Relation.Named,
     @SafeVarargs
     public final RelationQuery relations(R... relations) {
         requireSingleId("relations");
+        if (relations == null) {
+            throw new IllegalArgumentException("relations(...) requires non-null relation values");
+        }
         String[] names = new String[relations.length];
         for (int i = 0; i < relations.length; i++) {
             names[i] = relations[i].relationName();

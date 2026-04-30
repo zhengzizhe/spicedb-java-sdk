@@ -15,8 +15,10 @@ public final class GrpcExceptionMapper {
         return switch (e.getStatus().getCode()) {
             case DEADLINE_EXCEEDED ->
                     new AuthxTimeoutException("SpiceDB request timed out", e);
-            case UNAVAILABLE, CANCELLED ->
+            case UNAVAILABLE ->
                     new AuthxConnectionException("SpiceDB unavailable", e);
+            case CANCELLED ->
+                    new AuthxConnectionException("SpiceDB request was cancelled", e);
             case UNAUTHENTICATED, PERMISSION_DENIED ->
                     new AuthxAuthException("SpiceDB auth failed", e);
             case RESOURCE_EXHAUSTED ->
@@ -29,6 +31,10 @@ public final class GrpcExceptionMapper {
                     new AuthxPreconditionException("SpiceDB precondition failed (schema not written or not migrated?): " + e.getStatus().getDescription(), e);
             case ABORTED ->
                     new AuthxConnectionException("SpiceDB transaction aborted (retry may help)", e);
+            case INTERNAL ->
+                    new AuthxConnectionException("SpiceDB internal error", e);
+            case DATA_LOSS ->
+                    new AuthxException("SpiceDB reported data loss: " + e.getStatus(), e);
             default ->
                     new AuthxException("SpiceDB error: " + e.getStatus(), e);
         };

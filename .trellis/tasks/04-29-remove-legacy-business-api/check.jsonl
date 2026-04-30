@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Review against backend public API conventions"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify fail-fast and quality bar"}

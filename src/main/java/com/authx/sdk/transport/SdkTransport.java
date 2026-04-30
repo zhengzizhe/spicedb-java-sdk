@@ -50,7 +50,7 @@ public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkL
      * @param optionalRelation null to delete ALL relations for this subject on this resource
      */
     @Override
-    default RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject,
+    default WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
         // Default fallback: read-then-delete (InMemoryTransport, etc.)
         List<Tuple> existing;
@@ -67,7 +67,7 @@ public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkL
                         Relation.of(t.relation()),
                         SubjectRef.of(t.subjectType(), t.subjectId(), t.subjectRelation())))
                 .toList();
-        if (updates.isEmpty()) return new RevokeResult(null, 0);
+        if (updates.isEmpty()) return new WriteResult(null, 0);
         return deleteRelationships(updates);
     }
 

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Review must verify no L1 cache/watch invalidation is reintroduced."}
+{"file": ".trellis/spec/guides/approach-evaluation-thinking-guide.md", "reason": "Review the design trade-offs before implementation starts."}

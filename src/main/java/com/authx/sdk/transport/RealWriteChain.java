@@ -1,7 +1,7 @@
 package com.authx.sdk.transport;
 
 import com.authx.sdk.exception.AuthxException;
-import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.WriteResult;
 import com.authx.sdk.model.WriteRequest;
 import com.authx.sdk.spi.AttributeKey;
 import com.authx.sdk.spi.SdkInterceptor;
@@ -48,7 +48,7 @@ public final class RealWriteChain implements WriteChain {
     }
 
     @Override
-    public GrantResult proceed(WriteRequest request) {
+    public WriteResult proceed(WriteRequest request) {
         if (index >= interceptors.size()) {
             // End of chain — execute the actual transport call
             return transport.writeRelationships(request.updates());

@@ -3,20 +3,15 @@ package com.authx.sdk.model;
 import com.authx.sdk.model.enums.Permissionship;
 import org.jspecify.annotations.Nullable;
 
-import java.time.Instant;
-import java.util.Optional;
-
 /**
  * Result of a single SpiceDB permission check.
  *
  * @param permissionship the check outcome (has permission, no permission, or conditional)
  * @param zedToken       the ZedToken returned by SpiceDB for consistency chaining (nullable)
- * @param expiresAt      optional cache expiration hint for this result
  */
 public record CheckResult(
         Permissionship permissionship,
-        @Nullable String zedToken,
-        Optional<Instant> expiresAt
+        @Nullable String zedToken
 ) {
     /**
      * Creates a result indicating the subject has the requested permission.
@@ -25,7 +20,7 @@ public record CheckResult(
      * @return a {@code CheckResult} with {@link Permissionship#HAS_PERMISSION}
      */
     public static CheckResult allowed(String zedToken) {
-        return new CheckResult(Permissionship.HAS_PERMISSION, zedToken, Optional.empty());
+        return new CheckResult(Permissionship.HAS_PERMISSION, zedToken);
     }
 
     /**
@@ -35,7 +30,7 @@ public record CheckResult(
      * @return a {@code CheckResult} with {@link Permissionship#NO_PERMISSION}
      */
     public static CheckResult denied(String zedToken) {
-        return new CheckResult(Permissionship.NO_PERMISSION, zedToken, Optional.empty());
+        return new CheckResult(Permissionship.NO_PERMISSION, zedToken);
     }
 
     /**

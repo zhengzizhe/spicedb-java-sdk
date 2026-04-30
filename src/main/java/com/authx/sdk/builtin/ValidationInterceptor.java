@@ -1,7 +1,7 @@
 package com.authx.sdk.builtin;
 
 import com.authx.sdk.model.CheckResult;
-import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.WriteResult;
 import com.authx.sdk.spi.SdkInterceptor;
 import java.util.regex.Pattern;
 
@@ -23,7 +23,7 @@ public class ValidationInterceptor implements SdkInterceptor {
     }
 
     @Override
-    public GrantResult interceptWrite(WriteChain chain) {
+    public WriteResult interceptWrite(WriteChain chain) {
         SdkInterceptor.OperationContext ctx = chain.operationContext();
         validate(ctx.resourceType(), ctx.resourceId(), ctx.permission());
         return chain.proceed(chain.request());

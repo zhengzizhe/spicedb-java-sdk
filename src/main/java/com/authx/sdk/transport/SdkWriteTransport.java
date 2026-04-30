@@ -9,9 +9,9 @@ import java.util.List;
  */
 public interface SdkWriteTransport {
 
-    GrantResult writeRelationships(List<SdkTransport.RelationshipUpdate> updates);
+    WriteResult writeRelationships(List<SdkTransport.RelationshipUpdate> updates);
 
-    RevokeResult deleteRelationships(List<SdkTransport.RelationshipUpdate> updates);
+    WriteResult deleteRelationships(List<SdkTransport.RelationshipUpdate> updates);
 
-    RevokeResult deleteByFilter(ResourceRef resource, SubjectRef subject, Relation optionalRelation);
+    WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject, Relation optionalRelation);
 }

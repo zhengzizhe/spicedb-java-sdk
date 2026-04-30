@@ -35,16 +35,27 @@ Real examples:
   infrastructure. README breaking-change notes state these were removed; use
   SpiceDB reads and consistency modes instead.
 - Do not add uncommitted typed write chains. Typed `grant`/`revoke` return a
-  `WriteFlow`; chains must end in `commit()` or `commitAsync()`.
+  `WriteFlow`; chains must end in `commit()`. `WriteFlow` does not expose
+  a separate async commit terminal; callers that need async dispatch own that
+  at the application layer.
+- Register write listeners on `WriteFlow` before commit as the last
+  intermediate step, for example `.listener(done -> audit(done)).commit()`.
+  `listener(...)` returns `WriteListenerStage`, and that stage's terminal
+  `commit()` returns `CompletableFuture<WriteCompletion>` after the
+  asynchronous listener finishes. Creating this stage seals the original
+  `WriteFlow`; callers must commit through the returned stage. `WriteCompletion`
+  is a result object and must not grow post-hoc listener registration APIs.
 - Do not mutate builder state during `build()` in ways that stack duplicate
   behavior. `AuthxClientBuilder` builds an `effectiveInterceptors` list locally
   so repeated `build()` calls do not keep adding `ValidationInterceptor`.
 - Do not bypass existing central helpers: use `GrpcExceptionMapper` for gRPC
   status mapping, `LogFields` for logging keys/suffixes, `LogCtx` for trace
-  enrichment, and model factories such as `ResourceRef.of(...)`.
+  enrichment, model factories such as `ResourceRef.of(...)`, `SdkRefs` for
+  fluent API subject/type/relation/permission conversions, and
+  `RelationshipUpdates` for relationship update fan-out.
 - Do not make optional integrations mandatory in the main SDK. Caffeine,
-  Micrometer, and SLF4J are compile-only where applicable; Redis support is in
-  `sdk-redisson`.
+  Micrometer, and SLF4J are compile-only where applicable; distributed token
+  storage is exposed through `DistributedTokenStore` and implemented by users.
 - Do not use `System.out` in production SDK code. It appears only in demo/e2e
   scenario output.
 
@@ -69,10 +80,35 @@ Real examples:
   decisions. Existing examples include `GrpcTransport.lookupSubjects(...)`
   avoiding `optionalConcreteLimit` and `RealWriteChain` explaining fail-closed
   write interceptor behavior.
+- Keep fluent stage classes focused on lifecycle and state transitions. Do not
+  reintroduce scattered loops that build relationship update cartesian products
+  in individual stage methods; use `RelationshipUpdates` so capacity checks and
+  overflow protection stay centralized.
+- Treat multi-permission lookup limits as terminal-result limits. Do not push a
+  user-facing `limit(n)` into each per-permission `LookupResources` call before
+  computing union/intersection results; that can over-return for union and
+  false-negative for intersection.
+- Batch result mappers must preserve request shape. If a transport returns fewer
+  bulk check results than requested, fill the missing cells as denied; if it
+  returns more, ignore extras. Do not leak null placeholders or let result-count
+  mismatches shift matrix cells.
+- Bulk check maps must use canonical subject references (`type:id` or
+  `type:id#relation`) as keys, not bare subject ids. Bare ids collide across
+  subject types such as `user:alice` and `service:alice`.
+- Relationship write results should use the unified `WriteResult` /
+  `WriteCompletion` model. Do not reintroduce operation-specific result records
+  for grant, revoke, or batch writes when the underlying SpiceDB response shape
+  is the same.
+- Public result models must only expose values that the SDK can source from
+  SpiceDB or local request state without guessing. Do not add placeholder
+  fields such as check-result expiry hints when the gRPC response does not
+  provide them.
+- When a write-like RPC succeeds but SpiceDB does not report a submitted-update
+  count, use `WriteResult.unknownSubmittedUpdateCount(zedToken)` instead of
+  overloading `0`. `0` is reserved for a known submitted-update count of zero.
 - Use explicit Java local variable types in SDK source and tests. Do not use
-  Java `var` declarations in `src/**/*.java`, `sdk-redisson/**/*.java`, or
-  `test-app/**/*.java`; this keeps generated code, examples, and reviews
-  consistent.
+  Java `var` declarations in `src/**/*.java` or `test-app/**/*.java`; this
+  keeps generated code, examples, and reviews consistent.
 
 ---
 
@@ -84,9 +120,12 @@ Real examples:
   not required for simple value/transport tests.
 - Use `InMemoryTransport`/`AuthxClient.inMemory()` when a test only needs SDK
   behavior and not real SpiceDB semantics.
-- Use Testcontainers/e2e tests only when real SpiceDB or Redis behavior is the
-  point of the change. Existing locations are `src/test/java/com/authx/sdk/e2e`
-  and `sdk-redisson/src/test/java/com/authx/sdk/redisson`.
+- Use Testcontainers/e2e tests only when real SpiceDB behavior is the point of
+  the change. Existing SpiceDB e2e tests live under
+  `src/test/java/com/authx/sdk/e2e`.
+- For SDK-to-SpiceDB protocol changes, run `./gradlew spicedbE2eTest`. This
+  task deploys a real SpiceDB container and fails when Docker/Testcontainers is
+  unavailable; it must cover both successful flows and mapped exception paths.
 - For behavioral bug fixes, add regression tests at the lowest layer that owns
   the behavior. Examples already present include exception mapping,
   coalescing failure eviction, schema cache validation, and write-flow commit
@@ -98,10 +137,8 @@ Real examples:
 
 - For SDK code changes, run the smallest relevant Gradle test task first, then
   broader `./gradlew test` when the blast radius is not local.
-- For `sdk-redisson` changes, include that module's tests when Redis behavior
-  changed.
 - For Java style refactors, verify no `var` declarations remain with
-  `rg -n '\bvar\s+[A-Za-z_$]' src sdk-redisson test-app --glob '*.java'`.
+  `rg -n '\bvar\s+[A-Za-z_$]' src test-app --glob '*.java'`.
 - For spec-only changes under `.trellis/spec`, a lightweight validation is
   enough: verify the Markdown files no longer contain bootstrap placeholders,
   referenced repo paths exist, and any task JSONL files still parse as JSONL.

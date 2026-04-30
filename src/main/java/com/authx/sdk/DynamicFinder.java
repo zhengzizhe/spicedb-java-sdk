@@ -1,14 +1,10 @@
 package com.authx.sdk;
 
-import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.SubjectRef;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * String-permission reverse lookup for {@link DynamicResourceEntry}.
@@ -25,20 +21,19 @@ public final class DynamicFinder {
     }
 
     public DynamicFinder limit(int n) {
+        if (n < 0) {
+            throw new IllegalArgumentException("limit must be >= 0");
+        }
         this.limit = n;
         return this;
     }
 
     public List<String> can(String permission) {
-        return factory.lookup()
-                .withPermission(permission)
-                .by(subject)
-                .limit(limit)
-                .fetch();
+        return ResourceLookupSupport.can(factory, subject, permission, limit);
     }
 
     public Map<String, List<String>> can(String... permissions) {
-        if (permissions == null || permissions.length == 0) return Map.of();
+        SdkRefs.requireNotEmpty(permissions, "can(...)", "permission");
         LinkedHashMap<String, List<String>> out = new LinkedHashMap<>(permissions.length);
         for (String permission : permissions) {
             out.put(permission, can(permission));
@@ -47,7 +42,7 @@ public final class DynamicFinder {
     }
 
     public Map<String, List<String>> can(Collection<String> permissions) {
-        if (permissions == null || permissions.isEmpty()) return Map.of();
+        SdkRefs.requireNotEmpty(permissions, "can(Collection)", "permission");
         LinkedHashMap<String, List<String>> out = new LinkedHashMap<>(permissions.size());
         for (String permission : permissions) {
             out.put(permission, can(permission));
@@ -56,18 +51,10 @@ public final class DynamicFinder {
     }
 
     public List<String> canAny(String... permissions) {
-        if (permissions == null || permissions.length == 0) return List.of();
-        LinkedHashSet<String> seen = new LinkedHashSet<>();
-        for (String permission : permissions) seen.addAll(can(permission));
-        return List.copyOf(seen);
+        return ResourceLookupSupport.canAny(factory, subject, permissions, limit, "canAny(...)");
     }
 
     public List<String> canAll(String... permissions) {
-        if (permissions == null || permissions.length == 0) return List.of();
-        Set<String> acc = new LinkedHashSet<>(can(permissions[0]));
-        for (int i = 1; i < permissions.length && !acc.isEmpty(); i++) {
-            acc.retainAll(new HashSet<>(can(permissions[i])));
-        }
-        return List.copyOf(acc);
+        return ResourceLookupSupport.canAll(factory, subject, permissions, limit, "canAll(...)");
     }
 }

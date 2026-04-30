@@ -3,7 +3,6 @@ package com.authx.sdk;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectRef;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,10 +19,10 @@ import java.util.Map;
  * client.on(Document)
  *       .select(docId)
  *       .check(Document.Perm.VIEW)
- *       .by(userId);
+ *       .by(User, userId);
  *
  * client.on(Document)
- *       .findByUser(userId)
+ *       .lookupResources(User, userId)
  *       .limit(100)
  *       .can(Document.Perm.VIEW);
  * </pre>
@@ -56,14 +55,13 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
      * supports {@code check / grant / revoke / checkAll / who}.
      */
     public TypedHandle<R, P> select(String... ids) {
-        if (ids == null || ids.length == 0) {
-            throw new IllegalArgumentException("select() requires at least one id");
-        }
+        SdkRefs.requireNotEmpty(ids, "select()", "id");
         return new TypedHandle<>(factory, ids, type.permClass());
     }
 
     /** Collection overload for {@link #select(String...)}. */
     public TypedHandle<R, P> select(Collection<String> ids) {
+        SdkRefs.requireNotEmpty(ids, "select(Collection)", "id");
         return select(ids.toArray(String[]::new));
     }
 
@@ -78,7 +76,7 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
 
     /** Canonical-string form of {@link #lookupResources(SubjectRef)} — {@code "user:alice"} etc. */
     public TypedFinder<P> lookupResources(String subjectRef) {
-        return new TypedFinder<>(factory, SubjectRef.parse(subjectRef));
+        return new TypedFinder<>(factory, SdkRefs.subject(subjectRef));
     }
 
     /**
@@ -87,7 +85,7 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
      */
     public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
     TypedFinder<P> lookupResources(ResourceType<SR, SP> subjectType, String id) {
-        return lookupResources(subjectType.name() + ":" + id);
+        return lookupResources(SdkRefs.typedSubject(subjectType, id));
     }
 
     /**
@@ -97,9 +95,8 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
      */
     public <SR extends Enum<SR> & Relation.Named, SP extends Enum<SP> & Permission.Named>
     MultiFinder<R, P> lookupResources(ResourceType<SR, SP> subjectType, Iterable<String> ids) {
-        List<String> refs = new ArrayList<>();
-        for (String id : ids) refs.add(subjectType.name() + ":" + id);
-        return lookupResources(refs);
+        return lookupResources(SdkRefs.typedSubjectStrings(
+                subjectType, ids, "lookupResources(ResourceType, Iterable)"));
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -118,25 +115,23 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
      * </pre>
      */
     public MultiFinder<R, P> lookupResources(SubjectRef... subjects) {
+        SdkRefs.requireNotEmpty(subjects, "lookupResources(...)", "subject");
         return new MultiFinder<>(factory, List.of(subjects));
     }
 
     public MultiFinder<R, P> lookupResources(Collection<SubjectRef> subjects) {
+        SdkRefs.requireNotEmpty(subjects, "lookupResources(Collection)", "subject");
         return new MultiFinder<>(factory, List.copyOf(subjects));
     }
 
     /** Canonical-string varargs form of {@link #lookupResources(SubjectRef...)}. */
     public MultiFinder<R, P> lookupResources(String... subjectRefs) {
-        ArrayList<SubjectRef> refs = new ArrayList<SubjectRef>(subjectRefs.length);
-        for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
-        return new MultiFinder<>(factory, refs);
+        return new MultiFinder<>(factory, List.of(SdkRefs.subjects(subjectRefs, "lookupResources(...)")));
     }
 
     /** {@link Iterable} overload of {@link #lookupResources(String...)}. */
     public MultiFinder<R, P> lookupResources(Iterable<String> subjectRefs) {
-        ArrayList<SubjectRef> refs = new ArrayList<SubjectRef>();
-        for (String s : subjectRefs) refs.add(SubjectRef.parse(s));
-        return new MultiFinder<>(factory, refs);
+        return new MultiFinder<>(factory, List.of(SdkRefs.subjects(subjectRefs, "lookupResources(Iterable)")));
     }
 
     /**
@@ -150,11 +145,20 @@ public final class TypedResourceEntry<R extends Enum<R> & Relation.Named,
         private int limit = 0;
 
         MultiFinder(ResourceFactory factory, List<SubjectRef> subjects) {
+            if (subjects == null || subjects.isEmpty()) {
+                throw new IllegalArgumentException("lookupResources(...) requires at least one subject");
+            }
             this.factory = factory;
             this.subjects = subjects;
         }
 
-        public MultiFinder<R, P> limit(int n) { this.limit = n; return this; }
+        public MultiFinder<R, P> limit(int n) {
+            if (n < 0) {
+                throw new IllegalArgumentException("limit must be >= 0");
+            }
+            this.limit = n;
+            return this;
+        }
 
         /** Run one {@code LookupResources} per subject and collect results keyed by the subject's canonical ref string. */
         public Map<String, List<String>> can(P permission) {

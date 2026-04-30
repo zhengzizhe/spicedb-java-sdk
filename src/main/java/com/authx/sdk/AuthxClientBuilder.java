@@ -20,11 +20,6 @@ import com.authx.sdk.spi.SdkComponents;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.telemetry.TelemetryReporter;
 import com.authx.sdk.trace.LogCtx;
-import com.authx.sdk.transport.CoalescingTransport;
-import com.authx.sdk.transport.GrpcTransport;
-import com.authx.sdk.transport.InstrumentedTransport;
-import com.authx.sdk.transport.InterceptorTransport;
-import com.authx.sdk.transport.PolicyAwareConsistencyTransport;
 import com.authx.sdk.transport.ResilientTransport;
 import com.authx.sdk.transport.SchemaLoader;
 import com.authx.sdk.transport.SdkTransport;
@@ -32,6 +27,7 @@ import com.authx.sdk.transport.StaticNameResolver;
 import com.authx.sdk.transport.TokenTracker;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.Metadata;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,6 +60,8 @@ import java.util.function.Consumer;
  * lowest-latency reads.
  */
 public class AuthxClientBuilder {
+    private static final System.Logger LOG = System.getLogger(AuthxClientBuilder.class.getName());
+
     // Connection
     private String target;
     private List<String> targets;
@@ -169,13 +167,29 @@ public class AuthxClientBuilder {
     }
 
     public class ConnectionConfig {
-        public ConnectionConfig target(String t) { AuthxClientBuilder.this.target = t; return this; }
-        public ConnectionConfig targets(String... t) { AuthxClientBuilder.this.targets = List.of(t); return this; }
-        public ConnectionConfig presharedKey(String k) { AuthxClientBuilder.this.presharedKey = k; return this; }
+        public ConnectionConfig target(String t) {
+            AuthxClientBuilder.this.target = Objects.requireNonNull(t, "target");
+            return this;
+        }
+        public ConnectionConfig targets(String... t) {
+            SdkRefs.requireNotEmpty(t, "targets(...)", "target");
+            AuthxClientBuilder.this.targets = List.of(t);
+            return this;
+        }
+        public ConnectionConfig presharedKey(String k) {
+            AuthxClientBuilder.this.presharedKey = Objects.requireNonNull(k, "presharedKey");
+            return this;
+        }
         public ConnectionConfig tls(boolean t) { AuthxClientBuilder.this.useTls = t; return this; }
         public ConnectionConfig loadBalancing(String p) { AuthxClientBuilder.this.loadBalancing = p; return this; }
-        public ConnectionConfig keepAliveTime(Duration d) { AuthxClientBuilder.this.keepAliveTime = d; return this; }
-        public ConnectionConfig requestTimeout(Duration d) { AuthxClientBuilder.this.requestTimeout = d; return this; }
+        public ConnectionConfig keepAliveTime(Duration d) {
+            AuthxClientBuilder.this.keepAliveTime = Objects.requireNonNull(d, "keepAliveTime");
+            return this;
+        }
+        public ConnectionConfig requestTimeout(Duration d) {
+            AuthxClientBuilder.this.requestTimeout = Objects.requireNonNull(d, "requestTimeout");
+            return this;
+        }
     }
 
     public class FeatureConfig {
@@ -277,13 +291,25 @@ public class AuthxClientBuilder {
             channel = grpcChannel;
 
             // Phase: TRANSPORT
-            SdkTransport transport = lm.phase(SdkPhase.TRANSPORT, () ->
-                    buildTransportStack(grpcChannel, policies, spi, bus, sdkMetrics,
-                            tokenTracker, effectiveInterceptors, ctx));
-            if (ctx.resilientTransport != null) {
-                sdkMetrics.setCircuitBreakerStateSupplier(
-                        () -> ctx.resilientTransport.getCircuitBreakerState("_default").name());
-            }
+            TransportStackFactory.Stack transportStack = lm.phase(SdkPhase.TRANSPORT, () ->
+                    TransportStackFactory.build(new TransportStackFactory.Request(
+                            grpcChannel,
+                            presharedKey,
+                            requestTimeout.toMillis(),
+                            policies,
+                            spi,
+                            bus,
+                            sdkMetrics,
+                            tokenTracker,
+                            effectiveInterceptors,
+                            telemetryEnabled,
+                            coalescingEnabled,
+                            useVirtualThreads)));
+            SdkTransport transport = transportStack.transport();
+            ctx.resilientTransport = transportStack.resilientTransport();
+            ctx.telemetryReporter = transportStack.telemetryReporter();
+            sdkMetrics.setCircuitBreakerStateSupplier(
+                    () -> ctx.resilientTransport.getCircuitBreakerState("_default").name());
 
             // Phase: SCHEDULER
             lm.phase(SdkPhase.SCHEDULER, () ->
@@ -327,18 +353,21 @@ public class AuthxClientBuilder {
             // stays empty. The SchemaClient exposed via AuthxClient#schema() is
             // always non-null so callers don't need a null check.
             SchemaCache schemaCache = new SchemaCache();
+            SchemaLoader schemaLoader = new SchemaLoader();
+            Metadata authMetadata = authMetadata(presharedKey);
             if (loadSchemaOnStart) {
-                io.grpc.Metadata authMetadata = new io.grpc.Metadata();
-                authMetadata.put(
-                        io.grpc.Metadata.Key.of("authorization", io.grpc.Metadata.ASCII_STRING_MARSHALLER),
-                        "Bearer " + presharedKey);
-                new SchemaLoader().load(grpcChannel, authMetadata, schemaCache);
+                schemaLoader.load(grpcChannel, authMetadata, schemaCache);
             }
-            SchemaClient schemaClient = new SchemaClient(schemaCache);
+            SchemaClient schemaClient = new SchemaClient(
+                    schemaCache,
+                    grpcChannel,
+                    authMetadata,
+                    requestTimeout.toMillis(),
+                    schemaLoader);
 
-            // Hand the cache to AuthxClient so ResourceFactory/Handle/GrantAction
-            // can consume it for runtime subject-type validation. The
-            // SchemaClient public accessor wraps the same instance.
+            // Hand the cache to AuthxClient so WriteFlow can consume it for
+            // runtime subject-type validation. The SchemaClient public
+            // accessor wraps the same instance.
             AuthxClient client = new AuthxClient(transport, infraObj, observabilityObj, configObj, probe,
                     schemaClient, schemaCache);
 
@@ -358,7 +387,13 @@ public class AuthxClientBuilder {
                 catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
             }
             if (ctx.telemetryReporter != null) {
-                try { ctx.telemetryReporter.close(); } catch (Exception ignored) {}
+                try {
+                    ctx.telemetryReporter.close();
+                } catch (Exception closeError) {
+                    LOG.log(System.Logger.Level.WARNING, LogCtx.fmt(
+                            "Telemetry reporter cleanup failed after build error: {0}",
+                            closeError.getMessage()));
+                }
             }
             if (channel != null) {
                 channel.shutdown();
@@ -367,43 +402,6 @@ public class AuthxClientBuilder {
             }
             throw e;
         }
-    }
-
-    /**
-     * Build the transport decoration stack (innermost → outermost):
-     *   GrpcTransport → ResilientTransport → InstrumentedTransport
-     *   → PolicyAwareConsistencyTransport → CoalescingTransport → InterceptorTransport
-     */
-    private SdkTransport buildTransportStack(ManagedChannel grpcChannel, PolicyRegistry policies,
-            SdkComponents spi, TypedEventBus bus, SdkMetrics sdkMetrics,
-            TokenTracker tokenTracker, List<SdkInterceptor> effectiveInterceptors, BuildContext ctx) {
-        SdkTransport t = new GrpcTransport(grpcChannel, presharedKey, requestTimeout.toMillis());
-
-        // Resilience (circuit breaker + retry via Resilience4j).
-        //
-        // Metric-recording ownership (F11-1): exactly ONE layer in the stack
-        // should call sdkMetrics.recordRequest(), otherwise every miss is
-        // counted twice and the histogram contains two points per request.
-        // When telemetry is enabled, InstrumentedTransport wraps this layer
-        // and is the outermost recorder (it sees retry-inclusive latency, which
-        // is what operators actually want). In that case we pass null sdkMetrics
-        // to ResilientTransport so it skips recording. When telemetry is
-        // disabled, ResilientTransport is the outermost layer in the stack and
-        // owns the recording itself.
-        SdkMetrics resilientMetrics = telemetryEnabled ? null : sdkMetrics;
-        ResilientTransport resilientTransport = new ResilientTransport(t, policies, bus, resilientMetrics);
-        ctx.resilientTransport = resilientTransport;
-        t = resilientTransport;
-
-        if (telemetryEnabled) {
-            ctx.telemetryReporter = new TelemetryReporter(spi.telemetrySink(), useVirtualThreads);
-            t = new InstrumentedTransport(t, ctx.telemetryReporter, sdkMetrics);
-        }
-
-        t = new PolicyAwareConsistencyTransport(t, policies, tokenTracker);
-        if (coalescingEnabled) t = new CoalescingTransport(t, sdkMetrics);
-        if (!effectiveInterceptors.isEmpty()) t = new InterceptorTransport(t, effectiveInterceptors);
-        return t;
     }
 
     private void buildScheduler(SdkMetrics sdkMetrics, BuildContext ctx) {
@@ -435,5 +433,13 @@ public class AuthxClientBuilder {
             builder.usePlaintext();
         }
         return builder.build();
+    }
+
+    private static Metadata authMetadata(String presharedKey) {
+        Metadata metadata = new Metadata();
+        metadata.put(
+                Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
+                "Bearer " + presharedKey);
+        return metadata;
     }
 }

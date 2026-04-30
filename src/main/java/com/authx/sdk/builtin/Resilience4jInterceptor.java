@@ -5,7 +5,7 @@ import com.authx.sdk.event.SdkTypedEvent;
 import com.authx.sdk.event.TypedEventBus;
 import com.authx.sdk.exception.AuthxException;
 import com.authx.sdk.model.CheckResult;
-import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.WriteResult;
 import com.authx.sdk.spi.AttributeKey;
 import com.authx.sdk.spi.SdkInterceptor;
 import io.github.resilience4j.bulkhead.Bulkhead;
@@ -42,7 +42,7 @@ public class Resilience4jInterceptor implements SdkInterceptor {
     }
 
     @Override
-    public GrantResult interceptWrite(WriteChain chain) {
+    public WriteResult interceptWrite(WriteChain chain) {
         SdkInterceptor.OperationContext ctx = chain.operationContext();
         acquirePermissions(ctx);
         try {

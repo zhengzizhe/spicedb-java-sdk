@@ -55,6 +55,9 @@ Real examples:
 - Map `StatusRuntimeException` at the transport boundary. `GrpcTransport`
   catches gRPC status failures and delegates to `GrpcExceptionMapper.map(...)`;
   callers should not need to inspect raw gRPC statuses.
+- Do not turn SpiceDB bulk-check item errors into denied permissions. A denied
+  permission is a valid authorization result; a bulk item error is a transport
+  or request failure and must be mapped through `GrpcExceptionMapper`.
 - Preserve causes when wrapping transport failures. `GrpcExceptionMapperTest`
   checks that mapped exceptions retain the original
   `StatusRuntimeException`.
@@ -70,8 +73,8 @@ Real examples:
   - Write path: `RealWriteChain` logs at `WARNING`, wraps non-`Authx` runtime
     exceptions in `AuthxException`, and aborts the write fail-closed.
 - Keep graceful degradation where the SPI contract requires it. For example,
-  `RedissonTokenStore` logs Redis failures and swallows them; `get` returns
-  `null` on miss or error.
+  user-provided `DistributedTokenStore` implementations must not throw from
+  `set`, and `get` must return `null` on miss or storage failure.
 
 ---
 

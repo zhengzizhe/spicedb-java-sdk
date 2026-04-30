@@ -7,16 +7,18 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Result of checking a single permission against multiple subjects, keyed by subject id.
+ * Result of checking a single permission against multiple subjects, keyed by
+ * canonical subject reference ({@code type:id} or {@code type:id#relation}).
  */
 public class BulkCheckResult {
 
     private final Map<String, CheckResult> results;
 
     /**
-     * Creates a bulk check result from a map of subject id to individual check results.
+     * Creates a bulk check result from a map of canonical subject reference to
+     * individual check result.
      *
-     * @param results map of subject id to {@link CheckResult}
+     * @param results map of canonical subject reference to {@link CheckResult}
      */
     public BulkCheckResult(Map<String, CheckResult> results) {
         this.results = results;
@@ -25,26 +27,26 @@ public class BulkCheckResult {
     /**
      * Returns the check result for a specific subject.
      *
-     * @param userId the subject id to look up
+     * @param subjectRef canonical subject reference to look up
      * @return the {@link CheckResult} for the subject, or {@code null} if not present
      */
-    public CheckResult get(String userId) {
-        return results.get(userId);
+    public CheckResult get(String subjectRef) {
+        return results.get(subjectRef);
     }
 
     /**
      * Returns an unmodifiable view of all results as a map.
      *
-     * @return unmodifiable map of subject id to {@link CheckResult}
+     * @return unmodifiable map of canonical subject reference to {@link CheckResult}
      */
     public Map<String, CheckResult> asMap() {
         return Collections.unmodifiableMap(results);
     }
 
     /**
-     * Returns the list of subject ids that have the requested permission.
+     * Returns the list of subject refs that have the requested permission.
      *
-     * @return list of allowed subject ids
+     * @return list of allowed subject refs
      */
     public List<String> allowed() {
         return results.entrySet().stream()
@@ -54,18 +56,18 @@ public class BulkCheckResult {
     }
 
     /**
-     * Returns the set of subject ids that have the requested permission.
+     * Returns the set of subject refs that have the requested permission.
      *
-     * @return set of allowed subject ids
+     * @return set of allowed subject refs
      */
     public Set<String> allowedSet() {
         return new HashSet<>(allowed());
     }
 
     /**
-     * Returns the list of subject ids that do not have the requested permission.
+     * Returns the list of subject refs that do not have the requested permission.
      *
-     * @return list of denied subject ids
+     * @return list of denied subject refs
      */
     public List<String> denied() {
         return results.entrySet().stream()

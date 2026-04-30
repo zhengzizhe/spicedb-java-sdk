@@ -37,6 +37,7 @@ from .beads_cli import (
     run_bd_json,
 )
 from .git import run_git
+from .active_task import clear_task_from_sessions
 from .beads_link import (
     BeadsLinkError,
     find_task_by_bead_id,
@@ -51,9 +52,7 @@ from .paths import (
     DIR_TASKS,
     DIR_WORKFLOW,
     FILE_TASK_JSON,
-    clear_current_task,
     generate_task_date_prefix,
-    get_current_task,
     get_developer,
     get_repo_root,
     get_tasks_dir,
@@ -153,12 +152,12 @@ def _build_task_data(
 
 
 def _seed_context_files(task_dir: Path, repo_root: Path) -> bool:
-    """Seed implement/check JSONL files when this platform consumes them."""
+    """Seed implement/test/check JSONL files when this platform consumes them."""
     if not _has_subagent_platform(repo_root):
         return False
 
     seeded = False
-    for jsonl_name in ("implement.jsonl", "check.jsonl"):
+    for jsonl_name in ("implement.jsonl", "test.jsonl", "check.jsonl"):
         jsonl_path = task_dir / jsonl_name
         if not jsonl_path.exists():
             _write_seed_jsonl(jsonl_path)
@@ -422,7 +421,7 @@ def _remove_beads_child_metadata(parent_dir: Path, child_dir: Path, repo_root: P
 # Sub-agent platform detection + JSONL seeding
 # =============================================================================
 
-# Config directories of platforms that consume implement.jsonl / check.jsonl.
+# Config directories of platforms that consume implement.jsonl / test.jsonl / check.jsonl.
 # Keep in sync with src/types/ai-tools.ts AI_TOOLS entries — these are the
 # platforms listed in workflow.md's "agent-capable" Skill Routing block
 # (Class-1 hook-inject + Class-2 pull-based preludes). Kilo / Antigravity /
@@ -438,6 +437,7 @@ _SUBAGENT_CONFIG_DIRS: tuple[str, ...] = (
     ".codebuddy",
     ".factory",   # Factory Droid
     ".github/copilot",
+    ".pi",
 )
 
 _SEED_EXAMPLE = (
@@ -453,7 +453,7 @@ def _has_subagent_platform(repo_root: Path) -> bool:
 
     Detected by probing well-known config directories at the repo root. Used
     only to decide whether ``task.py create`` should seed empty
-    ``implement.jsonl`` / ``check.jsonl`` files.
+    ``implement.jsonl`` / ``test.jsonl`` / ``check.jsonl`` files.
     """
     for config_dir in _SUBAGENT_CONFIG_DIRS:
         if (repo_root / config_dir).is_dir():
@@ -579,7 +579,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         )
         write_json(legacy_task_file, task_data)
 
-    # Seed implement.jsonl / check.jsonl for sub-agent-capable platforms.
+    # Seed implement.jsonl / test.jsonl / check.jsonl for sub-agent-capable platforms.
     # Agent curates real entries in Phase 1.3 (see .trellis/workflow.md).
     # Agent-less platforms (Kilo / Antigravity / Windsurf) skip this — they
     # load specs via the trellis-before-dev skill instead of JSONL.
@@ -630,7 +630,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     print("  1. Create prd.md with requirements", file=sys.stderr)
     if seeded_jsonl:
         print(
-            "  2. Curate implement.jsonl / check.jsonl (spec + research files only — "
+            "  2. Curate implement.jsonl / test.jsonl / check.jsonl (spec + research files only — "
             "see .trellis/workflow.md Phase 1.3)",
             file=sys.stderr,
         )
@@ -663,8 +663,8 @@ def cmd_archive(args: argparse.Namespace) -> int:
 
     tasks_dir = get_tasks_dir(repo_root)
 
-    # Find task directory
-    task_dir = find_task_by_name(task_name, tasks_dir)
+    # Resolve task directory (supports task name, relative path, or absolute path)
+    task_dir = resolve_task_dir(task_name, repo_root)
 
     if not task_dir or not task_dir.is_dir():
         print(colored(f"Error: Task not found: {task_name}", Colors.RED), file=sys.stderr)
@@ -702,23 +702,11 @@ def cmd_archive(args: argparse.Namespace) -> int:
             data["completedAt"] = today
             write_json(legacy_task_file, data)
 
-            # Handle subtask relationships on archive
-            task_parent = data.get("parent")
+            # Handle subtask relationships on archive.
+            # Keep this task in its parent's children list so progress counters
+            # stay consistent; children missing from the active set are treated
+            # as completed by children_progress().
             task_children = data.get("children", [])
-
-            # If this is a child, remove from parent's children list
-            if task_parent:
-                parent_dir = find_task_by_name(task_parent, tasks_dir)
-                if parent_dir:
-                    parent_json = parent_dir / FILE_TASK_JSON
-                    if parent_json.is_file():
-                        parent_data = read_json(parent_json)
-                        if parent_data:
-                            parent_children = parent_data.get("children", [])
-                            if dir_name in parent_children:
-                                parent_children.remove(dir_name)
-                                parent_data["children"] = parent_children
-                                write_json(parent_json, parent_data)
 
             # If this is a parent, clear parent field in all children
             if task_children:
@@ -732,10 +720,8 @@ def cmd_archive(args: argparse.Namespace) -> int:
                                 child_data["parent"] = None
                                 write_json(child_json, child_data)
 
-    # Clear if current task
-    current = get_current_task(repo_root)
-    if current and dir_name in current:
-        clear_current_task(repo_root)
+    # Clear any session that still points at this task before the path moves.
+    clear_task_from_sessions(str(task_dir), repo_root)
 
     # Archive
     result = archive_task_complete(task_dir, repo_root)

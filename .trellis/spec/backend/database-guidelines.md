@@ -8,9 +8,9 @@
 
 The main SDK does not own an application database, ORM, SQL schema, or
 migration system. It talks directly to SpiceDB over gRPC and models SpiceDB
-relationship tuples in Java. The optional `sdk-redisson` module stores session
-zedTokens in Redis through the `DistributedTokenStore` SPI; it is not an ORM
-layer and does not define migrations.
+relationship tuples in Java. Cross-instance SESSION consistency is exposed as
+the `DistributedTokenStore` SPI only; concrete zedToken storage is user-owned
+infrastructure, not a module provided by this SDK.
 
 Real examples:
 
@@ -22,9 +22,8 @@ Real examples:
 - `src/main/java/com/authx/sdk/transport/InMemoryTransport.java` is an
   in-memory test transport backed by `ConcurrentHashMap`, not a production
   persistence layer.
-- `sdk-redisson/src/main/java/com/authx/sdk/redisson/RedissonTokenStore.java`
-  stores zedTokens as Redis strings with TTL and swallows Redis failures per
-  the SPI contract.
+- `src/main/java/com/authx/sdk/spi/DistributedTokenStore.java` defines the
+  best-effort zedToken sharing contract for multi-instance SESSION consistency.
 
 ---
 
@@ -48,6 +47,67 @@ Real examples:
 - For tests that do not need SpiceDB, use `AuthxClient.inMemory()` or
   `InMemoryTransport`. That test transport intentionally matches direct
   relation names only and does not compute schema recursion.
+
+## Scenario: User-Owned Distributed Token Store
+
+### 1. Scope / Trigger
+
+- Trigger: multi-instance SESSION consistency needs zedTokens shared across
+  JVMs, but the SDK no longer provides a concrete token-store module.
+
+### 2. Signatures
+
+- SPI: `com.authx.sdk.spi.DistributedTokenStore`
+- Methods: `void set(String key, String token)` and
+  `@Nullable String get(String key)`
+- Injection: `SdkComponents.builder().tokenStore(store).build()`
+
+### 3. Contracts
+
+- The SDK owns only the SPI and the `TokenTracker` call sites.
+- Applications own the backing storage, client lifecycle, credentials,
+  key prefixing, TTL, monitoring, and failure logging.
+- `tokenStore == null` means SESSION consistency is limited to one JVM.
+
+### 4. Validation & Error Matrix
+
+- `set` storage failure -> implementation logs/degrades; it must not throw.
+- `get` miss or storage failure -> return `null`.
+- No configured store in multi-instance deployments -> SDK logs a startup
+  warning; callers must choose a weaker consistency mode or provide storage.
+
+### 5. Good/Base/Bad Cases
+
+- Good: user implementation prefixes keys such as `authx:token:`, stores with
+  a short TTL such as 60 seconds, and swallows storage failures per contract.
+- Base: no `tokenStore`; SESSION works only inside the local JVM.
+- Bad: adding a Redis/database client dependency or concrete token-store
+  implementation to the main SDK.
+
+### 6. Tests Required
+
+- Keep `TokenTrackerTest` covering local-only behavior, distributed set/get,
+  and degradation when the store fails.
+- If SDK wiring changes, assert the no-store warning and that
+  `SdkComponents.tokenStore()` is passed into `TokenTracker`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```java
+implementation("some.redis:client")
+```
+
+in the main SDK to ship a concrete token store.
+
+#### Correct
+
+```java
+DistributedTokenStore store = userOwnedStore;
+AuthxClient.builder()
+        .extend(e -> e.components(SdkComponents.builder().tokenStore(store).build()));
+```
 
 ---
 
@@ -77,8 +137,9 @@ schema concerns:
   resource types and permissions/relations are lowercase snake-case style
   (`[a-z][a-z0-9_]{0,127}`); resource IDs allow letters, digits, slash,
   underscore, pipe, and hyphen up to 1024 characters.
-- Redis token keys in `RedissonTokenStore` are `keyPrefix + key`; callers pass
-  the prefix, for example `authx:token:`.
+- User-provided `DistributedTokenStore` implementations should namespace token
+  keys so SDK zedTokens do not collide with application data, for example with
+  an `authx:token:` prefix.
 
 ---
 
@@ -88,9 +149,9 @@ schema concerns:
   JPA, JDBC, Flyway, Liquibase, or application-owned SQL database here.
 - Do not make `InMemoryTransport` authoritative for SpiceDB semantics. Its
   comments explicitly say it has no permission recursion or schema validation.
-- Do not let Redis failures escape from `DistributedTokenStore`
-  implementations. `RedissonTokenStore` logs at `WARNING`, returns `null` on
-  `get` failure, and does not throw from `set`.
+- Do not let shared-storage failures escape from `DistributedTokenStore`
+  implementations. The SPI contract requires `set` to be best-effort and
+  `get` to return `null` on miss or error.
 - Do not bypass the existing gRPC conversion helpers when adding SpiceDB
   operations. Keep conversion and `StatusRuntimeException` mapping in the
   transport layer.

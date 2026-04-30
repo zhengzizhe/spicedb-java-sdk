@@ -1,50 +1,40 @@
 package com.authx.sdk;
 
-import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.Consistency;
+import com.authx.sdk.model.WriteResult;
 
 import java.util.Objects;
-import java.util.concurrent.Executor;
-import java.util.function.Consumer;
 
 /**
- * Handle returned by {@link WriteFlow#commit()}. Wraps the
- * underlying write outcome and optionally fires synchronous /
- * asynchronous listeners. The write has already happened by the time
- * this object exists — a listener registered here runs immediately
- * (sync) or is submitted to its executor (async).
+ * Handle returned by {@link WriteFlow#commit()}. Wraps the underlying
+ * write outcome.
  *
  * <pre>
  * WriteCompletion completion = auth.on(Document).select(docId)
  *     .grant(Document.Rel.VIEWER).to(User, "alice")
  *     .commit();
- * completion.listener(c -> auditLog.write(c));
+ * auditLog.write(completion);
  * </pre>
  *
  * <p>Delegates {@link #count()} / {@link #zedToken()} for call-site
  * ergonomics.
  *
- * <p>The underlying {@link #result()} is a {@link GrantResult}
- * regardless of whether the flow contained grants, revokes, or both —
- * SpiceDB's {@code WriteRelationships} RPC is the unified write
- * primitive, and its response shape (zedToken + count) doesn't
- * distinguish TOUCH vs DELETE totals.
+ * <p>The underlying {@link #result()} is a {@link WriteResult}. SpiceDB's
+ * {@code WriteRelationships} RPC is the unified write primitive, so the
+ * result shape is the same for grants, revokes, and mixed writes.
  */
 public final class WriteCompletion {
 
-    private static final System.Logger LOG =
-            System.getLogger(WriteCompletion.class.getName());
-
-    private final GrantResult result;
+    private final WriteResult result;
     private final int pendingCount;
-    private boolean listenerRegistered = false;
 
-    WriteCompletion(GrantResult result, int pendingCount) {
+    WriteCompletion(WriteResult result, int pendingCount) {
         this.result = Objects.requireNonNull(result, "result");
         this.pendingCount = pendingCount;
     }
 
-    /** Access the raw write result (zedToken + count). */
-    public GrantResult result() {
+    /** Access the raw write result (zedToken + submitted update count). */
+    public WriteResult result() {
         return result;
     }
 
@@ -58,45 +48,18 @@ public final class WriteCompletion {
         return pendingCount;
     }
 
+    /** Preferred name for {@link #count()}: number of submitted relationship updates. */
+    public int updateCount() {
+        return pendingCount;
+    }
+
     /** ZedToken from the write. May be {@code null} for in-memory transport. */
     public String zedToken() {
         return result.zedToken();
     }
 
-    // ── Listeners ────────────────────────────────────────────────────
-
-    /**
-     * Invoke {@code callback} synchronously on the calling thread with
-     * this completion. Exceptions propagate to the caller.
-     */
-    public void listener(Consumer<WriteCompletion> callback) {
-        markListenerRegistered();
-        Objects.requireNonNull(callback, "callback").accept(this);
-    }
-
-    /**
-     * Dispatch {@code callback} to {@code executor}. Returns immediately.
-     * Callback exceptions are caught, logged at WARNING, and swallowed.
-     */
-    public void listenerAsync(Consumer<WriteCompletion> callback, Executor executor) {
-        markListenerRegistered();
-        Objects.requireNonNull(callback, "callback");
-        Objects.requireNonNull(executor, "executor");
-        executor.execute(() -> {
-            try {
-                callback.accept(this);
-            } catch (Throwable t) {
-                LOG.log(System.Logger.Level.WARNING,
-                        "WriteCompletion async listener threw — swallowed", t);
-            }
-        });
-    }
-
-    private void markListenerRegistered() {
-        if (listenerRegistered) {
-            throw new IllegalStateException(
-                    "WriteCompletion listener already registered — use one listener per completion");
-        }
-        listenerRegistered = true;
+    /** Create a read consistency level that is at least as fresh as this write. */
+    public Consistency asConsistency() {
+        return result.asConsistency();
     }
 }

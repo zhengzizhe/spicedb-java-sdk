@@ -13,4 +13,8 @@ import java.util.Objects;
  */
 public record CaveatRef(String name, @Nullable Map<String, Object> context) {
     public CaveatRef { Objects.requireNonNull(name, "name"); }
+
+    public CaveatRef(String name, CaveatContext context) {
+        this(name, Objects.requireNonNull(context, "context").values());
+    }
 }

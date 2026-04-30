@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from common.active_task import set_active_task
 from common.tasks import load_task
 
 
@@ -21,6 +22,7 @@ STATUSLINE_HOOK = REPO_ROOT / ".codex" / "hooks" / "statusline.py"
 PROMPT_HOOK = REPO_ROOT / ".codex" / "hooks" / "inject-workflow-state.py"
 SESSION_HOOK = REPO_ROOT / ".codex" / "hooks" / "session-start.py"
 LEGACY_TASK_FILE = "task" + ".json"
+TEST_CONTEXT_ID = "test-session"
 
 
 class BeadsBackendTest(unittest.TestCase):
@@ -89,6 +91,35 @@ class BeadsBackendTest(unittest.TestCase):
             self.assertIn("--json", entries[0]["argv"])
             self.assertFalse((repo_root / ".beads").exists())
 
+    def test_create_seeds_implement_test_and_check_context_for_codex(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = self._make_trellis_repo(tmp)
+            (repo_root / ".codex").mkdir()
+            fake_bd, log_path = self._make_fake_bd(repo_root)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TASK_PY),
+                    "create",
+                    "Seed Context",
+                    "--slug",
+                    "seed-context",
+                ],
+                cwd=repo_root,
+                env=self._env(fake_bd, log_path),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            task_dir = self._single_task_dir(repo_root)
+            for jsonl_name in ("implement.jsonl", "test.jsonl", "check.jsonl"):
+                jsonl_path = task_dir / jsonl_name
+                self.assertTrue(jsonl_path.is_file(), jsonl_name)
+                self.assertIn('"_example"', jsonl_path.read_text(encoding="utf-8"))
+
     def test_beads_claim_sets_current_task_for_existing_link(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = self._make_trellis_repo(tmp)
@@ -125,7 +156,7 @@ class BeadsBackendTest(unittest.TestCase):
 
             self.assertEqual(claim.returncode, 0, claim.stderr)
             expected_ref = task_dir.relative_to(repo_root).as_posix()
-            self.assertEqual((repo_root / ".trellis" / ".current-task").read_text(encoding="utf-8"), expected_ref)
+            self.assertEqual(self._current_task(repo_root), expected_ref)
             entries = self._read_log(log_path)
             self.assertEqual(entries[0]["command"], "update")
             self.assertIn("--claim", entries[0]["argv"])
@@ -149,7 +180,7 @@ class BeadsBackendTest(unittest.TestCase):
             self.assertTrue(task_dir.is_dir())
             self.assertEqual((task_dir / ".bead").read_text(encoding="utf-8"), "bd-claim-new\n")
             self.assertFalse((task_dir / LEGACY_TASK_FILE).exists())
-            self.assertEqual((repo_root / ".trellis" / ".current-task").read_text(encoding="utf-8"), ".trellis/tasks/04-28-materialized-bead")
+            self.assertEqual(self._current_task(repo_root), ".trellis/tasks/04-28-materialized-bead")
             self.assertFalse((repo_root / ".beads").exists())
 
     def test_task_list_loads_beads_folder_from_beads_only(self) -> None:
@@ -213,7 +244,7 @@ class BeadsBackendTest(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((repo_root / ".trellis" / ".current-task").read_text(encoding="utf-8"), ".trellis/tasks/04-28-beads-start")
+            self.assertEqual(self._current_task(repo_root), ".trellis/tasks/04-28-beads-start")
             entries = self._read_log(log_path)
             self.assertEqual(entries[0]["command"], "update")
             self.assertIn("--claim", entries[0]["argv"])
@@ -242,6 +273,7 @@ class BeadsBackendTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(parent.returncode, 0, parent.stderr)
+            parent_ref = parent.stdout.strip().splitlines()[-1]
 
             child = subprocess.run(
                 [
@@ -252,7 +284,7 @@ class BeadsBackendTest(unittest.TestCase):
                     "--slug",
                     "hierarchy-child",
                     "--parent",
-                    ".trellis/tasks/04-28-hierarchy-parent",
+                    parent_ref,
                 ],
                 cwd=repo_root,
                 env=self._env(fake_bd, log_path),
@@ -261,6 +293,7 @@ class BeadsBackendTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(child.returncode, 0, child.stderr)
+            child_ref = child.stdout.strip().splitlines()[-1]
 
             entries = self._read_log(log_path)
             create_child = entries[1]
@@ -273,7 +306,7 @@ class BeadsBackendTest(unittest.TestCase):
             parent_metadata = update_entries[0]["metadata"]
             self.assertEqual(
                 parent_metadata["trellis_task"]["children"],
-                ["04-28-hierarchy-child"],
+                [Path(child_ref).name],
             )
 
     def test_task_archive_closes_beads_only_task(self) -> None:
@@ -308,7 +341,7 @@ class BeadsBackendTest(unittest.TestCase):
             (task_dir / ".bead").write_text("bd-hook-1\n", encoding="utf-8")
             (task_dir / "prd.md").write_text("# Hook Bead\n", encoding="utf-8")
             (task_dir / "implement.jsonl").write_text('{"file": ".trellis/spec/tooling/index.md"}\n', encoding="utf-8")
-            (repo_root / ".trellis" / ".current-task").write_text(".trellis/tasks/04-28-beads-hook", encoding="utf-8")
+            self._set_current_task(repo_root, ".trellis/tasks/04-28-beads-hook")
 
             statusline = subprocess.run(
                 [sys.executable, str(STATUSLINE_HOOK)],
@@ -320,7 +353,7 @@ class BeadsBackendTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(statusline.returncode, 0, statusline.stderr)
-            self.assertIn("Listed Bead", statusline.stdout)
+            self.assertIn("1 task(s)", statusline.stdout)
 
             prompt = subprocess.run(
                 [sys.executable, str(PROMPT_HOOK)],
@@ -486,7 +519,26 @@ else:
         env = os.environ.copy()
         env["TRELLIS_BD"] = str(fake_bd)
         env["FAKE_BD_LOG"] = str(log_path)
+        env["TRELLIS_CONTEXT_ID"] = TEST_CONTEXT_ID
         return env
+
+    def _set_current_task(self, repo_root: Path, task_ref: str) -> None:
+        old_context = os.environ.get("TRELLIS_CONTEXT_ID")
+        os.environ["TRELLIS_CONTEXT_ID"] = TEST_CONTEXT_ID
+        try:
+            active = set_active_task(task_ref, repo_root, platform="codex")
+            self.assertIsNotNone(active)
+        finally:
+            if old_context is None:
+                os.environ.pop("TRELLIS_CONTEXT_ID", None)
+            else:
+                os.environ["TRELLIS_CONTEXT_ID"] = old_context
+
+    def _current_task(self, repo_root: Path) -> str | None:
+        session_file = repo_root / ".trellis" / ".runtime" / "sessions" / f"{TEST_CONTEXT_ID}.json"
+        if not session_file.is_file():
+            return None
+        return json.loads(session_file.read_text(encoding="utf-8")).get("current_task")
 
     def _read_log(self, log_path: Path) -> list[dict]:
         return [

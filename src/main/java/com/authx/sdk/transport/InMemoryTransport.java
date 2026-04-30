@@ -38,13 +38,13 @@ public class InMemoryTransport implements SdkTransport {
         Map<String, CheckResult> results = new LinkedHashMap<>();
         for (SubjectRef sub : subjects) {
             CheckRequest subRequest = CheckRequest.of(request.resource(), request.permission(), sub, request.consistency());
-            results.put(sub.id(), check(subRequest));
+            results.put(sub.toRefString(), check(subRequest));
         }
         return new BulkCheckResult(results);
     }
 
     @Override
-    public GrantResult writeRelationships(List<RelationshipUpdate> updates) {
+    public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
         for (SdkTransport.RelationshipUpdate u : updates) {
             String key = tupleKey(u.resource().type(), u.resource().id(), u.relation().name(),
                     u.subject().type(), u.subject().id(), u.subject().relation());
@@ -55,17 +55,17 @@ public class InMemoryTransport implements SdkTransport {
                         u.subject().type(), u.subject().id(), u.subject().relation()));
             }
         }
-        return new GrantResult(nextToken(), updates.size());
+        return new WriteResult(nextToken(), updates.size());
     }
 
     @Override
-    public RevokeResult deleteRelationships(List<RelationshipUpdate> updates) {
+    public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
         for (SdkTransport.RelationshipUpdate u : updates) {
             String key = tupleKey(u.resource().type(), u.resource().id(), u.relation().name(),
                     u.subject().type(), u.subject().id(), u.subject().relation());
             store.remove(key);
         }
-        return new RevokeResult(nextToken(), updates.size());
+        return new WriteResult(nextToken(), updates.size());
     }
 
     @Override

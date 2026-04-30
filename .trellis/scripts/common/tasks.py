@@ -212,8 +212,10 @@ def children_progress(
     """
     if not children:
         return ""
+    # Archived children are missing from the active task map. Count them as
+    # done so parent progress does not regress after archive.
     done = sum(
         1 for c in children
-        if all_statuses.get(c) in ("completed", "done")
+        if c not in all_statuses or all_statuses.get(c) in ("completed", "done")
     )
     return f" [{done}/{len(children)} done]"

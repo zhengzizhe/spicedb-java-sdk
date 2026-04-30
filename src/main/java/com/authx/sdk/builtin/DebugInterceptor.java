@@ -1,7 +1,7 @@
 package com.authx.sdk.builtin;
 
 import com.authx.sdk.model.CheckResult;
-import com.authx.sdk.model.GrantResult;
+import com.authx.sdk.model.WriteResult;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.trace.LogCtx;
 
@@ -9,11 +9,11 @@ import com.authx.sdk.trace.LogCtx;
  * Debug interceptor: logs every operation with full details.
  * Enable with {@code .extend(e -> e.addInterceptor(new DebugInterceptor()))}.
  *
- * <pre>
- * -> CHECK document:doc-123 permission=view subject=user:alice
- * <- CHECK 2ms result=HAS_PERMISSION
- * </pre>
- */
+     * <pre>
+     * -> CHECK document:doc-123 permission=view subject=user:alice
+     * &lt;- CHECK 2ms result=HAS_PERMISSION
+     * </pre>
+     */
 public class DebugInterceptor implements SdkInterceptor {
 
     private static final System.Logger LOG = System.getLogger("authx.sdk.debug");
@@ -43,14 +43,14 @@ public class DebugInterceptor implements SdkInterceptor {
     }
 
     @Override
-    public GrantResult interceptWrite(WriteChain chain) {
+    public WriteResult interceptWrite(WriteChain chain) {
         SdkInterceptor.OperationContext ctx = chain.operationContext();
         LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                 "-> {0} {1}:{2}",
                 ctx.action(), ctx.resourceType(), ctx.resourceId()));
         long start = System.nanoTime();
         try {
-            GrantResult result = chain.proceed(chain.request());
+            WriteResult result = chain.proceed(chain.request());
             long ms = (System.nanoTime() - start) / 1_000_000;
             LOG.log(System.Logger.Level.INFO, LogCtx.fmt(
                     "<- {0} {1}ms count={2}",

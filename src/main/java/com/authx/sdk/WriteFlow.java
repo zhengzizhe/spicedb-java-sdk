@@ -1,6 +1,7 @@
 package com.authx.sdk;
 
 import com.authx.sdk.cache.SchemaCache;
+import com.authx.sdk.model.CaveatContext;
 import com.authx.sdk.model.CaveatRef;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
@@ -18,7 +19,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 
@@ -63,8 +65,10 @@ import org.jspecify.annotations.Nullable;
  *
  * <h2>Listener hooks</h2>
  *
- * <p>{@link #commit()} returns a {@link WriteCompletion} that can fire
- * one synchronous or asynchronous callback. See {@link WriteCompletion}.
+ * <p>{@link #listener(Consumer)} is the last intermediate operation before
+ * commit. It switches the chain to {@link WriteListenerStage}, whose
+ * terminal {@code commit()} returns {@code CompletableFuture<WriteCompletion>}
+ * and runs the listener asynchronously after a successful write.
  *
  * <h2>Lifecycle</h2>
  * <ul>
@@ -80,8 +84,7 @@ import org.jspecify.annotations.Nullable;
  * <p><b>ErrorProne note</b>: this class is marked
  * {@link CheckReturnValue @CheckReturnValue} — returned {@code WriteFlow}
  * instances must be used in a chain or assigned. Terminal accessors
- * ({@link #commit()}, {@link #commitAsync()}, {@link #pending()},
- * {@link #pendingCount()}) opt out via
+ * ({@link #commit()}, {@link #pending()}, {@link #pendingCount()}) opt out via
  * {@link CanIgnoreReturnValue @CanIgnoreReturnValue}. This catches the
  * common bug where a chain is built but {@code .commit()} is forgotten.
  */
@@ -104,9 +107,10 @@ public final class WriteFlow {
     /** True iff the last batch was TOUCH — modifiers only apply to TOUCH batches. */
     private boolean lastBatchIsTouch = false;
 
-    private final List<RelationshipUpdate> pending = new ArrayList<>();
+    private final ArrayList<RelationshipUpdate> pending = new ArrayList<>();
 
     private boolean committed = false;
+    private boolean listenerStageCreated = false;
 
     WriteFlow(String resourceType,
               String resourceId,
@@ -158,20 +162,23 @@ public final class WriteFlow {
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow to(ResourceType<R, P> type, String id) {
-        return beginBatch(Mode.GRANT).addSubject(SubjectRef.of(type.name(), id));
+        return beginBatch(Mode.GRANT).addSubject(SdkRefs.typedSubject(type, id));
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow to(ResourceType<R, P> type, String... ids) {
+        requireNotEmpty(ids, "to(ResourceType, String...)");
         beginBatch(Mode.GRANT);
-        for (String id : ids) addSubject(SubjectRef.of(type.name(), id));
+        for (String id : ids) addSubject(SdkRefs.typedSubject(type, id));
         return this;
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow to(ResourceType<R, P> type, Iterable<String> ids) {
         beginBatch(Mode.GRANT);
-        for (String id : ids) addSubject(SubjectRef.of(type.name(), id));
+        int before = pending.size();
+        for (String id : ids) addSubject(SdkRefs.typedSubject(type, id));
+        requireAdded(before, "to(ResourceType, Iterable)");
         return this;
     }
 
@@ -179,27 +186,29 @@ public final class WriteFlow {
             SR extends Enum<SR> & Relation.Named>
     WriteFlow to(ResourceType<R, P> type, String id, SR subRel) {
         return beginBatch(Mode.GRANT).addSubject(
-                SubjectRef.of(type.name(), id, subRel.relationName()));
+                SdkRefs.typedSubject(type, id, subRel.relationName()));
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named,
             SR extends Enum<SR> & Relation.Named>
     WriteFlow to(ResourceType<R, P> type, Iterable<String> ids, SR subRel) {
         beginBatch(Mode.GRANT);
+        int before = pending.size();
         String rel = subRel.relationName();
-        for (String id : ids) addSubject(SubjectRef.of(type.name(), id, rel));
+        for (String id : ids) addSubject(SdkRefs.typedSubject(type, id, rel));
+        requireAdded(before, "to(ResourceType, Iterable, Relation)");
         return this;
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow to(ResourceType<R, P> type, String id, Permission.Named subPerm) {
         return beginBatch(Mode.GRANT).addSubject(
-                SubjectRef.of(type.name(), id, subPerm.permissionName()));
+                SdkRefs.typedSubject(type, id, subPerm.permissionName()));
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow toWildcard(ResourceType<R, P> type) {
-        return beginBatch(Mode.GRANT).addSubject(SubjectRef.of(type.name(), "*"));
+        return beginBatch(Mode.GRANT).addSubject(SdkRefs.wildcardSubject(type));
     }
 
     public WriteFlow to(SubjectRef subject) {
@@ -207,30 +216,35 @@ public final class WriteFlow {
     }
 
     public WriteFlow to(SubjectRef... subjects) {
+        requireNotEmpty(subjects, "to(SubjectRef...)");
         beginBatch(Mode.GRANT);
         for (SubjectRef s : subjects) addSubject(Objects.requireNonNull(s, "subject"));
         return this;
     }
 
     public WriteFlow to(Collection<SubjectRef> subjects) {
+        SdkRefs.requireNotEmpty(subjects, "to(Collection)", "subject");
         beginBatch(Mode.GRANT);
         for (SubjectRef s : subjects) addSubject(Objects.requireNonNull(s, "subject"));
         return this;
     }
 
     public WriteFlow to(String canonical) {
-        return beginBatch(Mode.GRANT).addSubject(SubjectRef.parse(canonical));
+        return beginBatch(Mode.GRANT).addSubject(SdkRefs.subject(canonical));
     }
 
     public WriteFlow to(String... canonicals) {
+        requireNotEmpty(canonicals, "to(String...)");
         beginBatch(Mode.GRANT);
-        for (String c : canonicals) addSubject(SubjectRef.parse(c));
+        for (String c : canonicals) addSubject(SdkRefs.subject(c));
         return this;
     }
 
     public WriteFlow to(Iterable<String> canonicals) {
         beginBatch(Mode.GRANT);
-        for (String c : canonicals) addSubject(SubjectRef.parse(c));
+        int before = pending.size();
+        for (String c : canonicals) addSubject(SdkRefs.subject(c));
+        requireAdded(before, "to(Iterable)");
         return this;
     }
 
@@ -240,20 +254,23 @@ public final class WriteFlow {
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow from(ResourceType<R, P> type, String id) {
-        return beginBatch(Mode.REVOKE).addSubject(SubjectRef.of(type.name(), id));
+        return beginBatch(Mode.REVOKE).addSubject(SdkRefs.typedSubject(type, id));
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow from(ResourceType<R, P> type, String... ids) {
+        requireNotEmpty(ids, "from(ResourceType, String...)");
         beginBatch(Mode.REVOKE);
-        for (String id : ids) addSubject(SubjectRef.of(type.name(), id));
+        for (String id : ids) addSubject(SdkRefs.typedSubject(type, id));
         return this;
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow from(ResourceType<R, P> type, Iterable<String> ids) {
         beginBatch(Mode.REVOKE);
-        for (String id : ids) addSubject(SubjectRef.of(type.name(), id));
+        int before = pending.size();
+        for (String id : ids) addSubject(SdkRefs.typedSubject(type, id));
+        requireAdded(before, "from(ResourceType, Iterable)");
         return this;
     }
 
@@ -261,27 +278,29 @@ public final class WriteFlow {
             SR extends Enum<SR> & Relation.Named>
     WriteFlow from(ResourceType<R, P> type, String id, SR subRel) {
         return beginBatch(Mode.REVOKE).addSubject(
-                SubjectRef.of(type.name(), id, subRel.relationName()));
+                SdkRefs.typedSubject(type, id, subRel.relationName()));
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named,
             SR extends Enum<SR> & Relation.Named>
     WriteFlow from(ResourceType<R, P> type, Iterable<String> ids, SR subRel) {
         beginBatch(Mode.REVOKE);
+        int before = pending.size();
         String rel = subRel.relationName();
-        for (String id : ids) addSubject(SubjectRef.of(type.name(), id, rel));
+        for (String id : ids) addSubject(SdkRefs.typedSubject(type, id, rel));
+        requireAdded(before, "from(ResourceType, Iterable, Relation)");
         return this;
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow from(ResourceType<R, P> type, String id, Permission.Named subPerm) {
         return beginBatch(Mode.REVOKE).addSubject(
-                SubjectRef.of(type.name(), id, subPerm.permissionName()));
+                SdkRefs.typedSubject(type, id, subPerm.permissionName()));
     }
 
     public <R extends Enum<R> & Relation.Named, P extends Enum<P> & Permission.Named>
     WriteFlow fromWildcard(ResourceType<R, P> type) {
-        return beginBatch(Mode.REVOKE).addSubject(SubjectRef.of(type.name(), "*"));
+        return beginBatch(Mode.REVOKE).addSubject(SdkRefs.wildcardSubject(type));
     }
 
     public WriteFlow from(SubjectRef subject) {
@@ -289,30 +308,35 @@ public final class WriteFlow {
     }
 
     public WriteFlow from(SubjectRef... subjects) {
+        requireNotEmpty(subjects, "from(SubjectRef...)");
         beginBatch(Mode.REVOKE);
         for (SubjectRef s : subjects) addSubject(Objects.requireNonNull(s, "subject"));
         return this;
     }
 
     public WriteFlow from(Collection<SubjectRef> subjects) {
+        SdkRefs.requireNotEmpty(subjects, "from(Collection)", "subject");
         beginBatch(Mode.REVOKE);
         for (SubjectRef s : subjects) addSubject(Objects.requireNonNull(s, "subject"));
         return this;
     }
 
     public WriteFlow from(String canonical) {
-        return beginBatch(Mode.REVOKE).addSubject(SubjectRef.parse(canonical));
+        return beginBatch(Mode.REVOKE).addSubject(SdkRefs.subject(canonical));
     }
 
     public WriteFlow from(String... canonicals) {
+        requireNotEmpty(canonicals, "from(String...)");
         beginBatch(Mode.REVOKE);
-        for (String c : canonicals) addSubject(SubjectRef.parse(c));
+        for (String c : canonicals) addSubject(SdkRefs.subject(c));
         return this;
     }
 
     public WriteFlow from(Iterable<String> canonicals) {
         beginBatch(Mode.REVOKE);
-        for (String c : canonicals) addSubject(SubjectRef.parse(c));
+        int before = pending.size();
+        for (String c : canonicals) addSubject(SdkRefs.subject(c));
+        requireAdded(before, "from(Iterable)");
         return this;
     }
 
@@ -321,6 +345,10 @@ public final class WriteFlow {
     // ──────────────────────────────────────────────────────────────────
 
     public WriteFlow withCaveat(String name, Map<String, Object> ctx) {
+        return withCaveat(new CaveatRef(name, ctx));
+    }
+
+    public WriteFlow withCaveat(String name, CaveatContext ctx) {
         return withCaveat(new CaveatRef(name, ctx));
     }
 
@@ -350,18 +378,51 @@ public final class WriteFlow {
     }
 
     // ──────────────────────────────────────────────────────────────────
+    //  Listener — intermediate operation before commit()
+    // ──────────────────────────────────────────────────────────────────
+
+    /**
+     * Register a listener as the final intermediate step before commit.
+     * Like a Java Stream operation before a terminal call, this switches the
+     * chain to {@link WriteListenerStage}; that stage's {@code commit()}
+     * returns {@code CompletableFuture<WriteCompletion>}.
+     */
+    public WriteListenerStage listener(Consumer<WriteCompletion> callback) {
+        checkOpen();
+        listenerStageCreated = true;
+        return new WriteListenerStage(this, callback);
+    }
+
+    /**
+     * Register a listener that runs on {@code executor} after a successful
+     * write. The returned {@link WriteListenerStage} owns the async terminal
+     * {@link WriteListenerStage#commit()}.
+     */
+    public WriteListenerStage listener(Consumer<WriteCompletion> callback, Executor executor) {
+        checkOpen();
+        listenerStageCreated = true;
+        return new WriteListenerStage(this, callback, executor);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
     //  Termination
     // ──────────────────────────────────────────────────────────────────
 
     /**
      * Flush all accumulated updates (TOUCH + DELETE mixed) in one
-     * {@code WriteRelationships} RPC. Returns a {@link WriteCompletion}
-     * for optional listener chaining. SpiceDB applies all updates
-     * atomically.
+     * {@code WriteRelationships} RPC. SpiceDB applies all updates atomically.
      */
     @CanIgnoreReturnValue
     public WriteCompletion commit() {
-        checkOpen();
+        return commitInternal(false);
+    }
+
+    WriteCompletion commitFromListenerStage() {
+        return commitInternal(true);
+    }
+
+    private WriteCompletion commitInternal(boolean fromListenerStage) {
+        checkOpenForCommit(fromListenerStage);
         if (pending.isEmpty()) {
             throw new IllegalStateException(
                     "WriteFlow.commit() called with no pending updates — "
@@ -369,28 +430,10 @@ public final class WriteFlow {
         }
         committed = true;
         validateSchemaFailFast();
-        return new WriteCompletion(
+        WriteCompletion completion = new WriteCompletion(
                 transport.writeRelationships(List.copyOf(pending)),
                 pending.size());
-    }
-
-    @CanIgnoreReturnValue
-    public CompletableFuture<WriteCompletion> commitAsync() {
-        checkOpen();
-        if (pending.isEmpty()) {
-            return CompletableFuture.failedFuture(new IllegalStateException(
-                    "WriteFlow.commitAsync() called with no pending updates"));
-        }
-        committed = true;
-        try {
-            validateSchemaFailFast();
-        } catch (RuntimeException e) {
-            return CompletableFuture.failedFuture(e);
-        }
-        List<RelationshipUpdate> snapshot = List.copyOf(pending);
-        int count = snapshot.size();
-        return CompletableFuture.supplyAsync(() ->
-                new WriteCompletion(transport.writeRelationships(snapshot), count));
+        return completion;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -462,10 +505,35 @@ public final class WriteFlow {
         }
     }
 
+    private static void requireNotEmpty(Object[] values, String method) {
+        SdkRefs.requireNotEmpty(values, "WriteFlow." + method, "subject");
+    }
+
+    private void requireAdded(int before, String method) {
+        if (pending.size() == before) {
+            throw new IllegalArgumentException("WriteFlow." + method + " requires at least one subject");
+        }
+    }
+
     private void checkOpen() {
         if (committed) {
             throw new IllegalStateException(
                     "WriteFlow already committed — create a new flow");
+        }
+        if (listenerStageCreated) {
+            throw new IllegalStateException(
+                    "WriteFlow listener stage already created — call commit() on the returned WriteListenerStage");
+        }
+    }
+
+    private void checkOpenForCommit(boolean fromListenerStage) {
+        if (committed) {
+            throw new IllegalStateException(
+                    "WriteFlow already committed — create a new flow");
+        }
+        if (listenerStageCreated && !fromListenerStage) {
+            throw new IllegalStateException(
+                    "WriteFlow listener stage already created — call commit() on the returned WriteListenerStage");
         }
     }
 

@@ -7,8 +7,8 @@
 ## Overview
 
 This directory contains backend guidelines extracted from the repository's
-current Java SDK code, Gradle configuration, tests, README examples, and
-optional Redisson/test-app modules.
+current Java SDK code, Gradle configuration, tests, README examples, and the
+Spring test application.
 
 ---
 
@@ -17,7 +17,7 @@ optional Redisson/test-app modules.
 | Guide | Description | Status |
 |-------|-------------|--------|
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | Filled from existing Java SDK code |
-| [Database Guidelines](./database-guidelines.md) | SpiceDB/Redis persistence conventions | Filled from existing Java SDK code |
+| [Database Guidelines](./database-guidelines.md) | SpiceDB persistence and token-store SPI conventions | Filled from existing Java SDK code |
 | [Error Handling](./error-handling.md) | Error types, handling strategies | Filled from existing Java SDK code |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Filled from existing Java SDK code |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Filled from existing Java SDK code |

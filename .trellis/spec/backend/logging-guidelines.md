@@ -37,7 +37,8 @@ Real examples:
 - `WARNING`: degraded behavior, swallowed integration failures, failed
   listener callbacks, interceptor bugs, telemetry sink failures, or bridge
   disablement. Examples include `Slf4jMdcBridge` disabling itself after MDC
-  errors and `RedissonTokenStore` swallowing Redis failures.
+  errors and user token-store implementations reporting storage failures they
+  swallow per the SPI contract.
 - `DEBUG`: low-level diagnostic noise that should not normally surface.
   `GrpcTransport` logs per-item bulk-check errors at `DEBUG` before treating
   that item as `NO_PERMISSION`.
@@ -78,7 +79,7 @@ is limited to scenario/demo tests such as `RealWorldScenarios`.
 - Log lifecycle transitions and SDK degradation/recovery.
 - Log circuit breaker transitions and retry budget/degradation events.
 - Log swallowed integration failures when the code continues without the
-  optional feature, such as Redis token-store failures or SLF4J MDC bridge
+  optional feature, such as user token-store failures or SLF4J MDC bridge
   disablement.
 - Log interceptor failures with enough operation context to debug the resource
   and subject involved.

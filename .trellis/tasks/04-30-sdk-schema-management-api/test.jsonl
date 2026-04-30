@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Defines when to use Testcontainers/e2e and the full verification command."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Invalid schema and auth/transport failures need typed exception assertions."}

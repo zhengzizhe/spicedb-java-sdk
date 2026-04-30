@@ -14,7 +14,7 @@ Usage:
 
 Branch resolution order:
     1. --branch CLI arg (explicit)
-    2. active task branch field (Beads metadata or legacy task data)
+    2. task.json branch field (from active task)
     3. git branch --show-current (auto-detect)
     4. None (omitted gracefully)
 """
@@ -493,11 +493,11 @@ def main() -> int:
             print(f"Error: unknown package '{package}'. Available: {available}", file=sys.stderr)
             return 1
     else:
-        # Inferred: active task package → default_package → None
+        # Inferred: active task's task.json.package → default_package → None
         task_package = task_data.package if task_data else None
         package = resolve_package(task_package, repo_root)
 
-    # Resolve branch: CLI → active task → git auto-detect → None
+    # Resolve branch: CLI → task.json → git auto-detect → None
     branch = args.branch
 
     if not branch:
