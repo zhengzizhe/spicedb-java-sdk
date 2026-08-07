@@ -6,7 +6,7 @@ This file is bundled in the SDK JAR at `META-INF/authx-sdk/GUIDE.md`.
 
 ```groovy
 dependencies {
-    implementation("io.github.authxkit:authx-spicedb-sdk:3.0.1")
+    implementation("io.github.authxkit:authx-spicedb-sdk:3.0.2")
 }
 ```
 

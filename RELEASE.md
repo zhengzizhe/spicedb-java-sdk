@@ -1,9 +1,9 @@
 # Release Checklist
 
-## Release 3.0.1
+## Release 3.0.2
 
-Version `3.0.1` includes schema management, typed caveat builders, and
-documentation polish after the `3.0.0` release.
+Version `3.0.2` adds caveat and expiration modifiers to cross-resource grants,
+and preserves expiration values in SpiceDB relationship writes.
 
 Watch/change-stream support is intentionally not part of the next release
 unless a separate reliability design is accepted. Do not expose a stable

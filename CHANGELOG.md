@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.2 - 2026-08-07
+
+### Added
+
+- `CrossResourceBatchBuilder` grant scopes can now attach a caveat and an
+  expiration to the most recently appended grant, including fan-out grants.
+
+### Fixed
+
+- Relationship writes now serialize `expiresAt` to SpiceDB's
+  `optional_expires_at` field, preserving time-bounded grants over gRPC.
+
 ## 3.0.1 - 2026-04-30
 
 ### Added

@@ -8,7 +8,7 @@ lookups, batch checks, resilience, and observability.
 
 ```groovy
 dependencies {
-    implementation("io.github.authxkit:authx-spicedb-sdk:3.0.1")
+    implementation("io.github.authxkit:authx-spicedb-sdk:3.0.2")
 }
 ```
 
