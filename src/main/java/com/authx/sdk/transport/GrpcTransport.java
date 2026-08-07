@@ -29,6 +29,7 @@ import com.authzed.api.v1.WriteRelationshipsRequest;
 import com.authzed.api.v1.ZedToken;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.Struct;
+import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
@@ -404,6 +405,12 @@ public class GrpcTransport implements SdkTransport {
                 caveatBuilder.setContext(toStruct(u.caveat().context()));
             }
             builder.setOptionalCaveat(caveatBuilder.build());
+        }
+        if (u.expiresAt() != null) {
+            builder.setOptionalExpiresAt(Timestamp.newBuilder()
+                    .setSeconds(u.expiresAt().getEpochSecond())
+                    .setNanos(u.expiresAt().getNano())
+                    .build());
         }
         return builder.build();
     }

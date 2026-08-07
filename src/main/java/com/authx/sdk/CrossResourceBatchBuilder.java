@@ -1,16 +1,21 @@
 package com.authx.sdk;
 
-import com.authx.sdk.model.WriteResult;
+import com.authx.sdk.model.CaveatContext;
+import com.authx.sdk.model.CaveatRef;
 import com.authx.sdk.model.Permission;
 import com.authx.sdk.model.Relation;
 import com.authx.sdk.model.SubjectRef;
+import com.authx.sdk.model.WriteResult;
 import com.authx.sdk.transport.SdkTransport;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate;
 import com.authx.sdk.transport.SdkTransport.RelationshipUpdate.Operation;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /**
  * Cross-resource batch builder: atomic operations across multiple resources.
@@ -29,6 +34,9 @@ public class CrossResourceBatchBuilder {
 
     private final SdkTransport transport;
     private final ArrayList<RelationshipUpdate> updates = new ArrayList<>();
+    private int lastBatchStart = -1;
+    private int lastBatchEnd = -1;
+    private boolean lastBatchIsTouch;
 
     CrossResourceBatchBuilder(SdkTransport transport) {
         this.transport = transport;
@@ -152,6 +160,34 @@ public class CrossResourceBatchBuilder {
             return batch.on(resourceType, resourceId);
         }
 
+        /** Attach raw caveat context to the most recently appended grant. */
+        public ResourceScope withCaveat(String name, Map<String, Object> context) {
+            return withCaveat(new CaveatRef(name, context));
+        }
+
+        /** Attach typed caveat context to the most recently appended grant. */
+        public ResourceScope withCaveat(String name, CaveatContext context) {
+            return withCaveat(new CaveatRef(name, context));
+        }
+
+        /** Attach a caveat to the most recently appended grant. */
+        public ResourceScope withCaveat(CaveatRef caveat) {
+            Objects.requireNonNull(caveat, "caveat");
+            batch.rewriteLastGrant("withCaveat", update -> new RelationshipUpdate(
+                    update.operation(), update.resource(), update.relation(), update.subject(),
+                    caveat, update.expiresAt()));
+            return this;
+        }
+
+        /** Set expiration on the most recently appended grant. */
+        public ResourceScope expiringAt(Instant when) {
+            Objects.requireNonNull(when, "when");
+            batch.rewriteLastGrant("expiringAt", update -> new RelationshipUpdate(
+                    update.operation(), update.resource(), update.relation(), update.subject(),
+                    update.caveat(), when));
+            return this;
+        }
+
         /** Switch to a multi-id scope (same-type fan-out). */
         public MultiResourceScope onAll(ResourceType<?, ?> resourceType, Collection<String> resourceIds) {
             return batch.onAll(resourceType, resourceIds);
@@ -185,8 +221,10 @@ public class CrossResourceBatchBuilder {
         /** Grant the relation(s) to the given {@link SubjectRef subjects}. */
         public ResourceScope to(SubjectRef... subjects) {
             SdkRefs.requireNotEmpty(subjects, "to(...)", "subject");
+            int batchStart = scope.batch.updates.size();
             RelationshipUpdates.addTo(scope.batch.updates, scope.resourceType, scope.resourceId,
                     Operation.TOUCH, relations, subjects);
+            scope.batch.recordBatch(batchStart, Operation.TOUCH);
             return scope;
         }
 
@@ -285,6 +323,34 @@ public class CrossResourceBatchBuilder {
             return batch.onAll(type, ids);
         }
 
+        /** Attach raw caveat context to every update from the most recent fanned grant. */
+        public MultiResourceScope withCaveat(String name, Map<String, Object> context) {
+            return withCaveat(new CaveatRef(name, context));
+        }
+
+        /** Attach typed caveat context to every update from the most recent fanned grant. */
+        public MultiResourceScope withCaveat(String name, CaveatContext context) {
+            return withCaveat(new CaveatRef(name, context));
+        }
+
+        /** Attach a caveat to every update from the most recent fanned grant. */
+        public MultiResourceScope withCaveat(CaveatRef caveat) {
+            Objects.requireNonNull(caveat, "caveat");
+            batch.rewriteLastGrant("withCaveat", update -> new RelationshipUpdate(
+                    update.operation(), update.resource(), update.relation(), update.subject(),
+                    caveat, update.expiresAt()));
+            return this;
+        }
+
+        /** Set expiration on every update from the most recent fanned grant. */
+        public MultiResourceScope expiringAt(Instant when) {
+            Objects.requireNonNull(when, "when");
+            batch.rewriteLastGrant("expiringAt", update -> new RelationshipUpdate(
+                    update.operation(), update.resource(), update.relation(), update.subject(),
+                    update.caveat(), when));
+            return this;
+        }
+
         public WriteCompletion execute() { return batch.execute(); }
         public WriteCompletion commit()  { return batch.commit(); }
     }
@@ -301,8 +367,10 @@ public class CrossResourceBatchBuilder {
         /** Grant the relation(s) to the given {@link SubjectRef subjects}, fanned across all resource ids. */
         public MultiResourceScope to(SubjectRef... subjects) {
             SdkRefs.requireNotEmpty(subjects, "to(...)", "subject");
+            int batchStart = scope.batch.updates.size();
             RelationshipUpdates.addTo(scope.batch.updates, scope.resourceType, scope.resourceIds,
                     Operation.TOUCH, relations, subjects);
+            scope.batch.recordBatch(batchStart, Operation.TOUCH);
             return scope;
         }
 
@@ -365,8 +433,10 @@ public class CrossResourceBatchBuilder {
         /** Revoke the relation(s) from the given {@link SubjectRef subjects}, fanned across all resource ids. */
         public MultiResourceScope from(SubjectRef... subjects) {
             SdkRefs.requireNotEmpty(subjects, "from(...)", "subject");
+            int batchStart = scope.batch.updates.size();
             RelationshipUpdates.addTo(scope.batch.updates, scope.resourceType, scope.resourceIds,
                     Operation.DELETE, relations, subjects);
+            scope.batch.recordBatch(batchStart, Operation.DELETE);
             return scope;
         }
 
@@ -429,8 +499,10 @@ public class CrossResourceBatchBuilder {
         /** Revoke the relation(s) from the given {@link SubjectRef subjects}. */
         public ResourceScope from(SubjectRef... subjects) {
             SdkRefs.requireNotEmpty(subjects, "from(...)", "subject");
+            int batchStart = scope.batch.updates.size();
             RelationshipUpdates.addTo(scope.batch.updates, scope.resourceType, scope.resourceId,
                     Operation.DELETE, relations, subjects);
+            scope.batch.recordBatch(batchStart, Operation.DELETE);
             return scope;
         }
 
@@ -477,6 +549,27 @@ public class CrossResourceBatchBuilder {
         /** Typed batch: same type, many ids. Each id is wrapped as {@code "type:id"}. */
         public ResourceScope from(ResourceType<?, ?> subjectType, Iterable<String> ids) {
             return from(SdkRefs.typedSubjectStrings(subjectType, ids, "from(ResourceType, Iterable)"));
+        }
+    }
+
+    private void recordBatch(int start, Operation operation) {
+        lastBatchStart = start;
+        lastBatchEnd = updates.size();
+        lastBatchIsTouch = operation == Operation.TOUCH;
+    }
+
+    private void rewriteLastGrant(String method, UnaryOperator<RelationshipUpdate> rewrite) {
+        if (lastBatchStart < 0 || lastBatchStart >= lastBatchEnd) {
+            throw new IllegalStateException(
+                    "CrossResourceBatchBuilder." + method + "() requires a preceding grant(...).to(...) call");
+        }
+        if (!lastBatchIsTouch) {
+            throw new IllegalStateException(
+                    "CrossResourceBatchBuilder." + method + "() applies only to grant(...).to(...) updates, "
+                            + "not revoke(...).from(...) updates");
+        }
+        for (int index = lastBatchStart; index < lastBatchEnd; index++) {
+            updates.set(index, rewrite.apply(updates.get(index)));
         }
     }
 }
