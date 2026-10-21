@@ -191,3 +191,76 @@ The primary verification suite uses a real SpiceDB container:
 
 `spicedbE2eTest` is tagged `spicedb-e2e` and fails if Docker/Testcontainers is
 unavailable.
+
+
+## Unreleased: 3.0.3-SNAPSHOT authorization hardening
+
+The published installation above remains 3.0.2. The local snapshot adds:
+
+- Effective consistency is resolved before coalescing. Context maps (including nested
+  values) participate in request identity. Fully consistent head reads are not shared
+  with earlier in-flight reads. Waiters respect their own deadline/cancellation.
+- `client.batchCheck().add(type, id, permission, subject, context).fetchDetailed()`
+  preserves each requested cell, condition state and revision token. Duplicate cells
+  with different contexts remain separate. `fetchInSingleSnapshot()` accepts at most
+  500 cells and verifies that all actual outcomes carry the same nonblank token;
+  policy grouping may otherwise produce multiple revisions. Existing boolean matrices
+  remain available. Bulk context now survives fluent and raw transport paths.
+- Real gRPC bulk replies are bound to submitted request items; missing or mismatched items are protocol errors; reordered items are rebound by full request identity rather than permission decisions.
+- The client timeout is an operation budget across token resolution, coalescing waits,
+  retries and RPCs. Per-type timeouts may tighten it; mixed operations use the tightest
+  participating timeout. Upstream gRPC deadlines/cancellation still apply. Arbitrary
+  user SPI code must honor this context; a deadline cannot forcibly stop a blocking
+  third-party implementation that ignores cancellation.
+- Resilience state is bounded without a mandatory Caffeine runtime dependency. Active
+  or open breakers are not evicted to create new type capacity. Retry backoff honors
+  its configured maximum. Local validation/protocol failures are not retried.
+
+### Best-effort SESSION versus coordinated SESSION
+
+`ReadConsistency.session()` remains compatible best-effort, per-resource-type
+last-observed token tracking. Its `DistributedTokenStore` is a cache SPI: miss or
+failure may fall back to local state or minimize-latency reads. The suggested 60-second
+TTL belongs to that cache, not to the ZedToken itself. SESSION does not infer graph
+dependencies or guarantee monotonic concurrent token publication.
+
+For required coordination, opt into `ReadConsistency.coordinatedSession()` and
+provide a **CoordinatedTokenStore**, not just the old best-effort store:
+
+```java
+AuthxClient client = AuthxClient.builder()
+    .connection(c -> c.target(endpoint).presharedKey(key).tls(true))
+    .extend(e -> e
+        .policies(PolicyRegistry.builder()
+            .defaultPolicy(ResourcePolicy.builder()
+                .readConsistency(ReadConsistency.coordinatedSession())
+                .build())
+            .build())
+        .components(SdkComponents.builder()
+            .coordinatedTokenStore(coordinator)
+            .build()))
+    .build();
+```
+
+The coordinator's namespace must include every resource type affecting the protected
+checks. It must serialize the **actual graph mutations** across clients/processes,
+mark writes pending before dispatch, publish the real returned token before success,
+and make required reads unavailable after uncertain writes, lease loss, missing state,
+or storage failure. It must not return an older token after cache expiry. This design
+never compares opaque token strings. All SDK relationship write/delete entry points pass through
+the coordinator, even when reads use other configured resource policies. A coordinated read may not
+override its required bound with `full()` or an unrelated token; use a separate
+non-coordinated policy for intentional historical/head reads. Outcomes without an
+actual revision token cannot be accepted as coordinated decisions.
+
+The SDK does not ship a Redis implementation. A Redis get/set adapter does not meet
+this contract. Implementations must supply linearizable coordination, fencing and
+recovery; the backing SpiceDB datastore must preserve the required causal write order.
+Bootstrap/reconciliation of historical or externally written relationships is an
+application responsibility. Required reads fail closed until a safe token is published.
+Coordinating a broad namespace can serialize writes, so keep bulk writes and measure
+write throughput before production adoption. This API alone is not proof that global
+revocation works in a deployed multi-instance service.
+
+Time-based `boundedStaleness` has no implemented SpiceDB mapping and now fails
+explicitly rather than silently returning an unbounded cache snapshot.

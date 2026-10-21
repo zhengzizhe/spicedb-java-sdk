@@ -4,6 +4,7 @@ import com.authx.sdk.event.DefaultTypedEventBus;
 import com.authx.sdk.event.SdkTypedEvent;
 import com.authx.sdk.event.TypedEventBus;
 import com.authx.sdk.exception.AuthxAuthException;
+import com.authx.sdk.exception.AuthxTimeoutException;
 import com.authx.sdk.exception.AuthxInvalidArgumentException;
 import com.authx.sdk.exception.AuthxPreconditionException;
 import com.authx.sdk.exception.AuthxResourceExhaustedException;
@@ -44,26 +45,17 @@ public class ResilientTransport extends ForwardingTransport {
     private final SdkTransport delegate;
     private final PolicyRegistry policyRegistry;
     private final TypedEventBus eventBus;
-    /**
-     * Per-resource-type circuit breakers. Backed by Caffeine's W-TinyLFU
-     * eviction (true LRU + frequency tracking) — replaces the old
-     * ConcurrentHashMap+random-eviction scheme that could evict an OPEN
-     * breaker for a still-failing resource type, resetting protection.
-     *
-     * <p>W-TinyLFU keeps high-traffic types (whether failing or succeeding)
-     * and naturally evicts one-shot/low-traffic types, so a SaaS workload
-     * with 100 active tenants and 1000 dormant-tenant resource types stays
-     * correctly protected.
-     */
-    private final ConcurrentMap<String, CircuitBreaker> breakers;
-    /**
-     * Per-resource-type Retry instances. Same eviction semantics as
-     * {@link #breakers}; the removal listener on the breakers cache also
-     * evicts the corresponding retry to keep the two maps in sync.
-     */
-    private final ConcurrentMap<String, Retry> retries;
-    private final CircuitBreaker defaultBreaker;
-    private final Retry defaultRetry;
+    private record State(CircuitBreaker breaker, Retry retry, java.util.concurrent.atomic.AtomicInteger users) {
+        State(CircuitBreaker breaker, Retry retry) { this(breaker, retry, new java.util.concurrent.atomic.AtomicInteger()); }
+        boolean retain() {
+            int count;
+            do { count = users.get(); if (count < 0) return false; }
+            while (!users.compareAndSet(count, count + 1));
+            return true;
+        }
+        boolean retire() { return users.compareAndSet(0, -1); }
+    }
+    private final ConcurrentMap<String, State> states = new ConcurrentHashMap<>();
 
     // Retry budget: sliding 1-second window, max 20% retry rate
     private final LongAdder retryCount = new LongAdder();
@@ -78,26 +70,7 @@ public class ResilientTransport extends ForwardingTransport {
         this.policyRegistry = policyRegistry;
         this.eventBus = eventBus != null ? eventBus : new DefaultTypedEventBus();
         this.sdkMetrics = sdkMetrics;
-        // Caffeine-backed concurrent maps: W-TinyLFU eviction (true LRU + frequency)
-        // bounded at MAX_INSTANCES. The retries cache is the source of truth for
-        // sync — the breakers removal listener evicts the matching retry entry
-        // so the two maps never drift.
-        this.retries = com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
-                .maximumSize(MAX_INSTANCES)
-                .<String, Retry>build()
-                .asMap();
-        this.breakers = com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
-                .maximumSize(MAX_INSTANCES)
-                .<String, CircuitBreaker>removalListener((key, value, cause) -> {
-                    if (cause.wasEvicted() && value != null) {
-                        value.reset();
-                        if (key != null) retries.remove(key);
-                    }
-                })
-                .<String, CircuitBreaker>build()
-                .asMap();
-        this.defaultBreaker = createBreaker("__default__");
-        this.defaultRetry = createRetry("__default__");
+
     }
 
     public ResilientTransport(SdkTransport delegate, PolicyRegistry policyRegistry, TypedEventBus eventBus) {
@@ -140,6 +113,12 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     @Override
+    public WriteResult writeRelationships(WriteRequest request) {
+        RelationshipBatchInfo batch = RelationshipBatchInfo.from(request.updates());
+        return executeWithResilience(batch.resourceType(), () -> delegate.writeRelationships(request), !request.preconditions().isEmpty());
+    }
+
+    @Override
     public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
         RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
         return executeWithResilience(batch.resourceType(), () -> delegate.deleteRelationships(updates));
@@ -149,6 +128,11 @@ public class ResilientTransport extends ForwardingTransport {
     public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
         return executeWithResilience(resource.type(),
                 () -> delegate.readRelationships(resource, relation, consistency));
+    }
+
+    @Override
+    public List<RelationshipRecord> readRelationshipDetails(ResourceRef resource, Relation relation, Consistency consistency) {
+        return executeWithResilience(resource.type(), () -> delegate.readRelationshipDetails(resource, relation, consistency));
     }
 
     @Override
@@ -184,32 +168,39 @@ public class ResilientTransport extends ForwardingTransport {
     }
 
     public io.github.resilience4j.circuitbreaker.CircuitBreaker.State getCircuitBreakerState(String resourceType) {
-        io.github.resilience4j.circuitbreaker.CircuitBreaker breaker = breakers.get(resourceType);
-        return breaker != null ? breaker.getState() : io.github.resilience4j.circuitbreaker.CircuitBreaker.State.DISABLED;
+        State state = states.get(resourceType);
+        return state != null ? state.breaker().getState() : CircuitBreaker.State.DISABLED;
     }
 
     @Override
     public void close() {
-        breakers.values().forEach(CircuitBreaker::reset);
-        breakers.clear();
-        retries.clear();
+        states.values().forEach(state -> state.breaker().reset());
+        states.clear();
         delegate.close();
     }
 
     // ---- Internal ----
 
     private <T> T executeWithResilience(String resourceType, Supplier<T> call) {
+        return executeWithResilience(resourceType, call, false);
+    }
+
+    private <T> T executeWithResilience(String resourceType, Supplier<T> call, boolean conditionalWrite) {
         requestCount.increment();
         long startNanos = System.nanoTime();
         boolean isError = true;
 
-        CircuitBreaker breaker = resolveBreaker(resourceType);
-        Retry retry = resolveRetry(resourceType);
+        State state = resolveState(resourceType);
+        CircuitBreaker breaker = state.breaker();
+        Retry retry = state.retry();
 
         try {
             // Order: CB wraps Retry wraps call.
             // Retry failures are internal to CB — one request = one CB record.
-            Supplier<T> withRetry = Retry.decorateSupplier(retry, call);
+            // Never replay an uncertain coordinated/conditional mutation: a later
+            // precondition failure cannot prove that an earlier attempt did not commit.
+            Supplier<T> withRetry = conditionalWrite || Boolean.TRUE.equals(TokenTracker.COORDINATED_MUTATION.get())
+                    ? call : Retry.decorateSupplier(retry, call);
             Supplier<T> decorated = CircuitBreaker.decorateSupplier(breaker, withRetry);
             T result = decorated.get();
             isError = false;
@@ -217,6 +208,7 @@ public class ResilientTransport extends ForwardingTransport {
         } catch (CallNotPermittedException e) {
             throw new CircuitBreakerOpenException("Circuit breaker is OPEN for " + resourceType, e);
         } finally {
+            state.users().decrementAndGet();
             if (sdkMetrics != null) {
                 long micros = (System.nanoTime() - startNanos) / 1_000;
                 sdkMetrics.recordRequest(micros, isError);
@@ -224,16 +216,26 @@ public class ResilientTransport extends ForwardingTransport {
         }
     }
 
-    private CircuitBreaker resolveBreaker(String resourceType) {
-        // Caffeine-backed map: W-TinyLFU handles eviction automatically when
-        // size exceeds MAX_INSTANCES, with proper LRU + frequency tracking.
-        // The removal listener reset()s the evicted breaker and drops the
-        // matching retry entry so the two maps stay in sync.
-        return breakers.computeIfAbsent(resourceType, this::createBreaker);
-    }
-
-    private Retry resolveRetry(String resourceType) {
-        return retries.computeIfAbsent(resourceType, this::createRetry);
+    private State resolveState(String resourceType) {
+        State current = states.get(resourceType);
+        if (current != null && current.retain()) return current;
+        synchronized (states) {
+            current = states.get(resourceType);
+            if (current != null && current.retain()) return current;
+            if (states.size() >= MAX_INSTANCES) {
+                String evict = states.entrySet().stream()
+                        .filter(entry -> (entry.getValue().breaker().getState() == CircuitBreaker.State.CLOSED
+                                || entry.getValue().breaker().getState() == CircuitBreaker.State.DISABLED)
+                                && entry.getValue().retire())
+                        .map(java.util.Map.Entry::getKey).findFirst().orElse(null);
+                if (evict == null) throw new AuthxResourceExhaustedException("SDK resilience registry is full of active circuit breakers");
+                states.remove(evict);
+            }
+            State created = new State(createBreaker(resourceType), createRetry(resourceType));
+            created.retain();
+            states.put(resourceType, created);
+            return created;
+        }
     }
 
     private CircuitBreaker createBreaker(String resourceType) {
@@ -313,10 +315,17 @@ public class ResilientTransport extends ForwardingTransport {
 
         RetryConfig config = RetryConfig.custom()
                 .maxAttempts(policy.maxAttempts())
-                .intervalFunction(io.github.resilience4j.core.IntervalFunction.ofExponentialRandomBackoff(
-                        policy.baseDelay().toMillis(), policy.multiplier(), policy.jitterFactor()))
+                .intervalFunction(attempt -> {
+                    long delay = policy.delayForAttempt(Math.max(0, attempt - 1)).toMillis();
+                    io.grpc.Deadline deadline = io.grpc.Context.current().getDeadline();
+                    if (deadline == null) return delay;
+                    long remaining = deadline.timeRemaining(java.util.concurrent.TimeUnit.MILLISECONDS);
+                    if (remaining <= 0) throw new AuthxTimeoutException("Retry deadline expired");
+                    return Math.min(delay, remaining);
+                })
                 .retryOnException(t -> {
-                    if (!(t instanceof Exception e) || !policy.shouldRetry(e)) {
+                    if (Thread.currentThread().isInterrupted() || io.grpc.Context.current().isCancelled()
+                            || !(t instanceof Exception e) || !policy.shouldRetry(e)) {
                         return false;
                     }
                     if (!checkRetryBudget()) {

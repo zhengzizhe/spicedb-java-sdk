@@ -7,6 +7,7 @@ import com.authx.sdk.spi.SdkComponents;
 import com.authx.sdk.spi.SdkInterceptor;
 import com.authx.sdk.telemetry.TelemetryReporter;
 import com.authx.sdk.transport.CoalescingTransport;
+import com.authx.sdk.transport.DeadlineTransport;
 import com.authx.sdk.transport.GrpcTransport;
 import com.authx.sdk.transport.InstrumentedTransport;
 import com.authx.sdk.transport.InterceptorTransport;
@@ -22,7 +23,7 @@ import java.util.List;
  *
  * <p>Order is innermost to outermost:
  * {@code GrpcTransport -> ResilientTransport -> InstrumentedTransport? ->
- * PolicyAwareConsistencyTransport -> CoalescingTransport? ->
+ * CoalescingTransport? -> PolicyAwareConsistencyTransport -> DeadlineTransport ->
  * InterceptorTransport?}.
  */
 final class TransportStackFactory {
@@ -54,14 +55,16 @@ final class TransportStackFactory {
                     request.sdkMetrics());
         }
 
+        if (request.coalescingEnabled()) {
+            transport = new CoalescingTransport(transport, request.sdkMetrics());
+        }
         transport = new PolicyAwareConsistencyTransport(
                 transport,
                 request.policies(),
                 request.tokenTracker());
 
-        if (request.coalescingEnabled()) {
-            transport = new CoalescingTransport(transport, request.sdkMetrics());
-        }
+        transport = new DeadlineTransport(
+                transport, request.policies(), request.requestTimeoutMs());
         if (!request.effectiveInterceptors().isEmpty()) {
             transport = new InterceptorTransport(transport, request.effectiveInterceptors());
         }

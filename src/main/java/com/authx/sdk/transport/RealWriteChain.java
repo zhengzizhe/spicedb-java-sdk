@@ -51,7 +51,7 @@ public final class RealWriteChain implements WriteChain {
     public WriteResult proceed(WriteRequest request) {
         if (index >= interceptors.size()) {
             // End of chain — execute the actual transport call
-            return transport.writeRelationships(request.updates());
+            return transport.writeRelationships(request);
         }
         // Create next chain with incremented index and (possibly modified) request
         RealWriteChain next = new RealWriteChain(interceptors, index + 1, request, transport, ctx);

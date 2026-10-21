@@ -161,6 +161,17 @@ public class AuthxClient implements AutoCloseable {
         return new TypedResourceEntry<>(dynamic(resourceType.name()), resourceType);
     }
 
+    /** Execute an atomic relationship write, including optional existence preconditions. */
+    public com.authx.sdk.model.WriteResult write(com.authx.sdk.model.WriteRequest request) {
+        return transport.writeRelationships(Objects.requireNonNull(request, "request"));
+    }
+
+    /** Read relationship caveats and expiration as well as identity fields. */
+    public java.util.List<com.authx.sdk.model.RelationshipRecord> readRelationshipDetails(
+            com.authx.sdk.model.ResourceRef resource, Relation relation, com.authx.sdk.model.Consistency consistency) {
+        return transport.readRelationshipDetails(resource, relation, consistency);
+    }
+
     /**
      * Start a cross-resource batch builder for atomic operations across
      * multiple resources. Terminal {@code commit()} / {@code execute()} returns

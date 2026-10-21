@@ -1,6 +1,7 @@
 package com.authx.sdk.transport;
 
 import com.authx.sdk.model.*;
+import com.authx.sdk.exception.TokenStoreUnavailableException;
 import com.authx.sdk.policy.PolicyRegistry;
 import com.authx.sdk.policy.ReadConsistency;
 import java.util.ArrayList;
@@ -15,11 +16,12 @@ import java.util.Set;
  * ReadConsistency, and TokenTracker to map it to concrete SpiceDB Consistency.
  *
  * <p>When the user passes minimizeLatency() but the policy for this resource type says SESSION,
- * we upgrade to atLeast(lastWriteToken). If the policy says BOUNDED_STALENESS(5s),
- * we use a token from 5 seconds ago.
+ * we upgrade to atLeast(lastWriteToken). Time-based bounded staleness is unsupported
+ * and fails explicitly rather than silently selecting a weaker consistency.
  *
  * <p>When the user explicitly passes a non-default consistency (full(), atLeast(), atExactSnapshot()),
- * we respect it — explicit always wins over policy.
+ * we respect it for legacy policies. A coordinated-session policy requires its
+ * shared bound and rejects overrides that cannot prove the same requirement.
  */
 public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
@@ -42,24 +44,33 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     public CheckResult check(CheckRequest request) {
         CheckRequest adjusted = request.withConsistency(
                 resolveConsistency(request.resource().type(), request.consistency()));
-        return delegate.check(adjusted);
+        CheckResult result = delegate.check(adjusted);
+        requireCoordinatedOutcome(request.resource().type(), result);
+        return result;
     }
 
     @Override
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
         CheckRequest adjusted = request.withConsistency(
                 resolveConsistency(request.resource().type(), request.consistency()));
-        return delegate.checkBulk(adjusted, subjects);
+        BulkCheckResult result = delegate.checkBulk(adjusted, subjects);
+        result.asMap().values().forEach(item -> requireCoordinatedOutcome(request.resource().type(), item));
+        return result;
     }
 
     @Override
     public List<CheckResult> checkBulkMulti(List<BulkCheckItem> items, Consistency consistency) {
         if (items.isEmpty()) return List.of();
 
+        // One required namespace token for this whole operation, including related resource types.
+        Consistency sharedBound = items.stream().anyMatch(item -> isCoordinated(item.resource().type()))
+                ? tokenTracker.resolve(ReadConsistency.coordinatedSession(), items.getFirst().resource().type()) : null;
+        Map<String, Consistency> byType = new LinkedHashMap<>();
         Map<Consistency, List<IndexedBulkCheckItem>> groups = new LinkedHashMap<>();
         for (int i = 0; i < items.size(); i++) {
             BulkCheckItem item = items.get(i);
-            Consistency effective = resolveConsistency(item.resource().type(), consistency);
+            Consistency effective = byType.computeIfAbsent(item.resource().type(),
+                    type -> resolveConsistency(type, consistency, sharedBound));
             groups.computeIfAbsent(effective, ignored -> new ArrayList<>())
                     .add(new IndexedBulkCheckItem(i, item));
         }
@@ -77,6 +88,7 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
             int resultCount = Math.min(groupResults.size(), entry.getValue().size());
             for (int i = 0; i < resultCount; i++) {
                 CheckResult result = groupResults.get(i);
+                requireCoordinatedOutcome(entry.getValue().get(i).item().resource().type(), result);
                 ordered.set(entry.getValue().get(i).index(),
                         result != null ? result : CheckResult.denied(null));
             }
@@ -87,14 +99,20 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
 
     @Override
     public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
-        WriteResult result = delegate.writeRelationships(updates);
+        return writeRelationships(new WriteRequest(updates));
+    }
+
+    @Override
+    public WriteResult writeRelationships(WriteRequest request) {
+        List<RelationshipUpdate> updates = request.updates();
+        WriteResult result = tokenTracker.executeWrite(() -> delegate.writeRelationships(request));
         recordWriteForTouchedResourceTypes(updates, result.zedToken());
         return result;
     }
 
     @Override
     public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
-        WriteResult result = delegate.deleteRelationships(updates);
+        WriteResult result = tokenTracker.executeWrite(() -> delegate.deleteRelationships(updates));
         recordWriteForTouchedResourceTypes(updates, result.zedToken());
         return result;
     }
@@ -103,6 +121,11 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
         return delegate.readRelationships(resource, relation,
                 resolveConsistency(resource.type(), consistency));
+    }
+
+    @Override
+    public List<RelationshipRecord> readRelationshipDetails(ResourceRef resource, Relation relation, Consistency consistency) {
+        return delegate.readRelationshipDetails(resource, relation, resolveConsistency(resource.type(), consistency));
     }
 
     @Override
@@ -122,18 +145,39 @@ public class PolicyAwareConsistencyTransport extends ForwardingTransport {
     @Override
     public WriteResult deleteByFilter(ResourceRef resource, SubjectRef subject,
                                         Relation optionalRelation) {
-        WriteResult result = delegate.deleteByFilter(resource, subject, optionalRelation);
+        WriteResult result = tokenTracker.executeWrite(() -> delegate.deleteByFilter(resource, subject, optionalRelation));
         tokenTracker.recordWrite(resource.type(), result.zedToken());
         return result;
     }
 
     /**
      * If the user passed minimizeLatency (the default), apply the policy for this resource type.
-     * If the user explicitly passed full/atLeast/atExactSnapshot, respect it.
+     * Legacy policies accept explicit full/atLeast/atExactSnapshot. Coordinated
+     * policies accept only the default or the currently required shared bound.
      */
     private Consistency resolveConsistency(String resourceType, Consistency requested) {
+        return resolveConsistency(resourceType, requested, null);
+    }
+
+    private boolean isCoordinated(String resourceType) {
+        return policyRegistry.resolveReadConsistency(resourceType) instanceof ReadConsistency.CoordinatedSession;
+    }
+
+    private void requireCoordinatedOutcome(String type, CheckResult result) {
+        if (isCoordinated(type) && (result == null || result.zedToken() == null || result.zedToken().isBlank())) {
+            throw new TokenStoreUnavailableException("Required check has no actual snapshot token");
+        }
+    }
+
+    private Consistency resolveConsistency(String resourceType, Consistency requested, Consistency sharedBound) {
         Consistency effective;
-        if (!(requested instanceof Consistency.MinimizeLatency)) {
+        if (isCoordinated(resourceType)) {
+            effective = sharedBound == null
+                    ? tokenTracker.resolve(ReadConsistency.coordinatedSession(), resourceType) : sharedBound;
+            if (!(requested instanceof Consistency.MinimizeLatency) && !effective.equals(requested)) {
+                throw new IllegalArgumentException("Cannot override the required coordinated-session bound");
+            }
+        } else if (!(requested instanceof Consistency.MinimizeLatency)) {
             effective = requested; // explicit user choice wins
         } else {
             ReadConsistency policy = policyRegistry.resolveReadConsistency(resourceType);

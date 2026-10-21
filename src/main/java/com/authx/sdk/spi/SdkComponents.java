@@ -28,8 +28,15 @@ public record SdkComponents(
         TelemetrySink telemetrySink,
         SdkClock clock,
         @Nullable DistributedTokenStore tokenStore,
-        @Nullable HealthProbe healthProbe
+        @Nullable HealthProbe healthProbe,
+        @Nullable CoordinatedTokenStore coordinatedTokenStore
 ) {
+    /** Compatibility constructor for existing integrations. */
+    public SdkComponents(TelemetrySink sink, SdkClock clock,
+                         @Nullable DistributedTokenStore tokens, @Nullable HealthProbe health) {
+        this(sink, clock, tokens, health, null);
+    }
+
     public static SdkComponents defaults() {
         return new SdkComponents(TelemetrySink.NOOP, SdkClock.SYSTEM, null, null);
     }
@@ -41,6 +48,7 @@ public record SdkComponents(
         private SdkClock clock = SdkClock.SYSTEM;
         private DistributedTokenStore tokenStore;
         private HealthProbe healthProbe;
+        private CoordinatedTokenStore coordinatedTokenStore;
 
         /** Telemetry export sink (Kafka, OTLP, file). Default: noop. */
         public Builder telemetrySink(TelemetrySink sink) { this.telemetrySink = sink; return this; }
@@ -58,8 +66,14 @@ public record SdkComponents(
          */
         public Builder healthProbe(HealthProbe probe) { this.healthProbe = probe; return this; }
 
+        /** Opt into required, cross-client token coordination for one authorization namespace. */
+        public Builder coordinatedTokenStore(CoordinatedTokenStore store) {
+            this.coordinatedTokenStore = java.util.Objects.requireNonNull(store, "store");
+            return this;
+        }
+
         public SdkComponents build() {
-            return new SdkComponents(telemetrySink, clock, tokenStore, healthProbe);
+            return new SdkComponents(telemetrySink, clock, tokenStore, healthProbe, coordinatedTokenStore);
         }
     }
 }

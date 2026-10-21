@@ -1,6 +1,11 @@
 package com.authx.sdk;
 
 import com.authx.sdk.model.CheckMatrix;
+import com.authx.sdk.model.CheckRequest;
+import com.authx.sdk.model.DetailedBulkCheckResult;
+import com.authx.sdk.model.CaveatContext;
+import com.authx.sdk.exception.AuthxProtocolException;
+import java.util.Map;
 import com.authx.sdk.model.CheckResult;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.model.Permission;
@@ -53,7 +58,7 @@ public final class BatchCheckBuilder {
     /** Add one (resourceType, id, permission, subject) cell to the batch. */
     public BatchCheckBuilder add(String resourceType, String resourceId,
                                   Permission.Named permission, SubjectRef subject) {
-        entries.add(new Entry(resourceType, resourceId, permission.permissionName(), subject));
+        entries.add(new Entry(resourceType, resourceId, permission.permissionName(), subject, null));
         return this;
     }
 
@@ -111,7 +116,7 @@ public final class BatchCheckBuilder {
     public BatchCheckBuilder addAll(Collection<Cell> cells) {
         SdkRefs.requireNotEmpty(cells, "addAll(...)", "cell");
         for (Cell c : cells) {
-            entries.add(new Entry(c.resourceType, c.resourceId, c.permission, c.subject));
+            entries.add(new Entry(c.resourceType, c.resourceId, c.permission, c.subject, c.context));
         }
         return this;
     }
@@ -121,7 +126,14 @@ public final class BatchCheckBuilder {
      * feeding them in via {@link #addAll(Collection)}. Useful when the
      * cells are computed dynamically (e.g., from a search result set).
      */
-    public record Cell(String resourceType, String resourceId, String permission, SubjectRef subject) {
+    public record Cell(String resourceType, String resourceId, String permission, SubjectRef subject,
+                       @org.jspecify.annotations.Nullable Map<String, Object> context) {
+        public Cell {
+            context = context == null ? null : CaveatContext.of(context).values();
+        }
+        public Cell(String resourceType, String resourceId, String permission, SubjectRef subject) {
+            this(resourceType, resourceId, permission, subject, null);
+        }
         public static Cell of(ResourceType<?, ?> type, String id,
                               Permission.Named perm, SubjectRef subject) {
             return new Cell(type.name(), id, perm.permissionName(), subject);
@@ -132,7 +144,7 @@ public final class BatchCheckBuilder {
     /** String-based overload for dynamic-permission cases. */
     public BatchCheckBuilder add(String resourceType, String resourceId,
                                   String permission, SubjectRef subject) {
-        entries.add(new Entry(resourceType, resourceId, permission, subject));
+        entries.add(new Entry(resourceType, resourceId, permission, subject, null));
         return this;
     }
 
@@ -143,6 +155,46 @@ public final class BatchCheckBuilder {
      * {@code (resourceType:resourceId, permission, subject.toRefString())}.
      */
     public CheckMatrix fetch() {
+        List<DetailedBulkCheckResult.Item> results = execute(false).items();
+        CheckMatrix.Builder matrix = CheckMatrix.builder();
+        for (DetailedBulkCheckResult.Item item : results) {
+            CheckRequest request = item.request();
+            matrix.add(request.resource().type() + ":" + request.resource().id(),
+                    request.permission().name(), request.subject().toRefString(),
+                    item.result().hasPermission());
+        }
+        return matrix.build();
+    }
+
+    /** Add an independent condition context; the map is snapshotted before deferred execution. */
+    public BatchCheckBuilder add(String type, String id, String permission, SubjectRef subject,
+                                 Map<String, Object> context) {
+        entries.add(new Entry(type, id, permission, subject, CaveatContext.of(context).values()));
+        return this;
+    }
+
+    public BatchCheckBuilder add(ResourceType<?, ?> type, String id, Permission.Named permission,
+                                 SubjectRef subject, Map<String, Object> context) {
+        return add(type.name(), id, permission.permissionName(), subject, context);
+    }
+
+    public BatchCheckBuilder add(String type, String id, String permission, SubjectRef subject,
+                                 CaveatContext context) {
+        return add(type, id, permission, subject, context.values());
+    }
+
+    /** Retain condition states and tokens in request order, without collapsing duplicate cells. */
+    public DetailedBulkCheckResult fetchDetailed() { return execute(true); }
+
+    /** Require a bounded set of checks whose actual result tokens prove one common snapshot. */
+    public DetailedBulkCheckResult fetchInSingleSnapshot() {
+        if (entries.size() > 500) throw new IllegalArgumentException("A single snapshot supports at most 500 items");
+        DetailedBulkCheckResult result = execute(true);
+        result.requireSingleSnapshotToken();
+        return result;
+    }
+
+    private DetailedBulkCheckResult execute(boolean requireComplete) {
         if (entries.isEmpty()) {
             throw new IllegalStateException("batchCheck fetch requires at least one entry");
         }
@@ -151,18 +203,22 @@ public final class BatchCheckBuilder {
             items.add(new SdkTransport.BulkCheckItem(
                     ResourceRef.of(e.resourceType, e.resourceId),
                     Permission.of(e.permission),
-                    e.subject));
+                    e.subject, e.context));
         }
         List<CheckResult> results = transport.checkBulkMulti(items, consistency);
-        CheckMatrix.Builder b = CheckMatrix.builder();
-        for (int i = 0; i < entries.size(); i++) {
-            Entry e = entries.get(i);
-            String compositeId = e.resourceType + ":" + e.resourceId;
-            boolean allowed = i < results.size() && results.get(i).hasPermission();
-            b.add(compositeId, e.permission, e.subject.toRefString(), allowed);
+        if (requireComplete && results.size() != entries.size()) {
+            throw new AuthxProtocolException("Bulk response count does not match submitted checks");
         }
-        return b.build();
+        List<DetailedBulkCheckResult.Item> detailed = new ArrayList<>(entries.size());
+        for (int i = 0; i < entries.size(); i++) {
+            SdkTransport.BulkCheckItem item = items.get(i);
+            CheckResult result = i < results.size() ? results.get(i) : CheckResult.denied(null);
+            if (result == null) throw new AuthxProtocolException("Null bulk check outcome");
+            detailed.add(new DetailedBulkCheckResult.Item(new CheckRequest(item.resource(),
+                    item.permission(), item.subject(), consistency, item.caveatContext()), result));
+        }
+        return new DetailedBulkCheckResult(detailed);
     }
 
-    private record Entry(String resourceType, String resourceId, String permission, SubjectRef subject) {}
+    private record Entry(String resourceType, String resourceId, String permission, SubjectRef subject, Map<String, Object> context) {}
 }

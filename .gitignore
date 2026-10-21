@@ -13,3 +13,6 @@ build/
 *.db
 .beads-credential-key
 .gitnexus
+
+# Required to bootstrap the checked-in Gradle wrapper.
+!gradle/wrapper/gradle-wrapper.jar

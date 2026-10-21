@@ -238,7 +238,7 @@ public class TypedCheckAction {
                     items.add(new SdkTransport.BulkCheckItem(
                             ResourceRef.of(resourceType, id),
                             Permission.of(perm),
-                            sub));
+                            sub, context));
                     cellIds[k] = id;
                     cellPerms[k] = perm;
                     cellSubjects[k] = sub.toRefString();

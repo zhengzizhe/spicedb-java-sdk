@@ -38,7 +38,7 @@ public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkL
     default List<CheckResult> checkBulkMulti(List<BulkCheckItem> items, Consistency consistency) {
         List<CheckResult> results = new ArrayList<>(items.size());
         for (SdkTransport.BulkCheckItem item : items) {
-            results.add(check(CheckRequest.of(item.resource(), item.permission(), item.subject(), consistency)));
+            results.add(check(new CheckRequest(item.resource(), item.permission(), item.subject(), consistency, item.caveatContext())));
         }
         return results;
     }
@@ -85,7 +85,18 @@ public interface SdkTransport extends SdkCheckTransport, SdkWriteTransport, SdkL
     /**
      * Bulk check item: a single (resource, permission, subject) tuple.
      */
-    record BulkCheckItem(ResourceRef resource, Permission permission, SubjectRef subject) {}
+    record BulkCheckItem(ResourceRef resource, Permission permission, SubjectRef subject,
+                         @org.jspecify.annotations.Nullable Map<String, Object> caveatContext) {
+        public BulkCheckItem {
+            java.util.Objects.requireNonNull(resource, "resource");
+            java.util.Objects.requireNonNull(permission, "permission");
+            java.util.Objects.requireNonNull(subject, "subject");
+            caveatContext = caveatContext == null ? null : CaveatContext.of(caveatContext).values();
+        }
+        public BulkCheckItem(ResourceRef resource, Permission permission, SubjectRef subject) {
+            this(resource, permission, subject, null);
+        }
+    }
 
     /**
      * A relationship write/delete operation.

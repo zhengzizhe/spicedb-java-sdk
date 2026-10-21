@@ -26,6 +26,7 @@ public record CheckRequest(
         Objects.requireNonNull(permission, "permission");
         Objects.requireNonNull(subject, "subject");
         Objects.requireNonNull(consistency, "consistency");
+        caveatContext = caveatContext == null ? null : CaveatContext.of(caveatContext).values();
     }
 
     /**

@@ -5,6 +5,7 @@ import com.authx.sdk.exception.AuthxConnectionException;
 import com.authx.sdk.exception.AuthxException;
 import com.authx.sdk.exception.AuthxInvalidArgumentException;
 import com.authx.sdk.exception.AuthxPreconditionException;
+import com.authx.sdk.exception.AuthxProtocolException;
 import com.authx.sdk.exception.AuthxResourceExhaustedException;
 import com.authx.sdk.exception.AuthxTimeoutException;
 import com.authx.sdk.exception.AuthxUnimplementedException;
@@ -13,6 +14,7 @@ import com.authx.sdk.model.enums.Permissionship;
 import com.authx.sdk.trace.LogCtx;
 import com.authzed.api.v1.AlgebraicSubjectSet;
 import com.authzed.api.v1.CheckBulkPermissionsRequest;
+import com.authzed.api.v1.CheckBulkPermissionsResponse;
 import com.authzed.api.v1.CheckBulkPermissionsRequestItem;
 import com.authzed.api.v1.CheckPermissionRequest;
 import com.authzed.api.v1.DeleteRelationshipsRequest;
@@ -62,7 +64,7 @@ public class GrpcTransport implements SdkTransport {
      * Shared JVM-wide (static) because the tasks it runs are trivial and
      * creating one per-instance would leak if clients are short-lived.
      */
-    private static final ScheduledExecutorService DEADLINE_SCHEDULER =
+    static final ScheduledExecutorService DEADLINE_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "authx-grpc-deadline");
                 t.setDaemon(true);
@@ -114,19 +116,22 @@ public class GrpcTransport implements SdkTransport {
         List<String> subjectRefs = new ArrayList<>(subjects.size());
         for (SubjectRef sub : subjects) {
             subjectRefs.add(sub.toRefString());
-            builder.addItems(CheckBulkPermissionsRequestItem.newBuilder()
+            CheckBulkPermissionsRequestItem.Builder item = CheckBulkPermissionsRequestItem.newBuilder()
                     .setResource(objRef(request.resource()))
                     .setPermission(request.permission().name())
-                    .setSubject(subRef(sub)));
+                    .setSubject(subRef(sub));
+            if (request.caveatContext() != null && !request.caveatContext().isEmpty()) item.setContext(toStruct(request.caveatContext()));
+            builder.addItems(item);
         }
 
         com.authzed.api.v1.CheckBulkPermissionsResponse response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
 
         Map<String, CheckResult> results = new LinkedHashMap<>();
         String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
+        List<com.authzed.api.v1.CheckBulkPermissionsPair> pairs = bindPairs(builder.build(), response);
         for (int i = 0; i < subjectRefs.size(); i++) {
             CheckResult result = i < response.getPairsCount()
-                    ? mapBulkPair(response.getPairs(i), bulkToken)
+                    ? mapBulkPair(pairs.get(i), bulkToken)
                     : CheckResult.denied(bulkToken);
             results.put(subjectRefs.get(i), result);
         }
@@ -153,23 +158,52 @@ public class GrpcTransport implements SdkTransport {
         com.authzed.api.v1.CheckBulkPermissionsRequest.Builder builder = CheckBulkPermissionsRequest.newBuilder()
                 .setConsistency(toGrpc(consistency));
         for (SdkTransport.BulkCheckItem item : items) {
-            builder.addItems(CheckBulkPermissionsRequestItem.newBuilder()
+            CheckBulkPermissionsRequestItem.Builder grpcItem = CheckBulkPermissionsRequestItem.newBuilder()
                     .setResource(objRef(item.resource()))
                     .setPermission(item.permission().name())
-                    .setSubject(subRef(item.subject())));
+                    .setSubject(subRef(item.subject()));
+            if (item.caveatContext() != null && !item.caveatContext().isEmpty()) grpcItem.setContext(toStruct(item.caveatContext()));
+            builder.addItems(grpcItem);
         }
 
         com.authzed.api.v1.CheckBulkPermissionsResponse response = withErrorHandling(() -> stub().checkBulkPermissions(builder.build()));
         String bulkToken = response.hasCheckedAt() ? response.getCheckedAt().getToken() : null;
 
+        List<com.authzed.api.v1.CheckBulkPermissionsPair> pairs = bindPairs(builder.build(), response);
         List<CheckResult> results = new ArrayList<>(items.size());
         for (int i = 0; i < items.size(); i++) {
             CheckResult result = i < response.getPairsCount()
-                    ? mapBulkPair(response.getPairs(i), bulkToken)
+                    ? mapBulkPair(pairs.get(i), bulkToken)
                     : CheckResult.denied(bulkToken);
             results.add(result);
         }
         return results;
+    }
+
+    private static List<com.authzed.api.v1.CheckBulkPermissionsPair> bindPairs(
+            CheckBulkPermissionsRequest request, CheckBulkPermissionsResponse response) {
+        if (request.getItemsCount() != response.getPairsCount()) {
+            throw new AuthxProtocolException("SpiceDB bulk response item count mismatch");
+        }
+        Map<CheckBulkPermissionsRequestItem, java.util.ArrayDeque<com.authzed.api.v1.CheckBulkPermissionsPair>> byRequest = new LinkedHashMap<>();
+        for (com.authzed.api.v1.CheckBulkPermissionsPair pair : response.getPairsList()) {
+            if (!pair.hasRequest() || (!pair.hasItem() && !pair.hasError())) {
+                throw new AuthxProtocolException("SpiceDB bulk response has no request or outcome");
+            }
+            byRequest.computeIfAbsent(pair.getRequest(), ignored -> new java.util.ArrayDeque<>()).add(pair);
+        }
+        List<com.authzed.api.v1.CheckBulkPermissionsPair> ordered = new ArrayList<>();
+        for (CheckBulkPermissionsRequestItem item : request.getItemsList()) {
+            java.util.ArrayDeque<com.authzed.api.v1.CheckBulkPermissionsPair> matches = byRequest.get(item);
+            if (matches == null || matches.isEmpty()) {
+                throw new AuthxProtocolException("SpiceDB bulk response is not bound to its request");
+            }
+            ordered.add(matches.removeFirst());
+        }
+        if (byRequest.values().stream().anyMatch(matches -> !matches.isEmpty())) {
+            throw new AuthxProtocolException("SpiceDB bulk response contains unmatched outcomes");
+        }
+        return ordered;
     }
 
     static CheckResult mapBulkPair(com.authzed.api.v1.CheckBulkPermissionsPair pair, String bulkToken) {
@@ -186,7 +220,33 @@ public class GrpcTransport implements SdkTransport {
 
     @Override
     public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
+        return writeRelationships(new WriteRequest(updates));
+    }
+
+    @Override
+    public WriteResult writeRelationships(WriteRequest request) {
+        List<RelationshipUpdate> updates = request.updates();
         com.authzed.api.v1.WriteRelationshipsRequest.Builder builder = WriteRelationshipsRequest.newBuilder();
+        for (com.authx.sdk.model.RelationshipPrecondition precondition : request.preconditions()) {
+            com.authx.sdk.model.RelationshipFilter filter = precondition.filter();
+            com.authzed.api.v1.RelationshipFilter.Builder selector = com.authzed.api.v1.RelationshipFilter.newBuilder()
+                    .setResourceType(filter.resourceType());
+            if (filter.resourceId() != null) selector.setOptionalResourceId(filter.resourceId());
+            if (filter.relation() != null) selector.setOptionalRelation(filter.relation());
+            if (filter.subjectType() != null) {
+                com.authzed.api.v1.SubjectFilter.Builder subject = com.authzed.api.v1.SubjectFilter.newBuilder()
+                        .setSubjectType(filter.subjectType());
+                if (filter.subjectId() != null) subject.setOptionalSubjectId(filter.subjectId());
+                if (filter.subjectRelation() != null) subject.setOptionalRelation(
+                        com.authzed.api.v1.SubjectFilter.RelationFilter.newBuilder().setRelation(filter.subjectRelation()));
+                selector.setOptionalSubjectFilter(subject);
+            }
+            builder.addOptionalPreconditions(com.authzed.api.v1.Precondition.newBuilder()
+                    .setOperation(precondition.operation() == com.authx.sdk.model.RelationshipPrecondition.Operation.MUST_MATCH
+                            ? com.authzed.api.v1.Precondition.Operation.OPERATION_MUST_MATCH
+                            : com.authzed.api.v1.Precondition.Operation.OPERATION_MUST_NOT_MATCH)
+                    .setFilter(selector));
+        }
         for (SdkTransport.RelationshipUpdate u : updates) {
             builder.addUpdates(com.authzed.api.v1.RelationshipUpdate.newBuilder()
                     .setOperation(toGrpcOp(u.operation()))
@@ -212,6 +272,11 @@ public class GrpcTransport implements SdkTransport {
 
     @Override
     public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
+        return readRelationshipDetails(resource, relation, consistency).stream().map(RelationshipRecord::tuple).toList();
+    }
+
+    @Override
+    public List<RelationshipRecord> readRelationshipDetails(ResourceRef resource, Relation relation, Consistency consistency) {
         com.authzed.api.v1.RelationshipFilter.Builder filterBuilder = RelationshipFilter.newBuilder()
                 .setResourceType(resource.type())
                 .setOptionalResourceId(resource.id());
@@ -225,22 +290,44 @@ public class GrpcTransport implements SdkTransport {
 
         try (CloseableGrpcIterator<com.authzed.api.v1.ReadRelationshipsResponse> iterator = CloseableGrpcIterator.from(
                 () -> stub().readRelationships(request), newCallContext())) {
-            List<Tuple> tuples = new ArrayList<>();
+            List<RelationshipRecord> tuples = new ArrayList<>();
             while (iterator.hasNext()) {
                 com.authzed.api.v1.ReadRelationshipsResponse resp = iterator.next();
                 com.authzed.api.v1.Relationship rel = resp.getRelationship();
                 String subRel = rel.getSubject().getOptionalRelation();
-                tuples.add(new Tuple(
+                Tuple tuple = new Tuple(
                         rel.getResource().getObjectType(), rel.getResource().getObjectId(),
                         rel.getRelation(),
                         rel.getSubject().getObject().getObjectType(),
                         rel.getSubject().getObject().getObjectId(),
-                        subRel.isEmpty() ? null : subRel));
+                        subRel.isEmpty() ? null : subRel);
+                CaveatRef caveat = rel.hasOptionalCaveat()
+                        ? new CaveatRef(rel.getOptionalCaveat().getCaveatName(), decodeStruct(rel.getOptionalCaveat().getContext())) : null;
+                Instant expires = rel.hasOptionalExpiresAt() ? Instant.ofEpochSecond(
+                        rel.getOptionalExpiresAt().getSeconds(), rel.getOptionalExpiresAt().getNanos()) : null;
+                tuples.add(new RelationshipRecord(tuple, caveat, expires));
             }
             return tuples;
         } catch (StatusRuntimeException e) {
             throw mapGrpcException(e);
         }
+    }
+
+    private static Map<String, Object> decodeStruct(com.google.protobuf.Struct struct) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        struct.getFieldsMap().forEach((key, value) -> result.put(key, decodeValue(value)));
+        return result;
+    }
+
+    private static Object decodeValue(com.google.protobuf.Value value) {
+        return switch (value.getKindCase()) {
+            case NULL_VALUE, KIND_NOT_SET -> null;
+            case BOOL_VALUE -> value.getBoolValue();
+            case STRING_VALUE -> value.getStringValue();
+            case NUMBER_VALUE -> java.math.BigDecimal.valueOf(value.getNumberValue()).stripTrailingZeros();
+            case STRUCT_VALUE -> decodeStruct(value.getStructValue());
+            case LIST_VALUE -> value.getListValue().getValuesList().stream().map(GrpcTransport::decodeValue).toList();
+        };
     }
 
     @Override

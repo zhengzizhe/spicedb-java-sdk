@@ -18,7 +18,7 @@ import java.util.concurrent.TimeoutException;
 public class CoalescingTransport extends ForwardingTransport {
 
     /** Structured coalescing key — uses record equals/hashCode, avoids String allocation. */
-    private record CoalescingKey(ResourceRef resource, Permission permission, SubjectRef subject, Consistency consistency) {}
+    private record CoalescingKey(ResourceRef resource, Permission permission, SubjectRef subject, Consistency consistency, java.util.Map<String, Object> context) {}
 
     private final SdkTransport delegate;
     private final SdkMetrics metrics;
@@ -40,7 +40,11 @@ public class CoalescingTransport extends ForwardingTransport {
 
     @Override
     public CheckResult check(CheckRequest request) {
-        CoalescingTransport.CoalescingKey key = new CoalescingKey(request.resource(), request.permission(), request.subject(), request.consistency());
+        // A head read belongs to this invocation; reusing an older in-flight head read
+        // can miss a write completed before this request began.
+        if (request.consistency() instanceof Consistency.Full) return delegate.check(request);
+        CoalescingKey key = new CoalescingKey(request.resource(), request.permission(),
+                request.subject(), request.consistency(), request.caveatContext());
 
         // Try to be the "owner" of this request
         CompletableFuture<CheckResult> myFuture = new CompletableFuture<>();
@@ -55,8 +59,23 @@ public class CoalescingTransport extends ForwardingTransport {
             // the worker thread. join() would ignore the interrupt and keep the
             // worker pinned until the 30s budget elapses, wasting capacity.
             if (metrics != null) metrics.recordCoalesced();
+            io.grpc.Context caller = io.grpc.Context.current();
+            CompletableFuture<CheckResult> waiting = new CompletableFuture<>();
+            existing.whenComplete((result, failure) -> {
+                if (failure == null) waiting.complete(result);
+                else waiting.completeExceptionally(failure);
+            });
+            io.grpc.Context.CancellationListener cancelled = ignored -> waiting.completeExceptionally(
+                    new AuthxTimeoutException("Coalesced request cancelled"));
+            caller.addListener(cancelled, Runnable::run);
             try {
-                return existing.get(30, TimeUnit.SECONDS);
+                io.grpc.Deadline deadline = io.grpc.Context.current().getDeadline();
+                long waitNanos = deadline == null ? TimeUnit.SECONDS.toNanos(30)
+                        : Math.min(TimeUnit.SECONDS.toNanos(30), deadline.timeRemaining(TimeUnit.NANOSECONDS));
+                if (io.grpc.Context.current().isCancelled() || waitNanos <= 0) {
+                    throw new AuthxTimeoutException("Coalesced request deadline expired or was cancelled");
+                }
+                return waiting.get(waitNanos, TimeUnit.NANOSECONDS);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 throw new AuthxTimeoutException(
@@ -72,6 +91,8 @@ public class CoalescingTransport extends ForwardingTransport {
                 if (cause instanceof RuntimeException re) throw re;
                 if (cause instanceof Error err) throw err;
                 throw new RuntimeException("Coalesced check failed", cause);
+            } finally {
+                caller.removeListener(cancelled);
             }
         }
 
@@ -95,7 +116,7 @@ public class CoalescingTransport extends ForwardingTransport {
             CheckResult result = delegate.check(request);
             myFuture.complete(result);
             return result;
-        } catch (Exception e) {
+        } catch (RuntimeException | Error e) {
             // SR:C3 — evict before publishing (see comment above).
             inflight.remove(key, myFuture);
             myFuture.completeExceptionally(e);
@@ -111,6 +132,8 @@ public class CoalescingTransport extends ForwardingTransport {
 
     @Override
     public void close() {
+        inflight.values().forEach(future -> future.completeExceptionally(
+                new AuthxTimeoutException("SDK closed while waiting for a coalesced request")));
         inflight.clear();
         delegate.close();
     }

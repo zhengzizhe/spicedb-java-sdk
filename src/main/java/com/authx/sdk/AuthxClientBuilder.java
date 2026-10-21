@@ -257,10 +257,13 @@ public class AuthxClientBuilder {
             policies = PolicyRegistry.withDefaults();
         }
         SdkComponents spi = components != null ? components : SdkComponents.defaults();
+        if (policies.requiresCoordinatedSession() && spi.coordinatedTokenStore() == null) {
+            throw new IllegalArgumentException("coordinatedSession requires a CoordinatedTokenStore");
+        }
         TypedEventBus bus = eventBus != null ? eventBus : new DefaultTypedEventBus();
         LifecycleManager lm = new LifecycleManager(bus);
         SdkMetrics sdkMetrics = new SdkMetrics();
-        TokenTracker tokenTracker = new TokenTracker(spi.tokenStore());
+        TokenTracker tokenTracker = new TokenTracker(spi.tokenStore(), spi.coordinatedTokenStore());
         // Wire the event bus so cross-instance SESSION degradation/recovery
         // become observable. Must use the resolved `bus` (not the nullable
         // `eventBus` field) so subscribers on AuthxClient.eventBus() receive
@@ -318,7 +321,7 @@ public class AuthxClientBuilder {
             lm.complete();
 
             // Warn: SESSION consistency without distributed token store
-            if (spi.tokenStore() == null) {
+            if (spi.tokenStore() == null && spi.coordinatedTokenStore() == null) {
                 System.getLogger(AuthxClient.class.getName()).log(
                         System.Logger.Level.WARNING,
                         LogCtx.fmt(

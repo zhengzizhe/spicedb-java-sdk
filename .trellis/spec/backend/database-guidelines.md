@@ -155,3 +155,16 @@ schema concerns:
 - Do not bypass the existing gRPC conversion helpers when adding SpiceDB
   operations. Keep conversion and `StatusRuntimeException` mapping in the
   transport layer.
+
+
+## Coordinated session SPI
+
+`CoordinatedTokenStore` is separate from the legacy best-effort `DistributedTokenStore`.
+It coordinates actual writes for a shared namespace spanning related resource types,
+publishes the returned token before success, and makes missing/pending/uncertain state
+unavailable. Integrators own cross-process fencing, durable state, bootstrap and recovery.
+A Redis get/set cache is not an implementation of this contract. SDK code must not
+compare opaque token strings, invent timestamps, or silently expire required state.
+All relationship mutation entry points go through the coordinator when configured;
+raw/externally performed writes and schema changes require an explicit integration or
+reconciliation strategy before claiming global revocation guarantees.

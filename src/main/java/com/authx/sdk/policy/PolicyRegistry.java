@@ -66,6 +66,13 @@ public class PolicyRegistry {
         return resolve(resourceType).readConsistency();
     }
 
+    /** Whether any configured policy requires the coordinated token-store SPI. */
+    public boolean requiresCoordinatedSession() {
+        return defaultPolicy.readConsistency() instanceof ReadConsistency.CoordinatedSession
+                || resolvedPolicies.values().stream().anyMatch(policy ->
+                        policy.readConsistency() instanceof ReadConsistency.CoordinatedSession);
+    }
+
     /** Returns the global default policy (after merging with built-in defaults). */
     public ResourcePolicy defaultPolicy() { return defaultPolicy; }
 

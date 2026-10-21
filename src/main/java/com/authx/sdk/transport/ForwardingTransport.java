@@ -35,6 +35,13 @@ public abstract class ForwardingTransport implements SdkTransport {
     }
 
     @Override
+    public WriteResult writeRelationships(WriteRequest request) {
+        // Preserve legacy decorators overriding only the list-based method.
+        return request.preconditions().isEmpty() ? writeRelationships(request.updates())
+                : delegate().writeRelationships(request);
+    }
+
+    @Override
     public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
         return delegate().deleteRelationships(updates);
     }
@@ -42,6 +49,11 @@ public abstract class ForwardingTransport implements SdkTransport {
     @Override
     public List<Tuple> readRelationships(ResourceRef resource, Relation relation, Consistency consistency) {
         return delegate().readRelationships(resource, relation, consistency);
+    }
+
+    @Override
+    public List<RelationshipRecord> readRelationshipDetails(ResourceRef resource, Relation relation, Consistency consistency) {
+        return delegate().readRelationshipDetails(resource, relation, consistency);
     }
 
     @Override

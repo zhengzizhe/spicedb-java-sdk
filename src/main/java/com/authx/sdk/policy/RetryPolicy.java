@@ -50,6 +50,7 @@ public class RetryPolicy {
     /** Returns {@code true} if the given exception should be retried per the configured allow/deny lists. */
     public boolean shouldRetry(Exception e) {
         if (nonRetryableExceptions.stream().anyMatch(cls -> cls.isInstance(e))) return false;
+        if (e instanceof com.authx.sdk.exception.AuthxException sdk && !sdk.isRetryable()) return false;
         if (retryableExceptions.isEmpty()) return true; // default: retry all transient
         return retryableExceptions.stream().anyMatch(cls -> cls.isInstance(e));
     }
@@ -75,7 +76,7 @@ public class RetryPolicy {
             double jitter = delay * jitterFactor * (Math.random() * 2 - 1); // ±jitterFactor
             delay = Math.max(0, delay + jitter);
         }
-        return Duration.ofMillis((long) delay);
+        return Duration.ofMillis(Math.min((long) delay, maxDelay.toMillis()));
     }
 
     /** Returns a retry policy with retries disabled (maxAttempts = 0). */

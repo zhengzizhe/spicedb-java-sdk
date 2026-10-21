@@ -87,7 +87,6 @@ dependencies {
     errorprone("com.google.errorprone:error_prone_core:2.28.0")
 
     // Optional
-    compileOnly("com.github.ben-manes.caffeine:caffeine:3.1.8")
     compileOnly("io.micrometer:micrometer-core:1.13.0")
     // Optional SLF4J bridge — when on user's classpath, Slf4jMdcBridge
     // pushes authx.* MDC fields. Absent = noop (see Slf4jMdcBridge).
@@ -99,7 +98,6 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation("org.assertj:assertj-core:3.27.7")
     testImplementation("org.mockito:mockito-core:5.11.0")
-    testImplementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
     testImplementation("io.grpc:grpc-inprocess:1.80.0")
     testImplementation("org.testcontainers:testcontainers:1.21.1")
     testImplementation("org.testcontainers:junit-jupiter:1.21.1")

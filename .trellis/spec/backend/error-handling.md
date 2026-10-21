@@ -68,8 +68,10 @@ Real examples:
   code calls `Thread.currentThread().interrupt()` in builder shutdown and
   telemetry paths.
 - Treat user interceptor bugs by path:
-  - Read path: `RealCheckChain` and `RealOperationChain` log non-`Authx`
-    runtime exceptions at `WARNING`, skip the broken interceptor, and continue.
+  - Read path: SDK validation (`IllegalArgumentException`/`NullPointerException`)
+    propagates. Other non-`Authx` runtime interceptor failures may be logged and
+    skipped. Never skip malformed-input validation or downgrade a required
+    token-store failure into an authorization decision.
   - Write path: `RealWriteChain` logs at `WARNING`, wraps non-`Authx` runtime
     exceptions in `AuthxException`, and aborts the write fail-closed.
 - Keep graceful degradation where the SPI contract requires it. For example,
@@ -109,3 +111,11 @@ This is an example from `test-app`, not a required SDK-level HTTP contract.
   `IllegalArgumentException` and `Objects.requireNonNull` directly.
 - Do not swallow errors silently. Existing graceful-degradation code logs at
   `WARNING` before disabling/skipping behavior or returning a fallback.
+
+## Required consistency failures
+
+`TokenStoreUnavailableException` and `AuthxProtocolException` are non-retryable SDK
+failures. Required coordination never falls back to a local/missing token or an
+unproven allow result. A coordination write failure may require namespace
+reconciliation even when the actual graph mutation has committed. Do not blindly
+retry the entire write+publication operation after such a failure.

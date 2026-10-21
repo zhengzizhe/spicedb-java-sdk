@@ -37,7 +37,7 @@ public class InMemoryTransport implements SdkTransport {
     public BulkCheckResult checkBulk(CheckRequest request, List<SubjectRef> subjects) {
         Map<String, CheckResult> results = new LinkedHashMap<>();
         for (SubjectRef sub : subjects) {
-            CheckRequest subRequest = CheckRequest.of(request.resource(), request.permission(), sub, request.consistency());
+            CheckRequest subRequest = new CheckRequest(request.resource(), request.permission(), sub, request.consistency(), request.caveatContext());
             results.put(sub.toRefString(), check(subRequest));
         }
         return new BulkCheckResult(results);

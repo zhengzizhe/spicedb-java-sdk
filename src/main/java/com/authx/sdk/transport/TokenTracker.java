@@ -5,6 +5,11 @@ import com.authx.sdk.event.TypedEventBus;
 import com.authx.sdk.model.Consistency;
 import com.authx.sdk.policy.ReadConsistency;
 import com.authx.sdk.spi.DistributedTokenStore;
+import com.authx.sdk.spi.CoordinatedTokenStore;
+import com.authx.sdk.exception.TokenStoreUnavailableException;
+import com.authx.sdk.model.WriteResult;
+import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicReference;
 import com.authx.sdk.trace.LogCtx;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,23 +19,30 @@ import java.util.concurrent.atomic.LongAdder;
 /**
  * Tracks ZedTokens for SESSION consistency, per resource type.
  *
- * <p>Maintains the last write token per resource type so that reads after writes
- * always see at least the written state, without forcing unrelated resource types
- * to skip cache.
+ * <p>Legacy SESSION maintains a best-effort last write token per resource type.
+ * It does not infer graph dependencies or prevent concurrent publication from
+ * replacing a newer token with an older one.
  *
  * <p>When a {@link DistributedTokenStore} is provided, tokens are shared across
- * SDK instances (e.g., via Redis), enabling cross-instance SESSION consistency.
+ * SDK instances (e.g., via Redis), providing best-effort cross-instance tracking.
  * If the distributed store becomes unavailable, silently degrades to local-only
  * tokens (logs a single warning, does not spam on every call).
+ *
+ * <p>Required coordinated sessions use {@link CoordinatedTokenStore} instead;
+ * missing or uncertain shared state never falls back to this local map.
+ * The provider owns cross-process coordination and recovery.
  *
  * <p>Thread-safe: uses ConcurrentHashMap for per-resource-type token storage.
  */
 public class TokenTracker {
 
+    static final io.grpc.Context.Key<Boolean> COORDINATED_MUTATION = io.grpc.Context.key("authx-coordinated-mutation");
+
     private static final System.Logger LOG = System.getLogger(TokenTracker.class.getName());
 
     private final ConcurrentHashMap<String, String> lastWriteTokens = new ConcurrentHashMap<>();
     private final DistributedTokenStore distributed;
+    private final CoordinatedTokenStore coordinated;
     private final AtomicBoolean distributedAvailable = new AtomicBoolean(true);
     /** Cumulative count of failed token-store operations. Exposed for monitoring. */
     private final LongAdder distributedFailures = new LongAdder();
@@ -46,7 +58,45 @@ public class TokenTracker {
     }
 
     public TokenTracker(DistributedTokenStore distributed) {
+        this(distributed, null);
+    }
+
+    public TokenTracker(DistributedTokenStore distributed,
+                        CoordinatedTokenStore coordinated) {
         this.distributed = distributed;
+        this.coordinated = coordinated;
+    }
+
+    /** Coordinate the actual write, not just the later token publication. */
+    public WriteResult executeWrite(
+            Supplier<WriteResult> mutation) {
+        if (coordinated == null) return mutation.get();
+        AtomicReference<WriteResult> actual =
+                new AtomicReference<>();
+        AtomicBoolean invoked = new AtomicBoolean();
+        try {
+            WriteResult result = coordinated.executeWrite(() -> {
+                if (!invoked.compareAndSet(false, true)) {
+                    throw new TokenStoreUnavailableException("Coordinator invoked a mutation more than once");
+                }
+                io.grpc.Context execution = io.grpc.Context.current().withValue(COORDINATED_MUTATION, true);
+                io.grpc.Context previous = execution.attach();
+                try {
+                    WriteResult written = mutation.get();
+                    actual.set(written);
+                    return written;
+                } finally {
+                    execution.detach(previous);
+                }
+            });
+            if (!invoked.get() || result == null || result != actual.get()
+                    || result.zedToken() == null || result.zedToken().isBlank()) {
+                throw new TokenStoreUnavailableException("Coordinator did not publish the actual write token");
+            }
+            return result;
+        } catch (RuntimeException failure) {
+            throw new TokenStoreUnavailableException("Shared token coordination failed; reconciliation may be required", failure);
+        }
     }
 
     /** Allow the builder to wire an event bus after construction. */
@@ -68,7 +118,7 @@ public class TokenTracker {
      * Record a write token for a specific resource type.
      */
     public void recordWrite(String resourceType, String token) {
-        if (token == null || resourceType == null) return;
+        if (token == null || token.isBlank() || resourceType == null) return;
         lastWriteTokens.put(resourceType, token);
 
         if (distributed != null) {
@@ -95,6 +145,18 @@ public class TokenTracker {
                 yield token != null ? Consistency.atLeast(token) : Consistency.minimizeLatency();
             }
 
+            case ReadConsistency.CoordinatedSession ignored -> {
+                if (coordinated == null) throw new TokenStoreUnavailableException(
+                        "coordinatedSession requires a CoordinatedTokenStore");
+                try {
+                    String token = coordinated.readRequiredToken();
+                    if (token == null || token.isBlank()) throw new IllegalStateException("Missing coordinated token");
+                    yield Consistency.atLeast(token);
+                } catch (RuntimeException failure) {
+                    throw new TokenStoreUnavailableException("Required shared token is unavailable", failure);
+                }
+            }
+
             case ReadConsistency.Snapshot ignored ->
                     // Snapshot needs a user-provided token per-query.
                     // At policy level, fall back to STRONG.
@@ -104,9 +166,7 @@ public class TokenTracker {
                     Consistency.full();
 
             case ReadConsistency.BoundedStaleness ignored ->
-                    // BoundedStaleness: minimize latency is the closest available mapping.
-                    // Full time-based bounded staleness requires SpiceDB API support (planned).
-                    Consistency.minimizeLatency();
+                    throw new UnsupportedOperationException("Time-based bounded staleness is not implemented; use atLeast(token)");
         };
     }
 

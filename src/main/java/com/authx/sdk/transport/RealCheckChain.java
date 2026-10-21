@@ -69,6 +69,9 @@ public final class RealCheckChain implements CheckChain {
         SdkInterceptor interceptor = interceptors.get(index);
         try {
             return interceptor.interceptCheck(next);
+        } catch (IllegalArgumentException | NullPointerException invalid) {
+            // SDK validation is a caller error, not an optional interceptor failure.
+            throw invalid;
         } catch (AuthxException authx) {
             throw authx;
         } catch (RuntimeException bug) {

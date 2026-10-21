@@ -66,14 +66,20 @@ public class InterceptorTransport extends ForwardingTransport {
 
     @Override
     public WriteResult writeRelationships(List<RelationshipUpdate> updates) {
+        return writeRelationships(new WriteRequest(updates));
+    }
+
+    @Override
+    public WriteResult writeRelationships(WriteRequest request) {
+        List<RelationshipUpdate> updates = request.updates();
         RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
         Map<String, String> mdc = mdcFields("GRANT", batch.resourceType(), batch.resourceId(),
                 null, batch.relation(), batch.subjectRef(), null);
         try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
-            if (interceptors.isEmpty()) return delegate.writeRelationships(updates);
+            if (interceptors.isEmpty()) return delegate.writeRelationships(request);
             SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.WRITE,
                     batch.resourceType(), batch.resourceId(), "", batch.subjectType(), batch.subjectId());
-            WriteRequest writeRequest = new WriteRequest(updates);
+            WriteRequest writeRequest = request;
             RealWriteChain chain = new RealWriteChain(interceptors, 0, writeRequest, delegate, ctx);
             return chain.proceed(writeRequest);
         } catch (IOException e) {
@@ -127,6 +133,23 @@ public class InterceptorTransport extends ForwardingTransport {
             SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.READ, resource.type(), resource.id(),
                     relation != null ? relation.name() : "", "", "");
             return chainOperation(ctx, () -> delegate.readRelationships(resource, relation, consistency));
+        } catch (IOException e) {
+            throw new RuntimeException("Unreachable: MDC Closeable does not throw", e);
+        }
+    }
+
+    @Override
+    public List<RelationshipRecord> readRelationshipDetails(ResourceRef resource, Relation relation,
+                                          Consistency consistency) {
+        Map<String, String> mdc = mdcFields("READ", resource.type(), resource.id(),
+                null,
+                relation == null ? null : relation.name(),
+                null, consistencyLabel(consistency));
+        try (Closeable ignored = Slf4jMdcBridge.push(mdc)) {
+            if (interceptors.isEmpty()) return delegate.readRelationshipDetails(resource, relation, consistency);
+            SdkInterceptor.OperationContext ctx = new OperationContext(SdkAction.READ, resource.type(), resource.id(),
+                    relation != null ? relation.name() : "", "", "");
+            return chainOperation(ctx, () -> delegate.readRelationshipDetails(resource, relation, consistency));
         } catch (IOException e) {
             throw new RuntimeException("Unreachable: MDC Closeable does not throw", e);
         }

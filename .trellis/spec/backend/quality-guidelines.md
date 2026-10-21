@@ -53,9 +53,9 @@ Real examples:
   enrichment, model factories such as `ResourceRef.of(...)`, `SdkRefs` for
   fluent API subject/type/relation/permission conversions, and
   `RelationshipUpdates` for relationship update fan-out.
-- Do not make optional integrations mandatory in the main SDK. Caffeine,
-  Micrometer, and SLF4J are compile-only where applicable; distributed token
-  storage is exposed through `DistributedTokenStore` and implemented by users.
+- Do not make optional integrations mandatory in the main SDK. Micrometer and SLF4J are compile-only where applicable. Resilience state must
+  remain bounded without requiring Caffeine. Shared token persistence stays in
+  user-owned SPI implementations, not an SDK-owned business database.
 - Do not use `System.out` in production SDK code. It appears only in demo/e2e
   scenario output.
 
@@ -88,6 +88,10 @@ Real examples:
   user-facing `limit(n)` into each per-permission `LookupResources` call before
   computing union/intersection results; that can over-return for union and
   false-negative for intersection.
+- Real gRPC bulk replies must exactly bind to submitted items; malformed counts or
+  echoed requests are non-retryable protocol errors. Legacy boolean matrix mapping
+  may remain fail-closed for short synthetic transport results; detailed/snapshot
+  APIs reject incomplete results and preserve conditional outcomes and tokens.
 - Batch result mappers must preserve request shape. If a transport returns fewer
   bulk check results than requested, fill the missing cells as denied; if it
   returns more, ignore extras. Do not leak null placeholders or let result-count

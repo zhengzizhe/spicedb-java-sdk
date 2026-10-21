@@ -105,7 +105,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
             items.add(new SdkTransport.BulkCheckItem(
                     ResourceRef.of(resourceType, ids[0]),
                     Permission.of(v.permissionName()),
-                    subject));
+                    subject, context));
         }
         List<CheckResult> results = factory.transport().checkBulkMulti(items, consistency);
         for (int i = 0; i < values.length; i++) {
@@ -155,7 +155,7 @@ public class TypedCheckAllAction<E extends Enum<E> & Permission.Named> {
                 items.add(new SdkTransport.BulkCheckItem(
                         ResourceRef.of(resourceType, id),
                         Permission.of(v.permissionName()),
-                        subject));
+                        subject, context));
             }
         }
         List<CheckResult> results = factory.transport().checkBulkMulti(items, consistency);

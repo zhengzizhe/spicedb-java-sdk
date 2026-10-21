@@ -77,6 +77,15 @@ public class InstrumentedTransport extends ForwardingTransport {
     }
 
     @Override
+    public WriteResult writeRelationships(WriteRequest request) {
+        RelationshipBatchInfo batch = RelationshipBatchInfo.from(request.updates());
+        return instrument(SdkAction.WRITE,
+                batch.resourceType(), batch.resourceId(), batch.subjectType(), batch.subjectId(),
+                batch.relation() != null ? batch.relation() : "",
+                () -> new InstrumentedResult<>(delegate.writeRelationships(request), OperationResult.SUCCESS.name()));
+    }
+
+    @Override
     public WriteResult deleteRelationships(List<RelationshipUpdate> updates) {
         RelationshipBatchInfo batch = RelationshipBatchInfo.from(updates);
         return instrument(SdkAction.DELETE,
@@ -104,6 +113,16 @@ public class InstrumentedTransport extends ForwardingTransport {
                 relation != null ? relation.name() : "",
                 () -> new InstrumentedResult<>(
                         delegate.readRelationships(resource, relation, consistency),
+                        "SUCCESS"));
+    }
+
+    @Override
+    public List<RelationshipRecord> readRelationshipDetails(ResourceRef resource, Relation relation, Consistency consistency) {
+        return instrument(SdkAction.READ,
+                resource.type(), resource.id(), "", "",
+                relation != null ? relation.name() : "",
+                () -> new InstrumentedResult<>(
+                        delegate.readRelationshipDetails(resource, relation, consistency),
                         "SUCCESS"));
     }
 
